@@ -12,8 +12,10 @@ from __future__ import annotations
 
 import io
 import json
+import logging
 import os
 import struct
+import time
 import zipfile
 from typing import Any, Dict
 import xml.etree.ElementTree as ET
@@ -22,6 +24,18 @@ import numpy as np
 import trimesh
 from shapely.geometry import Polygon, Point, MultiPoint
 import shapely.ops
+
+from .errors import SkpParseError
+
+# Silent by default (standard library convention: a library never installs
+# its own handler or configures a level - the host application decides
+# whether/where these go). To see progress: logging.getLogger("openskp")
+# .setLevel(logging.DEBUG) plus a handler, e.g. logging.basicConfig().
+logger = logging.getLogger("openskp")
+
+# How often (in top-level records) to emit a DEBUG progress log during the
+# main walk - coarse enough that it costs nothing on a 300k-definition file.
+_PROGRESS_INTERVAL = 500
 
 
 # ── TLV Parsing ──────────────────────────────────────────────────────────
@@ -75,6 +89,56 @@ def parse_tlv_recursive(data, start, end, container_tags=None, depth=0):
         })
         pos += 6 + size
     return elements
+
+
+def _flat_headers(data, start, end):
+    """Scan [start, end) for direct-child (tag, offset, size) headers only,
+    without recursing into any container - O(sibling count), not
+    O(total node count). Used to locate top-level records one at a time so
+    full_parse() never has to hold the whole file's TLV tree in memory at
+    once (real production files can have 100k+ top-level definitions)."""
+    headers = []
+    pos = start
+    while pos < end - 6:
+        tag_hex = data[pos:pos+2].hex().upper()
+        size = read_u32(data, pos+2)
+        if pos + 6 + size > end:
+            break
+        headers.append((tag_hex, pos, size))
+        pos += 6 + size
+    return headers
+
+
+def iter_top_level_lazy(data, start, end, container_tags=None):
+    """Yield ``(index, total, node)`` for each top-level TLV record, fully
+    recursed, one at a time - transparently unwrapping a lone 'F401'
+    wrapper (matching the shape parse_tlv_recursive's callers already
+    expect) - without ever materializing more than one top-level subtree
+    simultaneously.
+
+    ``total`` (the top-level sibling count) comes for free from the same
+    cheap header scan that drives the loop, so callers can report "N of
+    total" progress with no extra pass over the file.
+
+    Each yielded node is independent and safe to discard (drop all
+    references) once the caller is done with it, before the next one is
+    produced - that's what keeps peak memory bounded by the size of the
+    single largest top-level record instead of the whole file.
+    """
+    if container_tags is None:
+        container_tags = CONTAINER_TAGS
+
+    headers = _flat_headers(data, start, end)
+    if len(headers) == 1 and headers[0][0] == 'F401':
+        _, f401_offset, f401_size = headers[0]
+        headers = _flat_headers(data, f401_offset + 6, f401_offset + 6 + f401_size)
+
+    total = len(headers)
+    for index, (tag_hex, offset, size) in enumerate(headers):
+        record_end = offset + 6 + size
+        nodes = parse_tlv_recursive(data, offset, record_end, container_tags)
+        if nodes:
+            yield index, total, nodes[0]
 
 
 # ── 3D planar triangulation ──────────────────────────────────────────────
@@ -547,17 +611,23 @@ def full_parse(skp_path: str) -> Dict[str, Any]:
         Dict with keys: version, definitions_dict, layer_colors,
         layer_id_to_name, materials, elements, defs_dict
     """
+    t0 = time.monotonic()
+    file_size = os.path.getsize(skp_path)
+    logger.info("Parsing %s (%d bytes)", skp_path, file_size)
+
     # 1. Find ZIP offset
     with open(skp_path, 'rb') as f:
         header = f.read(512)
 
     if not header.startswith(b'\xFF\xFE\xFF\x0E'):
-        raise ValueError("Not a valid SketchUp file")
+        raise SkpParseError(
+            "Not a valid SketchUp file (bad header magic)", stage="header")
 
     # Classic (pre-2021) files are MFC CArchive streams, not VFF/ZIP —
     # route them to the legacy walker (same output shape).
     from .legacy import is_legacy, full_parse_legacy
     if is_legacy(header):
+        logger.debug("Detected legacy MFC container; routing to legacy walker")
         return full_parse_legacy(skp_path)
 
     version = "unknown"
@@ -571,19 +641,23 @@ def full_parse(skp_path: str) -> Dict[str, Any]:
         if brace_start >= 0 and brace_end > brace_start:
             version = ver_text[brace_start:brace_end+1]
 
+    logger.debug("Detected version %s (VFF/ZIP container)", version)
+
     pk_pos = header.find(b'PK\x03\x04')
     if pk_pos < 0:
         with open(skp_path, 'rb') as f:
             chunk = f.read(4096)
             pk_pos = chunk.find(b'PK\x03\x04')
     if pk_pos < 0:
-        raise ValueError("No ZIP container found")
+        raise SkpParseError(
+            "No ZIP container found", stage="zip_extract")
 
     # 2. Extract ZIP contents
     with open(skp_path, 'rb') as f:
         f.seek(pk_pos)
         zip_bytes = f.read()
     zf = zipfile.ZipFile(io.BytesIO(zip_bytes), 'r')
+    logger.debug("Opened ZIP container: %d entries", len(zf.namelist()))
 
     # Materials & layer colors
     layer_colors = {}
@@ -674,13 +748,20 @@ def full_parse(skp_path: str) -> Dict[str, Any]:
                        'front_color': colors.get('4000'),
                        'back_color': colors.get('4001')})
 
+    logger.debug("Parsed %d materials, %d styles", len(materials), len(styles))
+
     model_dat = zf.read('model.dat')
     zf.close()
+    logger.debug("Read model.dat: %d bytes", len(model_dat))
 
-    # 3. Parse TLV tree
-    elements = parse_tlv_recursive(model_dat, 0, len(model_dat), CONTAINER_TAGS)
-    if len(elements) == 1 and elements[0]['tag'] == 'F401':
-        elements = elements[0]['children']
+    # 3. Walk the TLV tree one top-level record at a time (instead of
+    # building the whole file's tree at once) so peak memory is bounded by
+    # the single largest definition/layer-manager/material-manager/root
+    # block, not by the file's total node count. Real production files can
+    # have 100k+ separate component definitions; materializing all of them
+    # simultaneously is what actually exhausts memory on large files - not
+    # the (comparatively modest, ~1x) cost of decompressing model.dat
+    # itself. See iter_top_level_lazy() for the mechanics.
 
     # Layer ID -> name
     layer_id_to_name = {}
@@ -701,12 +782,6 @@ def full_parse(skp_path: str) -> Dict[str, Any]:
                             l_name = name_node['payload'].decode('utf-8', errors='replace')
                             layer_id_to_name[l_id] = l_name
             collect_layers(el['children'])
-    collect_layers(elements)
-
-    if 1 not in layer_id_to_name:
-        layer_id_to_name[1] = 'Layer0'
-    if 'Layer0' not in layer_colors:
-        layer_colors['Layer0'] = (136, 136, 136)
 
     # Material ID -> name
     material_id_to_name = {}
@@ -725,7 +800,6 @@ def full_parse(skp_path: str) -> Dict[str, Any]:
                     m_name = name_node['payload'].decode('utf-8', errors='replace')
                     material_id_to_name[m_id] = m_name
             collect_material_ids(el['children'])
-    collect_material_ids(elements)
 
     # Component definitions
     defs_dict = {}
@@ -769,13 +843,37 @@ def full_parse(skp_path: str) -> Dict[str, Any]:
                                      'always_faces_camera': faces_camera,
                                      'is_image': is_image, 'builder': builder}
             collect_defs(el['children'])
-    collect_defs(elements)
 
-    # Root definition
     root_builder = _GeometryBuilder()
-    for el in elements:
-        if el['tag'] == 'F601':
-            _extract_geometry_from_nodes(el['children'], root_builder)
+
+    for index, total, el in iter_top_level_lazy(model_dat, 0, len(model_dat), CONTAINER_TAGS):
+        try:
+            collect_layers([el])
+            collect_material_ids([el])
+            collect_defs([el])
+            if el['tag'] == 'F601':
+                _extract_geometry_from_nodes(el['children'], root_builder)
+        except Exception as e:
+            raise SkpParseError(
+                f"Failed while processing top-level record: {e}",
+                stage="tlv_walk", record_index=index, total_records=total,
+                tag=el['tag'],
+            ) from e
+        # `el` (and its whole subtree) is now unreferenced and eligible for
+        # garbage collection before the next top-level record is built.
+        if index % _PROGRESS_INTERVAL == 0 or index == total - 1:
+            logger.debug("Processed %d/%d top-level records", index + 1, total)
+
+    logger.info(
+        "Parse complete: %s (%d defs, %.2fs)",
+        skp_path, len(defs_dict), time.monotonic() - t0,
+    )
+
+    if 1 not in layer_id_to_name:
+        layer_id_to_name[1] = 'Layer0'
+    if 'Layer0' not in layer_colors:
+        layer_colors['Layer0'] = (136, 136, 136)
+
     defs_dict['ROOT'] = {'guid': 'ROOT', 'name': 'ROOT_MODEL', 'builder': root_builder}
 
     return {
@@ -786,7 +884,6 @@ def full_parse(skp_path: str) -> Dict[str, Any]:
         'materials': materials,
         'materials_by_folder': materials_by_folder,
         'defs_dict': defs_dict,
-        'elements': elements,
         'thumbnail_data': thumbnail_data,
         'styles': styles,
     }

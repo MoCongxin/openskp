@@ -7,6 +7,9 @@ export interface GeometryBuilderInstance {
   name: string;
   matrix: number[];
   materialId: number | null;
+  /** Layer ID this instance belongs to (D007 -> D207), or null. Internal -
+   * used for scene-graph layer inheritance, not part of the public API. */
+  layerId?: number | null;
   children: TlvNode[];
 }
 
@@ -14,6 +17,7 @@ export interface GeometryBuilderFace {
   loops: { edgeId: number; orientation: number }[][];
   normal: [number, number, number];
   materialId?: number | null;
+  backMaterialId?: number | null;
   uvTransform?: number[] | null;
   uvTransformBack?: number[] | null;
 }
@@ -21,6 +25,7 @@ export interface GeometryBuilderFace {
 export class GeometryBuilder {
   vertices = new Map<number, [number, number, number]>(); // id -> [x, y, z]
   edges = new Map<number, [number | null, number | null]>(); // id -> [v1, v2]
+  edgeFlags = new Map<number, number>(); // edge id -> display flag byte (D307)
   faces = new Map<number, GeometryBuilderFace>(); // id -> face data
   instances: GeometryBuilderInstance[] = [];
 }
@@ -29,6 +34,7 @@ export interface ParsedDefinition {
   guid: string;
   name: string;
   isImage: boolean;
+  alwaysFacesCamera: boolean;
   builder: GeometryBuilder;
 }
 
@@ -169,6 +175,16 @@ export function extractGeometryFromNodes(
         const v1 = v1Node ? parseVarInt(v1Node.payload, 0, v1Node.payload.length) : null;
         const v2 = v2Node ? parseVarInt(v2Node.payload, 0, v2Node.payload.length) : null;
         builder.edges.set(eId, [v1, v2]);
+
+        // D007 -> D307 = edge display flags: base 0x06, plus 0x01 hidden,
+        // 0x08|0x10 soft/smooth.
+        const d007 = el.children.find((c) => c.tag === 'D007');
+        if (d007) {
+          const d307 = d007.children.find((c) => c.tag === 'D307');
+          if (d307 && d307.payload.length > 0) {
+            builder.edgeFlags.set(eId, d307.payload[0]);
+          }
+        }
       }
     } else if (tag === 'AC0D') {
       const fId = extractEntityId(el);
@@ -231,10 +247,20 @@ export function extractGeometryFromNodes(
             [uvFront, uvBack] = extractUvTransforms(dc05.payload);
           }
         }
+        // Back-side material: the AF0D child of the face node (a face
+        // painted only on its back - common when the author paints the
+        // visible side of a downward-facing cap - carries AF0D but no
+        // D107).
+        let backMatId: number | null = null;
+        const af0d = el.children.find((c) => c.tag === 'AF0D');
+        if (af0d && af0d.payload.length > 0) {
+          backMatId = parseVarInt(af0d.payload, 0, af0d.payload.length);
+        }
         builder.faces.set(fId, {
           loops,
           normal,
           materialId: faceMatId,
+          backMaterialId: backMatId,
           uvTransform: uvFront,
           uvTransformBack: uvBack,
         });
@@ -283,11 +309,17 @@ export function extractGeometryFromNodes(
       // inherit this - the SDK resolves that inheritance when exporting,
       // so consumers need the raw value to do the same.
       let instMatId: number | null = null;
+      let instLayerId: number | null = null;
       const d007 = el.children.find((c) => c.tag === 'D007');
       if (d007) {
         const d107 = d007.children.find((c) => c.tag === 'D107');
         if (d107) {
           instMatId = parseVarInt(d107.payload, 0, d107.payload.length);
+        }
+        const d207 = d007.children.find((c) => c.tag === 'D207');
+        if (d207 && d207.payload.length > 0) {
+          const p = d207.payload;
+          instLayerId = p.length === 1 ? p[0] : parseVarInt(p, 0, p.length);
         }
       }
 
@@ -298,6 +330,7 @@ export function extractGeometryFromNodes(
         name: name || '',
         matrix: matrix,
         materialId: instMatId,
+        layerId: instLayerId,
         children: el.children,
       });
     } else if (el.children && el.children.length > 0) {
@@ -353,6 +386,7 @@ export function collectDefs(
       let guid: string | null = null;
       let name: string | null = null;
       let isImage = false;
+      let facesCamera = false;
       for (const child of el.children) {
         if (child.tag === '7D15' && child.payload.length === 16) {
           let hex = '';
@@ -372,6 +406,20 @@ export function collectDefs(
           // Definition kind: observed 0/1 for ordinary component/group
           // definitions, 2 for the quad definition backing an Image entity.
           isImage = parseVarInt(child.payload, 0, child.payload.length) === 2;
+        } else if (child.tag === '581B') {
+          // Component behavior flags: sub-TLV 5D1B == 1 marks "always
+          // faces camera" (2D people/tree cut-outs); its companion 5E1B
+          // is "shadows face sun".
+          let pos = 0;
+          const pl = child.payload;
+          while (pos <= pl.length - 6) {
+            const subSize = readU32(pl, pos + 2);
+            if (pos + 6 + subSize > pl.length) break;
+            if (pl[pos] === 0x5d && pl[pos + 1] === 0x1b && subSize >= 1) {
+              facesCamera = parseVarInt(pl, pos + 6, subSize) === 1;
+            }
+            pos += 6 + subSize;
+          }
         }
       }
       const entId = extractEntityId(el);
@@ -382,6 +430,7 @@ export function collectDefs(
           guid: guid || '',
           name: name || '',
           isImage,
+          alwaysFacesCamera: facesCamera,
           builder,
         });
       }
@@ -469,7 +518,20 @@ export function reconstructLoopVertices(
   return loopVerts;
 }
 
-export function parseMaterialXml(xmlText: string): { name: string; r: number; g: number; b: number; trans: number } | null {
+export function parseMaterialXml(xmlText: string): {
+  name: string;
+  r: number;
+  g: number;
+  b: number;
+  trans: number;
+  colorized: boolean;
+  colorizeType: number;
+  hasTexture: boolean;
+  textureFilename: string;
+  xScale: number;
+  yScale: number;
+  imagePath: string;
+} | null {
   const match = xmlText.match(/<(?:[a-zA-Z0-9_]+:)?material\b([^>]*)\/?>/);
   if (!match) return null;
   const attrsString = match[1];
@@ -484,7 +546,174 @@ export function parseMaterialXml(xmlText: string): { name: string; r: number; g:
   const colorRed = parseInt(getAttr('colorRed') || '128', 10);
   const colorGreen = parseInt(getAttr('colorGreen') || '128', 10);
   const colorBlue = parseInt(getAttr('colorBlue') || '128', 10);
-  const trans = parseFloat(getAttr('trans') || '0.5');
 
-  return { name, r: colorRed, g: colorGreen, b: colorBlue, trans };
+  // 'trans' is a TRANSPARENCY (0 = opaque, 1 = fully transparent) and only
+  // applies when useTrans="1"; otherwise it's a leftover default and the
+  // material is fully opaque. Expose the resulting OPACITY as 1 - trans
+  // (e.g. SketchUp's "Translucent Glass Blue", 70% opacity, stores
+  // trans="0.3").
+  let trans: number;
+  if (getAttr('useTrans') === '1') {
+    const rawTrans = parseFloat(getAttr('trans') || '0');
+    trans = Math.min(Math.max(1.0 - rawTrans, 0.0), 1.0);
+  } else {
+    trans = 1.0;
+  }
+
+  // type="2" marks a colourized copy ("[Name]1" materials SketchUp creates
+  // when you re-colour a textured material); colorizeType 0 = hue shift,
+  // 1 = tint.
+  const colorized = getAttr('type') === '2';
+  const colorizeTypeRaw = parseInt(getAttr('colorizeType') || '0', 10);
+  const colorizeType = Number.isNaN(colorizeTypeRaw) ? 0 : colorizeTypeRaw;
+
+  // <mat:texture ...> sub-element, if the material carries hasTexture="1".
+  const textureMatch = xmlText.match(/<(?:[a-zA-Z0-9_]+:)?texture\b([^>]*)\/?>/);
+  let hasTexture = false;
+  let textureFilename = '';
+  let xScale = 0.0;
+  let yScale = 0.0;
+  if (textureMatch) {
+    hasTexture = true;
+    const texAttrs = textureMatch[1];
+    const getTexAttr = (n: string): string | null => {
+      const r = new RegExp(`\\b${n}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`);
+      const m = texAttrs.match(r);
+      return m ? (m[1] !== undefined ? m[1] : m[2]) : null;
+    };
+    textureFilename = getTexAttr('textureFilename') || '';
+    const xs = parseFloat(getTexAttr('xScale') || '0');
+    xScale = Number.isNaN(xs) ? 0.0 : xs;
+    const ys = parseFloat(getTexAttr('yScale') || '0');
+    yScale = Number.isNaN(ys) ? 0.0 : ys;
+  }
+
+  // <mat:images>/<mat:image path="..."> - colourized copies keep no image
+  // of their own; this points into the SOURCE material's folder.
+  const imageMatch = xmlText.match(
+    /<(?:[a-zA-Z0-9_]+:)?image\b[^>]*\bpath\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*\/?>/
+  );
+  const imagePath = imageMatch ? (imageMatch[1] !== undefined ? imageMatch[1] : imageMatch[2]) : '';
+
+  return {
+    name,
+    r: colorRed,
+    g: colorGreen,
+    b: colorBlue,
+    trans,
+    colorized,
+    colorizeType,
+    hasTexture,
+    textureFilename,
+    xScale,
+    yScale,
+    imagePath,
+  };
+}
+
+/**
+ * Parse a styles/*\/style.xml document: face colors live as signed-int32
+ * ARGB variants under item id 4000 (front / default face color) and 4001
+ * (back face color). Viewers need them to shade unpainted faces the way
+ * SketchUp does.
+ */
+export function parseStyleXml(xmlText: string): {
+  name: string;
+  frontColor: [number, number, number] | null;
+  backColor: [number, number, number] | null;
+} | null {
+  const styleMatch = xmlText.match(/<(?:[a-zA-Z0-9_]+:)?style\b([^>]*)>/);
+  if (!styleMatch) return null;
+  const attrsString = styleMatch[1];
+  const nameMatch = attrsString.match(/\bname\s*=\s*(?:"([^"]*)"|'([^']*)')/);
+  const name = nameMatch ? (nameMatch[1] !== undefined ? nameMatch[1] : nameMatch[2]) : '';
+
+  const colors: Record<string, [number, number, number]> = {};
+  const itemRegex =
+    /<(?:[a-zA-Z0-9_]+:)?item\s+id\s*=\s*(?:"(\d+)"|'(\d+)')[^>]*>([\s\S]*?)<\/(?:[a-zA-Z0-9_]+:)?item>/g;
+  let m: RegExpExecArray | null;
+  while ((m = itemRegex.exec(xmlText)) !== null) {
+    const id = m[1] !== undefined ? m[1] : m[2];
+    if (id !== '4000' && id !== '4001') continue;
+    const inner = m[3];
+    const variantMatch = inner.match(/<(?:[a-zA-Z0-9_]+:)?variant\b[^>]*>(-?\d+)<\/(?:[a-zA-Z0-9_]+:)?variant>/);
+    if (!variantMatch) continue;
+    const raw = parseInt(variantMatch[1], 10);
+    if (Number.isNaN(raw)) continue;
+    const v = raw >>> 0; // reinterpret as unsigned 32-bit, matches Python's `& 0xFFFFFFFF`
+    colors[id] = [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+  }
+
+  return {
+    name,
+    frontColor: colors['4000'] ?? null,
+    backColor: colors['4001'] ?? null,
+  };
+}
+
+/** Strip any leading run of characters in `chars` (Python str.lstrip semantics). */
+function lstripChars(s: string, chars: string): string {
+  let i = 0;
+  while (i < s.length && chars.includes(s[i])) i++;
+  return s.slice(i);
+}
+
+/**
+ * Resolve a material's texture image bytes from the material files map
+ * (the flat "filename -> bytes" view of the embedded ZIP).
+ *
+ * SketchUp stores the image next to material.xml (materials/<folder>/<image>).
+ * The stored image name can differ from textureFilename (observed:
+ * "..._Safety.jpg" in the XML vs "..._Saftey.jpg" on disk) - the folder's
+ * non-XML sibling is used as fallback. Colourized copies ("[Name]1",
+ * type="2") keep no image of their own - their <mat:image path> points into
+ * the SOURCE material's folder, sometimes prefixed "./".
+ */
+export function resolveTextureBytes(
+  materialFiles: Record<string, Uint8Array>,
+  xmlName: string,
+  filename: string,
+  imagePath: string
+): { data: Uint8Array | null; filename: string } {
+  const names = Object.keys(materialFiles);
+  const slashIdx = xmlName.lastIndexOf('/');
+  const folder = slashIdx >= 0 ? xmlName.slice(0, slashIdx) : '';
+
+  let data: Uint8Array | null = null;
+  let resolvedFilename = filename;
+
+  const candidate = filename ? `${folder}/${filename}` : null;
+  if (candidate && names.includes(candidate)) {
+    data = materialFiles[candidate];
+  } else {
+    for (const entry of names) {
+      if (
+        entry.startsWith(folder + '/') &&
+        entry !== xmlName &&
+        !entry.toLowerCase().endsWith('.xml')
+      ) {
+        data = materialFiles[entry];
+        if (!resolvedFilename) {
+          resolvedFilename = entry.split('/').pop() || '';
+        }
+        break;
+      }
+    }
+  }
+
+  if (data === null) {
+    const imgPath = lstripChars(imagePath, './');
+    const candidates = [imgPath, folder ? `${folder}/${imgPath}` : imgPath];
+    for (const cand of candidates) {
+      if (cand && names.includes(cand)) {
+        data = materialFiles[cand];
+        if (!resolvedFilename) {
+          resolvedFilename = cand.split('/').pop() || '';
+        }
+        break;
+      }
+    }
+  }
+
+  return { data, filename: resolvedFilename };
 }

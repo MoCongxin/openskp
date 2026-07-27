@@ -96,3 +96,65 @@ export function parseTlvRecursive(
 
   return elements;
 }
+
+/** Scan [start, end) for direct-child (tag, offset, size) headers only,
+ * without recursing into any container - O(sibling count), not O(total
+ * node count). Used by iterTopLevelLazy to locate top-level records one at
+ * a time. */
+function flatHeaders(data: Uint8Array, start: number, end: number): [string, number, number][] {
+  const headers: [string, number, number][] = [];
+  let pos = start;
+  while (pos <= end - 6) {
+    const tagBytes = data.subarray(pos, pos + 2);
+    const size = readU32(data, pos + 2);
+    if (pos + 6 + size > end) break;
+    let tagHex = '';
+    for (let i = 0; i < 2; i++) {
+      const hex = tagBytes[i].toString(16).toUpperCase();
+      tagHex += hex.length === 1 ? '0' + hex : hex;
+    }
+    headers.push([tagHex, pos, size]);
+    pos += 6 + size;
+  }
+  return headers;
+}
+
+export interface TopLevelRecord {
+  index: number;
+  total: number;
+  node: TlvNode;
+}
+
+/** Yield `{index, total, node}` for each top-level TLV record's
+ * fully-recursed node one at a time, transparently unwrapping a lone "F401"
+ * wrapper - without ever materializing more than one top-level subtree
+ * simultaneously. `total` (the top-level sibling count) comes for free from
+ * the same cheap header scan that drives the loop, so callers can report
+ * "N of total" progress with no extra pass over the file. Each yielded node
+ * is safe to discard (drop all references) once the caller is done with it,
+ * before the next one is produced - that's what keeps peak memory bounded
+ * by the size of the single largest top-level record instead of the whole
+ * file (real production files can have 100k+ separate definitions). */
+export function* iterTopLevelLazy(
+  data: Uint8Array,
+  start: number,
+  end: number,
+  containerTags: Set<string> = CONTAINER_TAGS
+): Generator<TopLevelRecord> {
+  let headers = flatHeaders(data, start, end);
+  if (headers.length === 1 && headers[0][0] === 'F401') {
+    const [, f401Offset, f401Size] = headers[0];
+    headers = flatHeaders(data, f401Offset + 6, f401Offset + 6 + f401Size);
+  }
+
+  const total = headers.length;
+  let index = 0;
+  for (const [, offset, size] of headers) {
+    const recordEnd = offset + 6 + size;
+    const nodes = parseTlvRecursive(data, offset, recordEnd, containerTags);
+    if (nodes.length > 0) {
+      yield { index, total, node: nodes[0] };
+    }
+    index++;
+  }
+}

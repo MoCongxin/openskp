@@ -1057,3 +1057,142 @@ class TestLegacyRealFile:
         a_face = next(f for d in model.definitions.values()
                       for f in d.faces.values() if f.loops)
         assert len(a_face.loops[0]) >= 3
+
+
+# ── Scene baking (opt-in build_scene(), separate from parse()) ──────────
+
+
+class TestBuildScene:
+    """``SkpFile.build_scene()`` bakes every placed instance into a
+    triangulated, world-space scene - a separate, opt-in step from
+    :meth:`parse` (see module docstring in ``scene.py``).
+
+    Cross-validated directly against the TypeScript port's
+    ``SkpFile.buildScene()`` on this exact fixture: mesh count, mesh_index
+    count, gltf_materials count, and root instance count all match exactly,
+    down to the first three meshes' vertex/triangle counts and material
+    indices.
+    """
+
+    import pathlib as _pathlib
+
+    FIXTURE = _pathlib.Path(__file__).parent / "fixtures" / "capilla_quiroz_v17.skp"
+
+    def _scene(self):
+        import pytest as _pytest
+        if not self.FIXTURE.exists():
+            _pytest.skip("legacy fixture not present")
+        from openskp.model import SkpFile
+        return SkpFile.open(str(self.FIXTURE)).build_scene()
+
+    def test_scene_matches_typescript_ground_truth(self) -> None:
+        scene = self._scene()
+
+        assert len(scene.glb_primitives) == 13
+        assert len(scene.mesh_index) == 13
+        assert len(scene.gltf_materials) == 9
+
+        assert scene.scene_hierarchy.name == "ROOT"
+        assert scene.scene_hierarchy.definition_name == "ROOT_MODEL"
+        assert len(scene.scene_hierarchy.children) == 3
+        assert sorted(c.definition_name for c in scene.scene_hierarchy.children) == [
+            "grada", "grada", "puerta",
+        ]
+
+    def test_primitives_have_valid_geometry(self) -> None:
+        scene = self._scene()
+        for prim in scene.glb_primitives:
+            assert len(prim.positions) % 3 == 0
+            assert len(prim.normals) == len(prim.positions)
+            assert len(prim.indices) % 3 == 0
+            n_verts = len(prim.positions) // 3
+            assert all(0 <= idx < n_verts for idx in prim.indices)
+            assert 0 <= prim.material_index < len(scene.gltf_materials)
+
+    def test_independent_of_parse(self) -> None:
+        """build_scene() must not require parse() to have been called
+        first - it re-parses independently."""
+        from openskp.model import SkpFile
+        skp = SkpFile.open(str(self.FIXTURE))
+        scene = skp.build_scene()
+        assert len(scene.glb_primitives) == 13
+
+
+# ── Observability: progress logging + structured error context ──────────
+
+
+class TestObservability:
+    """openskp exposes progress via the stdlib ``logging`` module (silent
+    by default, matching ``requests``/``urllib3``), and raises
+    :class:`SkpParseError` with structured location context (stage,
+    record_index, tag, ...) on failure - so a production pipeline can
+    trace exactly where a model got stuck instead of a bare traceback."""
+
+    import pathlib as _pathlib
+
+    FIXTURE = _pathlib.Path(__file__).parent / "fixtures" / "capilla_quiroz_v17.skp"
+
+    def test_silent_by_default(self, caplog) -> None:
+        """With no explicit logging configuration, openskp's INFO/DEBUG
+        progress logs must not reach any handler - the library never
+        calls ``basicConfig()`` or installs its own handler/level."""
+        if not self.FIXTURE.exists():
+            pytest.skip("legacy fixture not present")
+        from openskp.model import SkpFile
+        SkpFile.open(str(self.FIXTURE)).parse()
+        assert caplog.records == []
+
+    def test_progress_logs_at_debug(self, caplog) -> None:
+        if not self.FIXTURE.exists():
+            pytest.skip("legacy fixture not present")
+        from openskp.model import SkpFile
+        with caplog.at_level("DEBUG", logger="openskp.legacy"):
+            SkpFile.open(str(self.FIXTURE)).parse()
+        messages = [r.message for r in caplog.records]
+        assert any("Parsing legacy" in m for m in messages)
+        assert any("Parse complete" in m for m in messages)
+
+    def test_scene_build_logs(self, caplog) -> None:
+        if not self.FIXTURE.exists():
+            pytest.skip("legacy fixture not present")
+        from openskp.model import SkpFile
+        with caplog.at_level("INFO", logger="openskp.scene"):
+            SkpFile.open(str(self.FIXTURE)).build_scene()
+        messages = [r.message for r in caplog.records]
+        assert any("Building scene" in m for m in messages)
+        assert any("Scene build complete" in m for m in messages)
+
+    def test_bad_header_raises_parse_error_with_stage(self, tmp_path) -> None:
+        from openskp import SkpParseError
+        from openskp.model import SkpFile
+
+        bad_file = tmp_path / "not_a_skp.skp"
+        bad_file.write_bytes(b"not a real skp file" * 10)
+
+        with pytest.raises(SkpParseError) as exc_info:
+            SkpFile.open(str(bad_file)).parse()
+        assert exc_info.value.stage == "header"
+
+    def test_parse_error_str_includes_context(self) -> None:
+        from openskp import SkpParseError
+
+        err = SkpParseError(
+            "boom", stage="tlv_walk", record_index=3, total_records=10,
+            tag="F601",
+        )
+        text = str(err)
+        assert "stage=tlv_walk" in text
+        assert "record=3/10" in text
+        assert "tag=F601" in text
+
+    def test_parse_error_preserves_cause(self) -> None:
+        from openskp import SkpParseError
+
+        original = ValueError("inner failure")
+        try:
+            try:
+                raise original
+            except ValueError as e:
+                raise SkpParseError("wrapped", stage="tlv_walk") from e
+        except SkpParseError as wrapped:
+            assert wrapped.__cause__ is original

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
-import { parseSkp } from './dist/index.mjs';
+import { parseSkp, buildScene } from './dist/index.mjs';
 
 // Application state variables
 let scene, camera, renderer, controls;
@@ -10,6 +10,7 @@ let raycaster, mouse;
 let selectedMesh = null;
 let selectedBoxHelper = null;
 let currentModel = null;
+let currentScene = null;
 let layerVisibility = {};
 
 // DOM Elements
@@ -21,6 +22,22 @@ const fileInput = document.getElementById('file-input');
 const btnLoad = document.getElementById('btn-load');
 const btnExport = document.getElementById('btn-export');
 const statusText = document.getElementById('status-text');
+const sizeWarningOverlay = document.getElementById('size-warning-overlay');
+const sizeWarningMessage = document.getElementById('size-warning-message');
+const btnSizeCancel = document.getElementById('btn-size-cancel');
+const btnSizeProceed = document.getElementById('btn-size-proceed');
+
+// This viewer runs entirely in one browser tab, which has a fixed JS heap
+// ceiling (commonly ~4GB) that can't be raised from a web page the way
+// Node's --max-old-space-size can. Verified directly: an 18.5MB file
+// (1,264 definitions) loads fine in ~20s; a 113MB file (132,879
+// definitions) - the same file confirmed to need 8-16GB of Node heap -
+// hangs this tab outright rather than throwing a catchable error. These
+// thresholds are deliberately conservative given that failure mode is
+// unrecoverable once it starts.
+const SOFT_WARNING_BYTES = 20 * 1024 * 1024;
+const HARD_WARNING_BYTES = 50 * 1024 * 1024;
+let pendingFile = null;
 
 // Layers Panel
 const layersListPlaceholder = document.getElementById('layers-list-placeholder');
@@ -374,9 +391,15 @@ function loadSkpBuffer(arrayBuffer, filename) {
       clearScene();
       
       const startTime = performance.now();
+      // parseSkp() is the light, per-definition raw parse (version, layers,
+      // materials); buildScene() is the separate, opt-in step that resolves
+      // the full placed scene graph into triangulated GLB-ready meshes. The
+      // viewer needs both, since it renders the baked scene but reports
+      // model-level metadata (version, layer list) from the light parse.
       currentModel = parseSkp(arrayBuffer);
+      currentScene = buildScene(arrayBuffer);
       const parseTimeMs = performance.now() - startTime;
-      
+
       console.log('Model parsed successfully:', currentModel);
       console.log(`Parsed in ${parseTimeMs.toFixed(1)}ms`);
 
@@ -386,25 +409,25 @@ function loadSkpBuffer(arrayBuffer, filename) {
       populateLayers(currentModel.layers);
 
       // Reconstruct Three.js Meshes from pre-triangulated GLB primitives
-      const prims = currentModel._glbPrimitives || [];
+      const prims = currentScene.glbPrimitives || [];
       console.log(`Building ${prims.length} geometry primitives...`);
 
       prims.forEach((prim) => {
         const geometry = new THREE.BufferGeometry();
-        
+
         geometry.setAttribute('position', new THREE.BufferAttribute(prim.positions, 3));
         geometry.setAttribute('normal', new THREE.BufferAttribute(prim.normals, 3));
         geometry.setIndex(new THREE.BufferAttribute(prim.indices, 1));
 
         // Get metadata
-        const metadata = currentModel.meshIndex[prim.geomName] || {};
-        
+        const metadata = currentScene.meshIndex[prim.geomName] || {};
+
         // Material & Color setup (Fallback to layer color if material factor is missing)
         const matIdx = prim.materialIndex;
         let colorFactor = [0.6, 0.6, 0.6, 1.0];
-        
-        if (currentModel._gltfMaterials && currentModel._gltfMaterials[matIdx]) {
-          colorFactor = currentModel._gltfMaterials[matIdx].pbrMetallicRoughness.baseColorFactor;
+
+        if (currentScene.gltfMaterials && currentScene.gltfMaterials[matIdx]) {
+          colorFactor = currentScene.gltfMaterials[matIdx].pbrMetallicRoughness.baseColorFactor;
         } else {
           // Attempt to find layer color
           const lay = currentModel.layers.find((l) => l.name === metadata.layer);
@@ -527,18 +550,46 @@ function initDragAndDrop() {
   window.addEventListener('drop', (e) => {
     e.preventDefault();
     dropOverlay.classList.remove('active');
-    
+
     const file = e.dataTransfer.files[0];
     if (file && file.name.toLowerCase().endsWith('.skp')) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        loadSkpBuffer(event.target.result, file.name);
-      };
-      reader.readAsArrayBuffer(file);
+      handleFile(file);
     } else {
       alert('Only .skp files are supported!');
     }
   });
+}
+
+// Format a byte count as a human-readable MB string.
+function formatMB(bytes) {
+  return (bytes / (1024 * 1024)).toFixed(1);
+}
+
+// Entry point for any newly selected/dropped file: checks size before
+// touching the parser at all, since a file large enough to exhaust this
+// tab's heap can freeze it mid-parse with no chance to show an error
+// afterward - the only reliable point to warn is before starting.
+function handleFile(file) {
+  if (file.size >= HARD_WARNING_BYTES) {
+    pendingFile = file;
+    sizeWarningMessage.textContent =
+      `"${file.name}" is ${formatMB(file.size)} MB. Files around this size or ` +
+      `larger have been confirmed to freeze this viewer's browser tab.`;
+    sizeWarningOverlay.classList.remove('hidden');
+    return;
+  }
+  if (file.size >= SOFT_WARNING_BYTES) {
+    statusText.textContent = `Loading ${file.name} (${formatMB(file.size)} MB) - large files parse slower in-browser than via the CLI packages...`;
+  }
+  readAndLoad(file);
+}
+
+function readAndLoad(file) {
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    loadSkpBuffer(event.target.result, file.name);
+  };
+  reader.readAsArrayBuffer(file);
 }
 
 // Event Bindings
@@ -546,11 +597,23 @@ btnLoad.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (file) {
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      loadSkpBuffer(event.target.result, file.name);
-    };
-    reader.readAsArrayBuffer(file);
+    handleFile(file);
+  }
+  // Allow re-selecting the same file path twice in a row.
+  fileInput.value = '';
+});
+
+btnSizeCancel.addEventListener('click', () => {
+  sizeWarningOverlay.classList.add('hidden');
+  pendingFile = null;
+});
+
+btnSizeProceed.addEventListener('click', () => {
+  sizeWarningOverlay.classList.add('hidden');
+  const file = pendingFile;
+  pendingFile = null;
+  if (file) {
+    readAndLoad(file);
   }
 });
 

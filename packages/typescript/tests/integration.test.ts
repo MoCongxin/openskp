@@ -46,6 +46,9 @@ describe('SketchUp Parser Integration Test', () => {
     expect(matLayer0).toBeDefined();
     expect(typeof matLayer0!.color.r).toBe('number');
     expect(typeof matLayer0!.transparency).toBe('number');
+    // Real data: none of this fixture's materials have useTrans="1" set,
+    // so all correctly read fully opaque.
+    expect(matLayer0!.transparency).toBe(1);
 
     // 4. Assert Definitions
     expect(model.definitions.size).toBe(46);
@@ -119,17 +122,27 @@ describe('SketchUp Parser Integration Test', () => {
     expect(model.materials).toContain(model.materialsById.get(26180));
     expect(model.materialsById.get(26180)!.id).toBe(26180);
     expect(Array.isArray(model.styles)).toBe(true);
+    // Real style data: this fixture bundles two style.xml files (the second
+    // is SketchUp's "_1" duplicate-naming convention), both named
+    // "[Construction Documentation Style]" with the same front/back colors.
+    expect(model.styles.length).toBe(2);
+    expect(model.styles[0].name).toBe('[Construction Documentation Style]');
+    expect(model.styles[0].frontColor).toEqual([255, 255, 255]);
+    expect(model.styles[0].backColor).toEqual([208, 209, 189]);
 
-    // 8. Assert Scene Hierarchy
-    expect(model.sceneHierarchy).toBeDefined();
-    expect(model.sceneHierarchy.name).toBe('ROOT');
-    expect(model.sceneHierarchy.definitionName).toBe('ROOT_MODEL');
-    expect(model.sceneHierarchy.children.length).toBeGreaterThan(0);
+    // 8. Assert Scene Hierarchy & Mesh Index - now a separate, opt-in step
+    // (buildScene()) from parse(), so it never costs a plain parse() call
+    // anything.
+    const scene = skpFile.buildScene();
+    expect(scene.sceneHierarchy).toBeDefined();
+    expect(scene.sceneHierarchy.name).toBe('ROOT');
+    expect(scene.sceneHierarchy.definitionName).toBe('ROOT_MODEL');
+    expect(scene.sceneHierarchy.children.length).toBeGreaterThan(0);
 
     // 9. Assert Mesh Index
-    const meshNames = Object.keys(model.meshIndex);
+    const meshNames = Object.keys(scene.meshIndex);
     expect(meshNames.length).toBe(43);
-    const firstMesh = model.meshIndex[meshNames[0]];
+    const firstMesh = scene.meshIndex[meshNames[0]];
     expect(firstMesh).toBeDefined();
     expect(firstMesh.name).toBeDefined();
     expect(firstMesh.layer).toBeDefined();
@@ -156,12 +169,13 @@ describe('SketchUp Parser Integration Test', () => {
     expect(model.definitions.size).toBe(0);
 
     // 5. Assert Scene Hierarchy & Mesh Index
-    expect(model.sceneHierarchy).toBeDefined();
-    expect(model.sceneHierarchy.name).toBe('ROOT');
-    expect(model.sceneHierarchy.definitionName).toBe('ROOT_MODEL');
+    const scene = skpFile.buildScene();
+    expect(scene.sceneHierarchy).toBeDefined();
+    expect(scene.sceneHierarchy.name).toBe('ROOT');
+    expect(scene.sceneHierarchy.definitionName).toBe('ROOT_MODEL');
 
-    const meshNames = Object.keys(model.meshIndex);
+    const meshNames = Object.keys(scene.meshIndex);
     expect(meshNames).toHaveLength(1);
-    expect(model.meshIndex[meshNames[0]].definitionName).toBe('ROOT_MODEL');
+    expect(scene.meshIndex[meshNames[0]].definitionName).toBe('ROOT_MODEL');
   });
 });

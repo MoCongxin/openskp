@@ -1,171 +1,71 @@
 import { extractSkpContents } from './vff';
-import { parseTlvRecursive, readF64, readU32, parseVarInt } from './parser';
-import { transformPoint, multiplyMatrices } from './transforms';
-import { triangulateFace3D } from './triangulator';
+import { iterTopLevelLazy, readU32, parseVarInt } from './parser';
+import { SkpParseError } from './errors';
+import { ParseOptions, PROGRESS_INTERVAL, emitLog, emitProgress } from './observability';
 import {
   GeometryBuilder,
   collectLayers,
   collectDefs,
   extractGeometryFromNodes,
-  extractDynamicProperties,
-  reconstructLoopVertices,
   parseMaterialXml,
+  parseStyleXml,
+  resolveTextureBytes,
   findChildTag,
+  ParsedDefinition,
 } from './geometry';
+import {
+  SkpModel,
+  SkpScene,
+  Style,
+  Material,
+  Texture,
+  InstanceNode,
+  ParsedRawData,
+  buildModelFromParsed,
+  buildSceneFromParsed,
+} from './model';
+import { isLegacy, parseLegacyToRaw } from './legacy';
+
+export * from './model';
+export * from './errors';
+export * from './observability';
 
 declare const process: any;
 declare const require: any;
 
-export interface SkpModel {
-  version: string;
-  definitions: Map<number, Definition>;
-  layers: Layer[];
-  materials: Material[];
-  materialsById: Map<number, Material>;
-  styles: Style[];
-  sceneHierarchy: InstanceNode;
-  meshIndex: Record<string, MeshMetadata>;
-}
-
-export interface Definition {
-  id: number;
-  guid: string;
-  name: string;
-  vertices: Vertex[];
-  edges: Edge[];
-  faces: Face[];
-  instances: Instance[];
-  isImage: boolean;
-  alwaysFacesCamera: boolean;
-}
-
-export interface Vertex {
-  id: number;
-  x: number;
-  y: number;
-  z: number;
-}
-
-export interface Edge {
-  id: number;
-  v1Id: number;
-  v2Id: number;
-  soft: boolean;
-  smooth: boolean;
-  hidden: boolean;
-}
-
-export interface Face {
-  id: number;
-  loops: CoEdge[][];
-  normal: [number, number, number];
-  /** Material of the face's FRONT side, or null. */
-  materialId: number | null;
-  /** Material of the face's BACK side, or null. */
-  backMaterialId: number | null;
-  /**
-   * Per-face texture mapping for a positioned / photo-fitted texture
-   * (SketchUp's pins), or null when the texture is untouched (default
-   * projection applies). A 9-element array: a 3x3 row-major matrix mapping
-   * texture space -> face plane. To compute the UV of a point p (inches):
-   *
-   * 1. Plane basis from the face normal n: xr = normalize(Z x n),
-   *    yr = n x xr (for a vertical n: xr = X, yr = +-Y by the sign of n.Z).
-   * 2. uvq = [p.xr, p.yr, 1] @ inv(M) (row-vector convention).
-   * 3. u = uvq[0]/uvq[2] / tileW, v = uvq[1]/uvq[2] / tileH with the
-   *    material texture's tile size in inches.
-   *
-   * When the texture is untouched (null), the default is
-   * u = (p.xr)/tileW, v = (p.yr)/tileH. Distorted (4-pin) mappings are
-   * projective: uvq[2] != 1.
-   */
-  uvTransform: number[] | null;
-  /** Same for the face's back side, or null. */
-  uvTransformBack: number[] | null;
-}
-
-export interface CoEdge {
-  edgeId: number;
-  orientation: number;
-}
-
-/** A placed instance (component or group) inside a Definition's own instance list. */
-export interface Instance {
-  name: string;
-  refIdx: number;
-  guid: string;
-  matrix: number[];
-  /**
-   * Material painted onto the instance itself (SketchUp's "paint the
-   * component"), or null. Faces inside the placed definition whose own
-   * Face.materialId is null inherit this material - consumers must resolve
-   * that inheritance themselves, like the official SDK does on export.
-   */
-  materialId: number | null;
-}
-
-export interface Layer {
-  name: string;
-  color: { r: number; g: number; b: number };
-}
-
-/** A material's texture image, extracted from the SKP container. */
-export interface Texture {
-  filename: string;
-  width: number;
-  height: number;
-  data: Uint8Array | null;
-}
-
-/** A rendering style bundled in the file (SketchUp's Styles browser). */
-export interface Style {
-  name: string;
-  frontColor: [number, number, number] | null;
-  backColor: [number, number, number] | null;
-}
-
-export interface Material {
-  name: string;
-  color: { r: number; g: number; b: number };
-  transparency: number;
-  id: number | null;
-  texture: Texture | null;
-  colorized: boolean;
-  colorizeType: number;
-}
-
-export interface InstanceNode {
-  name: string;
-  definitionName: string;
-  layer: string;
-  positionMm: [number, number, number];
-  properties: Record<string, string>;
-  children: InstanceNode[];
-}
-
-export interface MeshMetadata {
-  name: string;
-  definitionName: string;
-  layer: string;
-  positionMm: [number, number, number];
-  properties: Record<string, string>;
-  path: string;
-}
-
 /**
- * Parse a SketchUp (.skp) file from an ArrayBuffer.
+ * Parse a SketchUp (.skp) file from an ArrayBuffer into its raw,
+ * source-agnostic form - shared by parseSkp() (the light public model) and
+ * buildScene() (the opt-in, heavier triangulated-scene builder), so neither
+ * one pays for work only the other needs.
  *
- * @param buffer - The raw file contents as an ArrayBuffer
- * @returns Parsed SkpModel with full geometry and metadata
+ * Transparently handles both the modern VFF/ZIP container (SketchUp 2021+)
+ * and the classic pre-2021 MFC CArchive container (SketchUp 2013-2020).
  */
-export function parseSkp(buffer: ArrayBuffer): SkpModel {
+function parseToRaw(buffer: ArrayBuffer, options?: ParseOptions): ParsedRawData {
+  const t0 = Date.now();
   const data = new Uint8Array(buffer);
+  emitLog(options, 'info', `Parsing buffer (${data.length} bytes)`);
+
+  if (isLegacy(data)) {
+    emitLog(options, 'debug', 'Detected legacy MFC container; routing to legacy walker');
+    return parseLegacyToRaw(data, options);
+  }
 
   // 1. Extract SKP contents from VFF/ZIP container
-  const contents = extractSkpContents(data);
+  let contents;
+  try {
+    contents = extractSkpContents(data);
+  } catch (e) {
+    throw new SkpParseError(`Failed to extract SKP contents: ${(e as Error).message}`, {
+      stage: 'zip_extract',
+      cause: e,
+    });
+  }
   const version = contents.version;
   const modelData = contents.modelData;
   const materialFiles = contents.materialFiles;
+  emitLog(options, 'debug', `Detected version ${version} (VFF/ZIP container)`);
 
   // 2. Parse XML materials to populate layer colors and materials
   const layerColors = new Map<string, [number, number, number]>();
@@ -181,14 +81,29 @@ export function parseSkp(buffer: ArrayBuffer): SkpModel {
         const parsedMat = parseMaterialXml(xmlText);
         if (parsedMat) {
           const folderName = name.split('/')[1] || '';
+          let texture: Texture | null = null;
+          if (parsedMat.hasTexture) {
+            const resolved = resolveTextureBytes(
+              materialFiles,
+              name,
+              parsedMat.textureFilename,
+              parsedMat.imagePath
+            );
+            texture = {
+              filename: resolved.filename,
+              width: parsedMat.xScale,
+              height: parsedMat.yScale,
+              data: resolved.data,
+            };
+          }
           const matObj: Material = {
             name: parsedMat.name,
             color: { r: parsedMat.r, g: parsedMat.g, b: parsedMat.b },
             transparency: parsedMat.trans,
             id: null,
-            texture: null,
-            colorized: false,
-            colorizeType: 0,
+            texture,
+            colorized: parsedMat.colorized,
+            colorizeType: parsedMat.colorizeType,
           };
           materialsMap.set(parsedMat.name, matObj);
           if (folderName) {
@@ -204,22 +119,37 @@ export function parseSkp(buffer: ArrayBuffer): SkpModel {
     }
   }
 
-  // 3. Parse TLV recursively starting at offset 0, handling the F401 container tag wrapper
-  let elements = parseTlvRecursive(modelData, 0, modelData.length);
-  if (elements.length === 1 && elements[0].tag === 'F401') {
-    elements = elements[0].children;
+  // 2b. Parse styles/*/style.xml: face colors for unpainted faces, stored as
+  // signed-int32 ARGB variants under item id 4000 (front) / 4001 (back).
+  const styles: Style[] = [];
+  for (const [name, xmlBytes] of Object.entries(materialFiles)) {
+    const lowerName = name.toLowerCase();
+    if (lowerName.startsWith('styles/') && lowerName.endsWith('style.xml')) {
+      try {
+        const decoder = new TextDecoder('utf-8');
+        const xmlText = decoder.decode(xmlBytes);
+        const parsedStyle = parseStyleXml(xmlText);
+        if (parsedStyle) {
+          styles.push({
+            name: parsedStyle.name,
+            frontColor: parsedStyle.frontColor,
+            backColor: parsedStyle.backColor,
+          });
+        }
+      } catch (e) {
+        // Ignore XML errors
+      }
+    }
   }
 
-  // 4. Collect layer ID to name mapping
-  const layerIdToName = collectLayers(elements);
-  if (!layerIdToName.has(1)) {
-    layerIdToName.set(1, 'Layer0');
-  }
-  if (!layerColors.has('Layer0')) {
-    layerColors.set('Layer0', [136, 136, 136]);
-  }
-
-  // 4b. Collect material ID to name mapping
+  // 3. Walk the TLV tree one top-level record at a time (instead of
+  // building the whole file's tree at once) so peak memory is bounded by
+  // the single largest definition/layer-manager/material-manager/root
+  // block, not by the file's total node count. Real production files can
+  // have 100k+ separate component definitions; materializing all of them
+  // simultaneously is what actually exhausts memory on large files - not
+  // the (comparatively modest, ~1x) cost of decompressing model.dat itself.
+  const layerIdToName = new Map<number, string>();
   const materialIdToName = new Map<number, string>();
   function collectMaterialIds(nodes: any[]) {
     for (const el of nodes) {
@@ -238,13 +168,11 @@ export function parseSkp(buffer: ArrayBuffer): SkpModel {
           let mName = '';
           try {
             const decoder = new TextDecoder('utf-8');
-            mName = decoder.decode(nameNode.payload).replace(/\0/g, '').trim();
+            mName = decoder.decode(nameNode.payload);
           } catch (e) {
             // Ignore
           }
-          if (mName) {
-            materialIdToName.set(mId, mName);
-          }
+          materialIdToName.set(mId, mName);
         }
       }
       if (el.children && el.children.length > 0) {
@@ -252,431 +180,106 @@ export function parseSkp(buffer: ArrayBuffer): SkpModel {
       }
     }
   }
-  collectMaterialIds(elements);
 
-  // 4c. Join the TLV material IDs (what Face.materialId references) onto the
-  // parsed materials, so callers can resolve face -> material. Same
-  // name-then-folder resolution used for face/instance colouring below.
-  // materialsMap/materialsByFolder may share the same Material object
-  // reference for an alias, so setting `.id` here is visible through both.
-  const materialsById = new Map<number, Material>();
-  for (const [mId, mName] of materialIdToName.entries()) {
-    const mat = materialsMap.get(mName) || materialsByFolder.get(mName);
-    if (!mat) continue;
-    if (mat.id === null) {
-      mat.id = mId;
-    }
-    materialsById.set(mId, mat);
-  }
+  emitLog(options, 'debug', `Parsed ${materialsMap.size} materials, ${styles.length} styles`);
 
-  // 5. Collect component definitions
-  const defsDict = collectDefs(elements);
-
-  // 6. Collect root geometry
+  const defsDict = new Map<number | string, ParsedDefinition>();
   const rootBuilder = new GeometryBuilder();
-  for (const el of elements) {
-    if (el.tag === 'F601') {
-      extractGeometryFromNodes(el.children, rootBuilder);
+
+  for (const { index, total, node: el } of iterTopLevelLazy(modelData, 0, modelData.length)) {
+    try {
+      collectLayers([el], layerIdToName);
+      collectMaterialIds([el]);
+      collectDefs([el], defsDict);
+      if (el.tag === 'F601') {
+        extractGeometryFromNodes(el.children, rootBuilder);
+      }
+    } catch (e) {
+      throw new SkpParseError(`Failed while processing top-level record: ${(e as Error).message}`, {
+        stage: 'tlv_walk',
+        recordIndex: index,
+        totalRecords: total,
+        tag: el.tag,
+        cause: e,
+      });
+    }
+    // `el` (and its whole subtree) is now unreferenced and eligible for
+    // garbage collection before the next top-level record is built.
+    if (index % PROGRESS_INTERVAL === 0 || index === total - 1) {
+      emitProgress(options, 'tlv_walk', index + 1, total);
+      emitLog(options, 'debug', `Processed ${index + 1}/${total} top-level records`);
     }
   }
+
+  emitLog(
+    options,
+    'info',
+    `Parse complete: ${defsDict.size} defs (${((Date.now() - t0) / 1000).toFixed(2)}s)`
+  );
+
+  if (!layerIdToName.has(1)) {
+    layerIdToName.set(1, 'Layer0');
+  }
+  if (!layerColors.has('Layer0')) {
+    layerColors.set('Layer0', [136, 136, 136]);
+  }
+
   defsDict.set('ROOT', {
     guid: 'ROOT',
     name: 'ROOT_MODEL',
     isImage: false,
+    alwaysFacesCamera: false,
     builder: rootBuilder,
   });
 
-  // 7. Instantiate scene hierarchy and gather mesh metadata & GLB primitives
-  const meshCounter = { count: 0 };
-  const meshIndex: Record<string, MeshMetadata> = {};
-  const glbPrimitives: any[] = [];
-
-  const getLayerColor = (name: string) => {
-    const c = layerColors.get(name) || [136, 136, 136];
-    return { r: c[0], g: c[1], b: c[2] };
-  };
-
-  const colorToMaterialIndex = new Map<string, number>();
-  const gltfMaterials: any[] = [];
-
-  function getMaterialIndex(color: { r: number; g: number; b: number }) {
-    const key = `${color.r},${color.g},${color.b}`;
-    if (colorToMaterialIndex.has(key)) {
-      return colorToMaterialIndex.get(key)!;
-    }
-    const idx = gltfMaterials.length;
-    gltfMaterials.push({
-      pbrMetallicRoughness: {
-        baseColorFactor: [color.r / 255, color.g / 255, color.b / 255, 1.0],
-        metallicFactor: 0.0,
-        roughnessFactor: 0.8,
-      },
-    });
-    colorToMaterialIndex.set(key, idx);
-    return idx;
-  }
-
-  function instantiate(
-    defId: number | string,
-    currentMatrix: number[],
-    parentLayer: string = 'Layer0',
-    pathName: string = 'ROOT',
-    inheritedMaterialColor?: { r: number; g: number; b: number }
-  ): InstanceNode[] {
-    const d = defsDict.get(defId);
-    if (!d) return [];
-
-    const builder = d.builder;
-
-    if (builder.faces.size > 0) {
-      const faceGroups = new Map<string, {
-        color: { r: number; g: number; b: number };
-        localVerts: [number, number, number][];
-        localFaces: number[][];
-        localVMap: Map<number, number>;
-        faceList: { fId: number; fData: any; localFacesStart: number; localFacesEnd: number }[];
-      }>();
-
-      for (const [fId, fData] of builder.faces.entries()) {
-        let faceColor = inheritedMaterialColor;
-        const faceMatId = (fData as any).materialId;
-        if (faceMatId !== undefined && faceMatId !== null) {
-          const matName = materialIdToName.get(faceMatId);
-          if (matName) {
-            const mat = materialsMap.get(matName) || materialsByFolder.get(matName);
-            if (mat) {
-              faceColor = mat.color;
-            }
-          }
-        }
-        if (!faceColor) {
-          faceColor = getLayerColor(parentLayer);
-        }
-
-        const colorKey = `${faceColor.r},${faceColor.g},${faceColor.b}`;
-        let group = faceGroups.get(colorKey);
-        if (!group) {
-          group = {
-            color: faceColor,
-            localVerts: [],
-            localFaces: [],
-            localVMap: new Map<number, number>(),
-            faceList: [],
-          };
-          faceGroups.set(colorKey, group);
-        }
-
-        const loops: number[][] = [];
-        for (const loop of fData.loops) {
-          const loopVerts = reconstructLoopVertices(loop, builder.edges);
-          if (loopVerts.length > 0) {
-            loops.push(loopVerts);
-          }
-        }
-        if (loops.length === 0) continue;
-
-        const triangles = triangulateFace3D(builder.vertices, loops, fData.normal);
-        const startFaceIdx = group.localFaces.length;
-        for (const tri of triangles) {
-          const faceIndices: number[] = [];
-          for (const vId of tri) {
-            if (builder.vertices.has(vId)) {
-              let idx = group.localVMap.get(vId);
-              if (idx === undefined) {
-                const pt = builder.vertices.get(vId)!;
-                group.localVerts.push(pt);
-                idx = group.localVerts.length - 1;
-                group.localVMap.set(vId, idx);
-              }
-              faceIndices.push(idx);
-            }
-          }
-          if (faceIndices.length === 3) {
-            group.localFaces.push(faceIndices);
-          }
-        }
-        const endFaceIdx = group.localFaces.length;
-        group.faceList.push({ fId, fData, localFacesStart: startFaceIdx, localFacesEnd: endFaceIdx });
-      }
-
-      for (const [colorKey, group] of faceGroups.entries()) {
-        if (group.localFaces.length === 0) continue;
-
-        const isRoot = pathName === 'ROOT';
-        const tx = isRoot ? 0 : (currentMatrix[9] ?? 0) * 25.4;
-        const ty = isRoot ? 0 : (currentMatrix[10] ?? 0) * 25.4;
-        const tz = isRoot ? 0 : (currentMatrix[11] ?? 0) * 25.4;
-
-        let safePath = pathName.replace(/ \/ /g, '__').replace(/ /g, '_');
-        if (safePath.length > 80) safePath = safePath.slice(0, 80);
-        
-        const colorSuffix = faceGroups.size > 1 ? `_${colorKey.replace(/,/g, '_')}` : '';
-        const geomName = `mesh_${meshCounter.count}_${safePath}_${parentLayer}${colorSuffix}`;
-        meshCounter.count++;
-
-        meshIndex[geomName] = {
-          name: isRoot ? 'ROOT' : pathName.split(' / ').pop() || '',
-          definitionName: d.name || '',
-          layer: parentLayer,
-          positionMm: [Math.round(tx * 100) / 100, Math.round(ty * 100) / 100, Math.round(tz * 100) / 100],
-          properties: {},
-          path: pathName,
-        };
-
-        const scale = 0.0254;
-        const positions = new Float32Array(group.localVerts.length * 3);
-        const normals = new Float32Array(group.localVerts.length * 3);
-
-        const vertexNormalsAccum = new Array(group.localVerts.length).fill(null).map(() => [0, 0, 0]);
-        for (const faceItem of group.faceList) {
-          const loops: number[][] = [];
-          for (const loop of faceItem.fData.loops) {
-            const loopVerts = reconstructLoopVertices(loop, builder.edges);
-            if (loopVerts.length > 0) {
-              loops.push(loopVerts);
-            }
-          }
-          if (loops.length === 0) continue;
-
-          const fn = faceItem.fData.normal;
-          for (const loop of loops) {
-            for (const vId of loop) {
-              const idx = group.localVMap.get(vId);
-              if (idx !== undefined) {
-                vertexNormalsAccum[idx][0] += fn[0];
-                vertexNormalsAccum[idx][1] += fn[1];
-                vertexNormalsAccum[idx][2] += fn[2];
-              }
-            }
-          }
-        }
-
-        for (let i = 0; i < group.localVerts.length; i++) {
-          const v = group.localVerts[i];
-          const pt = transformPoint(currentMatrix, v);
-          positions[i * 3] = pt[0] * scale;
-          positions[i * 3 + 1] = pt[2] * scale;
-          positions[i * 3 + 2] = -pt[1] * scale;
-
-          const rawNorm = vertexNormalsAccum[i];
-          const normLen = Math.sqrt(rawNorm[0] ** 2 + rawNorm[1] ** 2 + rawNorm[2] ** 2);
-          const n = normLen > 1e-6 ? [rawNorm[0] / normLen, rawNorm[1] / normLen, rawNorm[2] / normLen] : [0, 0, 1];
-
-          const nx = currentMatrix[0] * n[0] + currentMatrix[1] * n[1] + currentMatrix[2] * n[2];
-          const ny = currentMatrix[3] * n[0] + currentMatrix[4] * n[1] + currentMatrix[5] * n[2];
-          const nz = currentMatrix[6] * n[0] + currentMatrix[7] * n[1] + currentMatrix[8] * n[2];
-
-          const l = Math.sqrt(nx * nx + ny * ny + nz * nz);
-          if (l > 1e-6) {
-            normals[i * 3] = nx / l;
-            normals[i * 3 + 1] = nz / l;
-            normals[i * 3 + 2] = -ny / l;
-          } else {
-            normals[i * 3] = 0;
-            normals[i * 3 + 1] = 1;
-            normals[i * 3 + 2] = 0;
-          }
-        }
-
-        const indices = new Uint32Array(group.localFaces.length * 3);
-        for (let i = 0; i < group.localFaces.length; i++) {
-          indices[i * 3] = group.localFaces[i][0];
-          indices[i * 3 + 1] = group.localFaces[i][1];
-          indices[i * 3 + 2] = group.localFaces[i][2];
-        }
-
-        const materialIndex = getMaterialIndex(group.color);
-
-        glbPrimitives.push({
-          positions,
-          normals,
-          indices,
-          materialIndex,
-          geomName,
-        });
-      }
-    }
-
-    const childInstancesInfo: InstanceNode[] = [];
-
-    for (const inst of builder.instances) {
-      const refIdx = inst.refIdx;
-      const instMatrix = inst.matrix;
-      const newMatrix = multiplyMatrices(currentMatrix, instMatrix);
-
-      let lName = parentLayer;
-      let instColor = inheritedMaterialColor;
-      const d007 = inst.children.find((c) => c.tag === 'D007');
-      let properties: Record<string, string> = {};
-
-      if (d007) {
-        const d207 = d007.children.find((c) => c.tag === 'D207');
-        if (d207 && d207.payload.length > 0) {
-          const p = d207.payload;
-          let lId: number;
-          if (p.length === 1) {
-            lId = p[0];
-          } else {
-            lId = parseVarInt(p, 0, p.length);
-          }
-          lName = layerIdToName.get(lId) || parentLayer;
-        }
-
-        const d107 = d007.children.find((c) => c.tag === 'D107');
-        if (d107) {
-          const instMatId = parseVarInt(d107.payload, 0, d107.payload.length);
-          const matName = materialIdToName.get(instMatId);
-          if (matName) {
-            const mat = materialsMap.get(matName) || materialsByFolder.get(matName);
-            if (mat) {
-              instColor = mat.color;
-            }
-          }
-        }
-
-        try {
-          properties = extractDynamicProperties(d007);
-        } catch (e) {
-          // Ignore
-        }
-      }
-
-      const instName = inst.name || `Component_${refIdx}`;
-      const fullPathName = `${pathName} / ${instName}`;
-      const childNodes = instantiate(refIdx, newMatrix, lName, fullPathName, instColor);
-
-      const tx = (newMatrix[9] ?? 0) * 25.4;
-      const ty = (newMatrix[10] ?? 0) * 25.4;
-      const tz = (newMatrix[11] ?? 0) * 25.4;
-
-      const instInfo: InstanceNode = {
-        name: inst.name || '',
-        definitionName: defsDict.get(refIdx)?.name || '',
-        layer: lName,
-        positionMm: [
-          Math.round(tx * 100) / 100,
-          Math.round(ty * 100) / 100,
-          Math.round(tz * 100) / 100,
-        ],
-        properties: properties,
-        children: childNodes,
-      };
-      childInstancesInfo.push(instInfo);
-
-      let safeChildPath = fullPathName.replace(/ \/ /g, '__').replace(/ /g, '_');
-      if (safeChildPath.length > 80) safeChildPath = safeChildPath.slice(0, 80);
-
-      for (const geomName of Object.keys(meshIndex)) {
-        if (geomName.includes(safeChildPath)) {
-          const existing = meshIndex[geomName];
-          if (existing) {
-            existing.properties = properties;
-            existing.name = inst.name || '';
-          }
-        }
-      }
-    }
-
-    return childInstancesInfo;
-  }
-
-  const identityMat = [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1.0];
-  const rootChildren = instantiate('ROOT', identityMat);
-
-  // Fill in missing root meshes
-  for (const geomName of Object.keys(meshIndex)) {
-    const existing = meshIndex[geomName];
-    if (existing && existing.path === 'ROOT') {
-      existing.name = 'ROOT';
-      existing.definitionName = 'ROOT_MODEL';
-      existing.layer = 'Layer0';
-      existing.positionMm = [0, 0, 0];
-      existing.properties = {};
-    }
-  }
-
-  const finalLayersList: Layer[] = Array.from(layerColors.entries()).map(([name, c]) => ({
-    name,
-    color: { r: c[0], g: c[1], b: c[2] },
-  }));
-
-  const finalMaterialsList: Material[] = Array.from(materialsMap.values());
-
-  const sceneHierarchy: InstanceNode = {
-    name: 'ROOT',
-    definitionName: 'ROOT_MODEL',
-    layer: 'Layer0',
-    positionMm: [0, 0, 0],
-    properties: {},
-    children: rootChildren,
-  };
-
-  const finalDefinitions = new Map<number, Definition>();
-  for (const [id, d] of defsDict.entries()) {
-    if (typeof id === 'number') {
-      const vertices: Vertex[] = Array.from(d.builder.vertices.entries()).map(([vId, [x, y, z]]) => ({
-        id: vId,
-        x,
-        y,
-        z,
-      }));
-      const edges: Edge[] = Array.from(d.builder.edges.entries()).map(([eId, [v1, v2]]) => ({
-        id: eId,
-        v1Id: v1 ?? 0,
-        v2Id: v2 ?? 0,
-        soft: false,
-        smooth: false,
-        hidden: false,
-      }));
-      const faces: Face[] = Array.from(d.builder.faces.entries()).map(([fId, fData]) => ({
-        id: fId,
-        loops: fData.loops,
-        normal: fData.normal,
-        materialId: fData.materialId ?? null,
-        backMaterialId: null,
-        uvTransform: fData.uvTransform ?? null,
-        uvTransformBack: fData.uvTransformBack ?? null,
-      }));
-      const instances: Instance[] = d.builder.instances.map((inst) => ({
-        name: inst.name,
-        refIdx: inst.refIdx,
-        guid: inst.refGuid,
-        matrix: inst.matrix,
-        materialId: inst.materialId,
-      }));
-
-      finalDefinitions.set(id, {
-        id,
-        guid: d.guid,
-        name: d.name,
-        vertices,
-        edges,
-        faces,
-        instances,
-        isImage: d.isImage,
-        alwaysFacesCamera: false,
-      });
-    }
-  }
-
-  const styles: Style[] = [];
-
-  const model: SkpModel = {
+  return {
     version,
-    definitions: finalDefinitions,
-    layers: finalLayersList,
-    materials: finalMaterialsList,
-    materialsById,
+    layerColors,
+    layerIdToName,
+    materialIdToName,
+    materialsMap,
+    materialsByFolder,
     styles,
-    sceneHierarchy,
-    meshIndex,
+    defsDict,
   };
+}
 
-  // Attach internal GLB data
-  (model as any)._glbPrimitives = glbPrimitives;
-  (model as any)._gltfMaterials = gltfMaterials;
+/**
+ * Parse a SketchUp (.skp) file from an ArrayBuffer.
+ *
+ * Transparently handles both the modern VFF/ZIP container (SketchUp 2021+)
+ * and the classic pre-2021 MFC CArchive container (SketchUp 2013-2020).
+ *
+ * Fast and memory-light regardless of file size: this returns each
+ * definition's raw geometry exactly once, with no scene-graph instancing
+ * resolved. For a flattened, triangulated, world-space scene ready for
+ * rendering or GLB export, see {@link buildScene} - a separate, opt-in
+ * step, since baking every placed instance can produce far more data than
+ * the file's raw geometry.
+ *
+ * @param buffer - The raw file contents as an ArrayBuffer
+ * @param options - Optional progress/log callbacks (see {@link ParseOptions})
+ * @returns Parsed SkpModel with full geometry and metadata
+ */
+export function parseSkp(buffer: ArrayBuffer, options?: ParseOptions): SkpModel {
+  return buildModelFromParsed(parseToRaw(buffer, options));
+}
 
-  return model;
+/**
+ * Bake every instance actually placed in the model into world-space,
+ * triangulated mesh data, ready for a GLB export or any other renderer.
+ * See {@link buildSceneFromParsed} for the full explanation of why this is
+ * separate from {@link parseSkp}.
+ *
+ * Independent of parseSkp(): calling both re-parses the raw TLV data once
+ * per call rather than sharing it, trading a bit of extra CPU time for
+ * keeping each call's memory footprint no larger than what it actually
+ * needs.
+ *
+ * @param options - Optional progress/log callbacks (see {@link ParseOptions})
+ */
+export function buildScene(buffer: ArrayBuffer, options?: ParseOptions): SkpScene {
+  return buildSceneFromParsed(parseToRaw(buffer, options), options);
 }
 
 function createGlb(json: any, binaryBuffer: Uint8Array): Uint8Array {
@@ -719,14 +322,15 @@ function createGlb(json: any, binaryBuffer: Uint8Array): Uint8Array {
 }
 
 /**
- * Export a parsed SkpModel to GLB (binary glTF 2.0) format.
+ * Export a baked SkpScene (see {@link buildScene}) to GLB (binary glTF 2.0)
+ * format.
  *
- * @param model - Parsed SkpModel
+ * @param scene - The result of buildScene()
  * @returns GLB file as Uint8Array
  */
-export function toGLB(model: SkpModel): Uint8Array {
-  const prims = (model as any)._glbPrimitives || [];
-  const gltfMaterials = (model as any)._gltfMaterials || [];
+export function toGLB(scene: SkpScene): Uint8Array {
+  const prims = scene.glbPrimitives || [];
+  const gltfMaterials = scene.gltfMaterials || [];
 
   let totalBinaryLength = 0;
   for (const prim of prims) {
@@ -872,12 +476,15 @@ export function toGLB(model: SkpModel): Uint8Array {
 }
 
 /**
- * Export a parsed SkpModel to a metadata JSON object.
+ * Export a parsed SkpModel to a metadata JSON object. Pass the result of
+ * {@link buildScene} as `scene` to also include mesh/scene-hierarchy data;
+ * omit it for a lighter summary covering just the raw model.
  *
  * @param model - Parsed SkpModel
+ * @param scene - Optional result of buildScene()
  * @returns Metadata object
  */
-export function toJSON(model: SkpModel): Record<string, unknown> {
+export function toJSON(model: SkpModel, scene?: SkpScene): Record<string, unknown> {
   const definitionsObj: Record<string, any> = {};
   for (const [id, defn] of model.definitions.entries()) {
     definitionsObj[id] = {
@@ -925,12 +532,12 @@ export function toJSON(model: SkpModel): Record<string, unknown> {
     format_version: '1.0',
     sketchup_version: model.version,
     total_definitions: model.definitions.size,
-    total_meshes: Object.keys(model.meshIndex).length,
+    total_meshes: scene ? Object.keys(scene.meshIndex).length : 0,
     total_layers: model.layers.length,
     layers: layersList,
     materials: materialsList,
-    mesh_index: model.meshIndex,
-    scene_hierarchy: serializeInstanceNode(model.sceneHierarchy),
+    mesh_index: scene ? scene.meshIndex : {},
+    scene_hierarchy: scene ? serializeInstanceNode(scene.sceneHierarchy) : null,
     definitions: definitionsObj,
   };
 }
@@ -960,7 +567,20 @@ export class SkpFile {
     }
   }
 
-  parse(): SkpModel {
-    return parseSkp(this.buffer);
+  /** Fast, memory-light parse: raw per-definition geometry, no scene-graph
+   * instancing resolved. See {@link buildScene} for a triangulated,
+   * world-space scene ready for rendering or GLB export.
+   * @param options - Optional progress/log callbacks (see {@link ParseOptions}) */
+  parse(options?: ParseOptions): SkpModel {
+    return parseSkp(this.buffer, options);
+  }
+
+  /** Bake every placed instance into world-space, triangulated mesh data.
+   * Independent of parse() - re-parses the raw TLV data on its own rather
+   * than reusing a prior parse() call, so calling only parse() never pays
+   * for this heavier computation.
+   * @param options - Optional progress/log callbacks (see {@link ParseOptions}) */
+  buildScene(options?: ParseOptions): SkpScene {
+    return buildScene(this.buffer, options);
   }
 }

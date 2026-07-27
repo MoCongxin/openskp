@@ -3,7 +3,7 @@ import { validateHeader, readVersion } from '../src/vff';
 import { readU32, readF64, parseVarInt, parseTlvRecursive } from '../src/parser';
 import { transformPoint, multiplyMatrices, isIdentity } from '../src/transforms';
 import { computeFaceNormal, triangulateFace3D } from '../src/triangulator';
-import { GeometryBuilder, extractGeometryFromNodes, extractUvTransforms, collectDefs } from '../src/geometry';
+import { GeometryBuilder, extractGeometryFromNodes, extractUvTransforms, collectDefs, parseMaterialXml } from '../src/geometry';
 
 /** Build a single TLV element: 2-byte tag (hex) + 4-byte LE size + payload. */
 function tlv(tagHex: string, payload: Uint8Array): Uint8Array {
@@ -285,5 +285,90 @@ describe('Image entities', () => {
     const names = Array.from(defsDict.values()).map((d) => [d.name, d.isImage]);
     expect(names).toContainEqual(['imagen#1', true]);
     expect(names).toContainEqual(['Grupo', false]);
+  });
+});
+
+describe('Always faces camera (component behavior flags)', () => {
+  it('marks Definition.alwaysFacesCamera when 581B carries 5D1B == 1', () => {
+    const behaviorOn = tlv('581B', tlv('5D1B', new Uint8Array([0x01])));
+    const behaviorOff = tlv('581B', tlv('5D1B', new Uint8Array([0x00])));
+
+    const susan = tlv(
+      '7C15',
+      concatBytes(tlv('DE05', new Uint8Array([0x01])), tlv('7E15', new TextEncoder().encode('Susan')), behaviorOn)
+    );
+    const chair = tlv(
+      '7C15',
+      concatBytes(tlv('DE05', new Uint8Array([0x02])), tlv('7E15', new TextEncoder().encode('Chair')), behaviorOff)
+    );
+    const buf = concatBytes(susan, chair);
+
+    const elements = parseTlvRecursive(buf, 0, buf.length);
+    const defsDict = collectDefs(elements);
+
+    const names = Array.from(defsDict.values()).map((d) => [d.name, d.alwaysFacesCamera]);
+    expect(names).toContainEqual(['Susan', true]);
+    expect(names).toContainEqual(['Chair', false]);
+  });
+});
+
+describe('Back-side material (AF0D)', () => {
+  it('extracts the back-side material while front stays unpainted', () => {
+    const dc05 = tlv('DC05', tlv('DE05', new Uint8Array([0x2a])));
+    const af0d = tlv('AF0D', new Uint8Array([0x85, 0x8b, 0x06]));
+    const node = tlv('AC0D', concatBytes(dc05, af0d));
+
+    const elements = parseTlvRecursive(node, 0, node.length);
+    const builder = new GeometryBuilder();
+    extractGeometryFromNodes(elements, builder);
+
+    expect(builder.faces.has(0x2a)).toBe(true);
+    const f = builder.faces.get(0x2a)!;
+    expect(f.materialId ?? null).toBeNull();
+    expect(f.backMaterialId).toBe(0x068b85);
+  });
+});
+
+describe("Material transparency (useTrans gating)", () => {
+  it('applies trans as an opacity (1 - trans) when useTrans="1"', () => {
+    const xml =
+      '<mat:material name="M" colorRed="1" colorGreen="2" colorBlue="3" trans="0.27" useTrans="1"/>';
+    const parsed = parseMaterialXml(xml);
+    expect(parsed).not.toBeNull();
+    // trans stores a TRANSPARENCY; the exposed value is the resulting
+    // opacity, so trans="0.27" reads back as 0.73.
+    expect(parsed!.trans).toBeCloseTo(0.73, 9);
+  });
+
+  it('stays fully opaque when useTrans is absent or "0" (trans is a leftover default)', () => {
+    const xml =
+      '<mat:material name="M" colorRed="1" colorGreen="2" colorBlue="3" trans="0" useTrans="0"/>';
+    const parsed = parseMaterialXml(xml);
+    expect(parsed).not.toBeNull();
+    expect(parsed!.trans).toBe(1.0);
+  });
+});
+
+describe('Edge display flags (D307)', () => {
+  it('decodes plain / hidden / soft+smooth edges from the D307 flag byte', () => {
+    const buildEdge = (entityId: number, flag: number) => {
+      const de05 = tlv('DE05', new Uint8Array([entityId]));
+      const d307 = tlv('D307', new Uint8Array([flag]));
+      const d007 = tlv('D007', d307);
+      return tlv('B80B', concatBytes(de05, d007));
+    };
+
+    const plain = buildEdge(0x01, 0x06);
+    const hidden = buildEdge(0x02, 0x07);
+    const softSmooth = buildEdge(0x03, 0x1e);
+    const buf = concatBytes(plain, hidden, softSmooth);
+
+    const elements = parseTlvRecursive(buf, 0, buf.length);
+    const builder = new GeometryBuilder();
+    extractGeometryFromNodes(elements, builder);
+
+    expect(builder.edgeFlags.get(0x01)).toBe(0x06);
+    expect(builder.edgeFlags.get(0x02)).toBe(0x07);
+    expect(builder.edgeFlags.get(0x03)).toBe(0x1e);
   });
 });
