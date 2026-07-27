@@ -6,7 +6,7 @@
 
 **Parse `.skp` files without SketchUp. No SDK. No license. Just code.**
 
-### 🌐 [Try the Live Web Viewer (Drag-and-Drop)](https://iamahsanmehmood.github.io/openskp/)
+### 🌐 [Try the Live Web Viewer (Drag-and-Drop)](https://iamahsanmehmood.github.io/openskp/) · 📖 [Browse the Docs Site](https://iamahsanmehmood.github.io/openskp/docs/)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.9+](https://img.shields.io/badge/Python-3.9+-3776AB.svg?logo=python&logoColor=white)](https://python.org)
@@ -302,6 +302,12 @@ z_mm = -y_inches × 25.4
 ---
 
 ## 📖 Documentation
+
+### 🌐 [iamahsanmehmood.github.io/openskp/docs/](https://iamahsanmehmood.github.io/openskp/docs/)
+
+A browsable docs site — install/quick-start per language, the data model, memory & performance numbers, observability, error handling, and the known differences between the four ports, all in one place. Deployed alongside the [web viewer](https://iamahsanmehmood.github.io/openskp/) from [`examples/web-viewer/docs/`](examples/web-viewer/docs/).
+
+The full source for each topic also lives here as plain Markdown:
 
 | Document | Description |
 |:---------|:------------|
