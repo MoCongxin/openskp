@@ -43,6 +43,13 @@ let pendingFile = null;
 const layersListPlaceholder = document.getElementById('layers-list-placeholder');
 const layersList = document.getElementById('layers-list');
 const layerCountBadge = document.getElementById('layer-count');
+const panelLayers = document.getElementById('panel-layers');
+const panelInspector = document.getElementById('panel-inspector');
+const mtoggleLayers = document.getElementById('mtoggle-layers');
+const mtoggleInspector = document.getElementById('mtoggle-inspector');
+const mtoggleLayerCount = document.getElementById('mtoggle-layer-count');
+const btnCloseLayers = document.getElementById('btn-close-layers');
+const btnCloseInspector = document.getElementById('btn-close-inspector');
 
 // Inspector Panel
 const inspectorEmptyState = document.getElementById('inspector-empty-state');
@@ -65,8 +72,8 @@ const statMeshes = document.getElementById('stat-meshes');
 function initViewport() {
   // Scene
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0a0b10);
-  scene.fog = new THREE.FogExp2(0x0a0b10, 0.015);
+  scene.background = new THREE.Color(0x08090b);
+  scene.fog = new THREE.FogExp2(0x08090b, 0.015);
 
   // Camera
   camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -81,6 +88,10 @@ function initViewport() {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
   canvasContainer.appendChild(renderer.domElement);
+  // Required for OrbitControls' own touch gesture handling (rotate/pan/
+  // pinch-zoom) to receive events at all - without this, mobile browsers
+  // intercept single/multi-finger drags for page scroll/zoom first.
+  renderer.domElement.style.touchAction = 'none';
 
   // Controls
   controls = new OrbitControls(camera, renderer.domElement);
@@ -105,7 +116,7 @@ function initViewport() {
   scene.add(fillLight);
 
   // Helpers (Grid & Axes)
-  const gridHelper = new THREE.GridHelper(50, 50, 0x00f0ff, 0x24252d);
+  const gridHelper = new THREE.GridHelper(50, 50, 0x3a3d46, 0x1b1c21);
   gridHelper.position.y = -0.01; // slightly lower than ground
   scene.add(gridHelper);
 
@@ -193,7 +204,7 @@ function selectMesh(mesh) {
   if (selectedBoxHelper) {
     scene.remove(selectedBoxHelper);
   }
-  selectedBoxHelper = new THREE.BoxHelper(mesh, 0x00f0ff);
+  selectedBoxHelper = new THREE.BoxHelper(mesh, 0xe8a33d);
   selectedBoxHelper.material.depthTest = false;
   selectedBoxHelper.material.transparent = true;
   selectedBoxHelper.material.opacity = 0.8;
@@ -237,6 +248,11 @@ function selectMesh(mesh) {
   inspectorEmptyState.style.display = 'none';
   inspectorDetails.style.display = 'block';
 
+  // On mobile, surface the drawer the selection just populated (no-op on
+  // desktop, where .open only affects layout inside the phone media query).
+  setDrawer(panelInspector, mtoggleInspector, true);
+  setDrawer(panelLayers, mtoggleLayers, false);
+
   // Log to console for debugging
   console.log('Selected Mesh:', data);
 }
@@ -250,6 +266,11 @@ function clearSelection() {
 
   inspectorDetails.style.display = 'none';
   inspectorEmptyState.style.display = 'flex';
+
+  // A tap on empty canvas is a signal the user wants the 3D view, not a
+  // drawer, in front - close both (no-op on desktop).
+  setDrawer(panelLayers, mtoggleLayers, false);
+  setDrawer(panelInspector, mtoggleInspector, false);
 }
 
 // Clear scene of old loaded model
@@ -295,12 +316,14 @@ function populateLayers(layers) {
     layersListPlaceholder.style.display = 'flex';
     layersList.style.display = 'none';
     layerCountBadge.textContent = '0';
+    mtoggleLayerCount.textContent = '0';
     return;
   }
 
   layersListPlaceholder.style.display = 'none';
   layersList.style.display = 'flex';
   layerCountBadge.textContent = layers.length.toString();
+  mtoggleLayerCount.textContent = layers.length.toString();
 
   layers.forEach((layer) => {
     layerVisibility[layer.name] = true;
@@ -618,6 +641,31 @@ btnSizeProceed.addEventListener('click', () => {
 });
 
 btnExport.addEventListener('click', exportToGLB);
+
+// Mobile drawers: on phone-width screens the Layers/Inspector panels are
+// hidden by default (see the max-width:768px block in style.css) so the
+// 3D canvas stays full-screen and interactive. These toggles open them as
+// dismissible drawers instead of permanently competing with the canvas
+// for space.
+function setDrawer(panel, toggleBtn, open) {
+  panel.classList.toggle('open', open);
+  if (toggleBtn) toggleBtn.classList.toggle('active', open);
+}
+
+mtoggleLayers.addEventListener('click', () => {
+  const willOpen = !panelLayers.classList.contains('open');
+  setDrawer(panelLayers, mtoggleLayers, willOpen);
+  if (willOpen) setDrawer(panelInspector, mtoggleInspector, false);
+});
+
+mtoggleInspector.addEventListener('click', () => {
+  const willOpen = !panelInspector.classList.contains('open');
+  setDrawer(panelInspector, mtoggleInspector, willOpen);
+  if (willOpen) setDrawer(panelLayers, mtoggleLayers, false);
+});
+
+btnCloseLayers.addEventListener('click', () => setDrawer(panelLayers, mtoggleLayers, false));
+btnCloseInspector.addEventListener('click', () => setDrawer(panelInspector, mtoggleInspector, false));
 
 // Kickstart
 initViewport();
