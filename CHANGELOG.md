@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-07-29
+
 All additions below are backwards-compatible (new defaulted dataclass
 fields only; no existing field or behaviour removed) unless noted under
 "Changed".
@@ -86,6 +88,20 @@ fields only; no existing field or behaviour removed) unless noted under
   scene-baking split above. Every model would parse "successfully" but
   silently render zero meshes. Fixed to call the new `buildScene()`
   alongside `parseSkp()`.
+- **Python**: `openskp.export.obj.export()` and
+  `openskp.export.json_export`'s `scene_hierarchy` output both silently
+  depended on `SkpModel.mesh_index`/`SkpModel.scene_hierarchy` — dataclass
+  fields `parse()` never populates, always empty. `obj.export()` always
+  wrote a near-empty `.obj` file; `json_export`'s `scene_hierarchy` key
+  always serialized as `[]`, even though the rest of the JSON output was
+  correct. Fixed: `obj.export()` now takes a built `Scene` (from
+  `build_scene()`) and writes real geometry from its `glb_primitives`;
+  `json_export.to_dict()`/`.export()` now accept an optional `scene=`
+  parameter and use `Scene.scene_hierarchy`'s real, resolved instance tree
+  when provided (`scene_hierarchy` is `None`, not a misleading `[]`, when
+  omitted). This is a breaking signature change for `obj.export()`
+  (previously `export(model, output_path)`, now
+  `export(scene, output_path)`).
 
 ### Known limitations (not yet fixed)
 
@@ -100,11 +116,11 @@ fields only; no existing field or behaviour removed) unless noted under
   even at 16 GB. Root-caused to V8's per-object overhead on millions of
   small geometry objects; a more compact internal representation is
   tracked as follow-up work.
-- **GLB export**: only TypeScript ships a complete binary `.glb`
-  serializer (`toGLB()`) today. Python, .NET, and Dart all expose the
-  same triangulated scene data via `buildScene()`, but a consumer needs
-  to serialize it to `.glb` bytes themselves. OBJ and JSON export are not
-  implemented in any language's current public API.
+- **GLB/OBJ/JSON export**: Python ships complete disk-writing exporters
+  (`openskp.export.glb`/`obj`/`json_export`); TypeScript ships a complete
+  in-memory GLB serializer (`toGLB()`) but no OBJ/JSON export yet; .NET
+  and Dart expose the same triangulated scene data via `buildScene()` but
+  a consumer needs to serialize it themselves.
 
 - **Python**: `Material.id` and `SkpModel.materials_by_id` — expose the TLV
   material IDs that `Face.material_id` references, so callers can resolve a
@@ -217,5 +233,6 @@ fields only; no existing field or behaviour removed) unless noted under
   - GitHub Actions for TypeScript
   - PyPI release workflow
 
+[0.3.0]: https://github.com/iamahsanmehmood/openskp/compare/python-v0.2.0...python-v0.3.0
 [0.2.0]: https://github.com/iamahsanmehmood/openskp/compare/python-v0.1.0...python-v0.2.0
 [0.1.0]: https://github.com/iamahsanmehmood/openskp/releases/tag/python-v0.1.0

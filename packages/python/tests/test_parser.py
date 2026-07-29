@@ -306,7 +306,7 @@ class TestJsonExport:
         assert d["definitions"] == {}
         assert d["layers"] == []
         assert d["materials"] == []
-        assert d["scene_hierarchy"] == []
+        assert d["scene_hierarchy"] is None
 
 
 # ── SkpFile tests ────────────────────────────────────────────────────────

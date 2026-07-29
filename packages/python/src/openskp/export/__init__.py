@@ -9,11 +9,16 @@ into various output formats:
 
 Example::
 
+    from openskp import SkpFile
     from openskp.export import glb, obj, json_export
 
-    glb.export(model, "output.glb")
-    obj.export(model, "output.obj")
-    json_export.export(model, "output.json")
+    skp = SkpFile.open("model.skp")
+    model = skp.parse()
+    scene = skp.build_scene()
+
+    glb.export(skp, "output.glb")
+    obj.export(scene, "output.obj")
+    json_export.export(model, "output.json", scene=scene)
 """
 
 from __future__ import annotations

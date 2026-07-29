@@ -170,7 +170,7 @@ equivalent, not the internal triangle split.
 | XML parsing (materials/styles) | `xml.etree.ElementTree` (stdlib) | manual/DOM | `System.Xml` (BCL) | `xml` |
 | Triangulation | `shapely` | `earcut` (ported inline, MIT/ISC) | `Earcut.cs` (ported) | `earcut.dart` (ported) |
 | Matrix/transform math | `numpy` | native | native | `vector_math`-free, native |
-| GLB export | `trimesh` (internal helper only — see [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md#export-capabilities)) | custom (`toGLB()`, public) | *(not yet ported)* | *(not yet ported)* |
+| GLB/OBJ/JSON export | `trimesh`-backed, public (`openskp.export` — see [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md#export-capabilities)) | GLB only, custom (`toGLB()`, public) | *(not yet ported)* | *(not yet ported)* |
 
 ## Testing philosophy
 

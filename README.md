@@ -47,7 +47,7 @@ OpenSKP is the **first and only** open-source, cross-platform parser for SketchU
 | **Styles** | ✅ | Front/back face colors for unpainted faces |
 | **Dynamic Components** | ✅ | Extract dynamic component attribute key-value pairs |
 | **Observability** | ✅ | Opt-in progress reporting + structured, location-carrying parse errors — see [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md) |
-| **Export to GLB** | ⚠️ | Full binary `.glb` serializer in TypeScript; other languages expose the same triangulated scene data but don't ship a serializer yet — see [Export capabilities](docs/DEVELOPER_GUIDE.md#export-capabilities) |
+| **Export to GLB / OBJ / JSON** | ⚠️ | Full disk-writing exporters in Python; GLB-only in TypeScript; .NET/Dart expose the same triangulated scene data but don't ship a serializer yet — see [Export capabilities](docs/DEVELOPER_GUIDE.md#export-capabilities) |
 | **Streaming / low-memory parsing** | ✅ | Peak memory bounded by the largest single definition, not the whole file — see [Memory architecture](docs/ARCHITECTURE.md#memory-architecture) |
 | **Pure Implementation** | ✅ | No SketchUp SDK, no native dependencies, no license required |
 | **Cross-Platform** | ✅ | Works on Linux, macOS, and Windows |
@@ -71,7 +71,7 @@ Using OpenSKP in your own project? [Open an issue](https://github.com/iamahsanme
 
 | Platform | Version | Status | Install | Package Link |
 |:---------|:--------|:------:|:--------|:-------------|
-| 🐍 **Python** | `v0.2.0` | ✅ Available | `pip install openskp` | [PyPI](https://pypi.org/project/openskp/) |
+| 🐍 **Python** | `v0.3.0` | ✅ Available | `pip install openskp` | [PyPI](https://pypi.org/project/openskp/) |
 | 📘 **TypeScript / JS** | `v0.2.0` | ✅ Available | `npm install openskp` | [npm](https://www.npmjs.com/package/openskp) |
 | 🚀 **.NET / C#** | `v0.3.0` | ✅ Available | `dotnet add package OpenSkp` | [NuGet](https://www.nuget.org/packages/OpenSkp) |
 | 🎯 **Dart / Flutter** | `v0.3.0` | ✅ Available | `dart pub add openskp` | [pub.dev](https://pub.dev/packages/openskp) |
@@ -191,7 +191,7 @@ graph TB
     WALK --> RAW["Raw parsed data<br/>defs · layers · materials · styles"]
     RAW --> PARSE["parse() -> SkpModel<br/>per-definition geometry,<br/>no scene resolution"]
     RAW --> SCENE["buildScene() -> Scene<br/>full placed instance tree,<br/>triangulated, world-space"]
-    SCENE --> GLB["toGLB()<br/>(TypeScript only today)"]
+    SCENE --> GLB["toGLB() / openskp.export<br/>(Python + TypeScript today)"]
 
     style SKP fill:#f59e0b,color:#000,stroke:#d97706
     style RAW fill:#8b5cf6,color:#fff,stroke:#7c3aed

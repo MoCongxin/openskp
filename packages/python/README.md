@@ -34,9 +34,10 @@ for layer in model.layers:
 for defn in model.definitions.values():
     print(f"{defn.name}: {len(defn.faces)} faces, {len(defn.vertices)} vertices")
 
-# Inspect scene hierarchy
-for inst in model.scene_hierarchy:
-    print(f"  {inst.name} → definition #{inst.ref_idx}")
+# Inspect resolved, world-space scene hierarchy (opt-in, heavier)
+scene = skp.build_scene()
+for inst in scene.scene_hierarchy.children:
+    print(f"  {inst.name} [{inst.layer}] @ {inst.position_mm}")
 ```
 
 ## Exporting
@@ -44,15 +45,15 @@ for inst in model.scene_hierarchy:
 ```python
 from openskp.export import glb, obj, json_export
 
-# Export to GLB (glTF 2.0 binary)
-glb.export(model, "output.glb")
+# Export to GLB (glTF 2.0 binary) - takes the SkpFile itself
+glb.export(skp, "output.glb")
 
-# Export to Wavefront OBJ
-obj.export(model, "output.obj")
+# Export to Wavefront OBJ - takes a built Scene, not the raw model
+obj.export(scene, "output.obj")
 
-# Export metadata as JSON
-meta = json_export.to_dict(model)
-json_export.export(model, "output.json")
+# Export metadata as JSON - pass scene= to include the resolved hierarchy
+meta = json_export.to_dict(model, scene=scene)
+json_export.export(model, "output.json", scene=scene)
 ```
 
 ## Package Structure

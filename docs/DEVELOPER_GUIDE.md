@@ -35,7 +35,7 @@ others, that's stated plainly rather than smoothed over.
 
 | Language | Install | Current version |
 |---|---|---|
-| Python | `pip install openskp` | 0.2.0 |
+| Python | `pip install openskp` | 0.3.0 |
 | TypeScript / JavaScript | `npm install openskp` | 0.2.0 |
 | .NET / C# | `dotnet add package OpenSkp` | 0.3.0 |
 | Dart / Flutter | `dart pub add openskp` | 0.3.0 |
@@ -297,35 +297,55 @@ something more basic:
 `buildScene()`'s result (`Scene`, `GlbPrimitive[]`, `gltfMaterials`) is
 already exactly the data a GLB/glTF exporter needs — triangulated,
 world-space, grouped by material. What differs is whether each language
-ships the last step (serializing that data into an actual `.glb` binary
-file) for you:
+ships file-writing exporters on top of that data:
 
-| Language | Scene data (`buildScene()`) | Binary `.glb` serializer |
-|---|---|---|
-| TypeScript | ✅ | ✅ `toGLB(scene)` in `index.ts` |
-| Python | ✅ | ⚠️ not in the public API — see below |
-| .NET | ✅ | ❌ not yet ported |
-| Dart | ✅ | ❌ not yet ported |
+| Language | Scene data (`buildScene()`) | GLB | OBJ | JSON metadata |
+|---|---|---|---|---|
+| Python | ✅ | ✅ `openskp.export.glb` | ✅ `openskp.export.obj` | ✅ `openskp.export.json_export` |
+| TypeScript | ✅ | ✅ `toGLB(scene)` in `index.ts` | ❌ not yet ported | ❌ not yet ported |
+| .NET | ✅ | ❌ not yet ported | ❌ not yet ported | ❌ not yet ported |
+| Dart | ✅ | ❌ not yet ported | ❌ not yet ported | ❌ not yet ported |
 
-TypeScript is the only port with a complete, public, in-memory-to-`.glb`-
-bytes function today (`toGLB()`, used by the [web viewer](#the-web-viewer)'s
-"Export GLB" button). Python has an older, *internal* helper
-(`openskp._core.build_scene(parsed, output_dir, filename_stem)` — note the
-different signature and module from the public `openskp.scene.build_scene()`
-this guide describes) that writes GLB+JSON straight to disk via `trimesh`;
-it predates this session's public `Scene` API, is not part of the
-documented public surface, and shouldn't be relied on directly by new code.
-.NET and Dart consumers who need a `.glb` file today need to serialize
+Python is the only port with a full set of disk-writing exporters today,
+in `openskp.export`:
+
+```python
+from openskp import SkpFile
+from openskp.export import glb, obj, json_export
+
+skp = SkpFile.open("model.skp")
+model = skp.parse()
+scene = skp.build_scene()
+
+glb.export(skp, "output.glb")               # takes the SkpFile, writes .glb + .json via trimesh
+obj.export(scene, "output.obj")              # takes a built Scene, writes vertices/faces only
+json_export.export(model, "output.json", scene=scene)  # scene= populates scene_hierarchy
+```
+
+Notes on each:
+
+- **`glb.export(skp_file, output_path, ...)`** requires `skp_file.parse()`
+  to have been called first. Internally it calls the older
+  `openskp._core.build_scene(parsed, output_dir, filename_stem)` helper
+  (trimesh-based, writes GLB+JSON straight to disk) — a different function
+  from the public `openskp.scene.build_scene()` this guide otherwise
+  describes, but it is real, working, public API reachable via
+  `openskp.export.glb`.
+- **`obj.export(scene, output_path)`** takes a built `Scene` (not the raw
+  model) and writes one `o` group per `GlbPrimitive` with `v`/`f` records
+  only — no materials, normals, or UVs.
+- **`json_export.to_dict(model, scene=None)` / `.export(...)`** serialize
+  definitions/layers/materials from `model` always; `scene_hierarchy` is
+  `None` unless a built `Scene` is passed via `scene=`, in which case it's
+  the real, resolved, world-space instance tree.
+
+TypeScript's `toGLB(scene)` is the only other language with a complete,
+public, in-memory-to-`.glb`-bytes function (used by the
+[web viewer](#the-web-viewer)'s "Export GLB" button). .NET and Dart
+consumers who need a `.glb`/`.obj`/JSON file today need to serialize
 `Scene`'s `GlbPrimitive`s themselves (the format is simple — see the glTF
-2.0 spec, or read TypeScript's `toGLB()` for a reference implementation of
-exactly this data shape).
-
-Wavefront OBJ and JSON export are **not currently implemented** in any of
-the four languages' public APIs, despite being mentioned in older project
-notes — if you need OBJ output today, build it from `Scene`'s
-already-triangulated primitives yourself (each `GlbPrimitive` is flat
-position/normal/index arrays, which is most of the work an OBJ writer
-needs anyway).
+2.0 spec, or read TypeScript's `toGLB()` or Python's `openskp.export.obj`
+for reference implementations of exactly this data shape).
 
 ## The web viewer
 
@@ -377,8 +397,10 @@ relying on the string-keyed `'ROOT'` entry.)
 
 ### GLB/OBJ/JSON export
 
-Covered above under [Export capabilities](#export-capabilities) — only
-TypeScript has a public, complete `.glb` binary serializer today.
+Covered above under [Export capabilities](#export-capabilities) — Python
+has a full set of disk-writing exporters (GLB/OBJ/JSON); TypeScript has a
+public, complete in-memory `.glb` serializer; .NET and Dart have neither
+yet, only the raw `Scene` data to serialize from.
 
 ### Progress/logging mechanism
 

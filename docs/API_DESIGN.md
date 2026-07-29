@@ -125,5 +125,7 @@ All four languages produce equivalent structured output for the same file:
 
 | Format | Extension | Ships in |
 |---|---|---|
-| GLB (binary glTF 2.0) | `.glb` | TypeScript (`toGLB()`) only — see [Export capabilities](DEVELOPER_GUIDE.md#export-capabilities) for the other three languages' current status |
-| Raw scene data | — | All four, via `buildScene()`'s `Scene`/`GlbPrimitive` — build your own serializer (OBJ, custom JSON, etc.) from this |
+| GLB (binary glTF 2.0) | `.glb` | Python (`openskp.export.glb`), TypeScript (`toGLB()`) — see [Export capabilities](DEVELOPER_GUIDE.md#export-capabilities) for .NET/Dart's current status |
+| Wavefront OBJ | `.obj` | Python (`openskp.export.obj`) only |
+| Full metadata JSON | `.json` | Python (`openskp.export.json_export`) only |
+| Raw scene data | — | All four, via `buildScene()`'s `Scene`/`GlbPrimitive` — build your own serializer from this |

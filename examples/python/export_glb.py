@@ -11,11 +11,11 @@ from openskp.export import glb
 
 # Parse the SKP file
 skp = SkpFile.open("model.skp")
-model = skp.parse()
+skp.parse()
 
 # Export to GLB
-glb.export(model, "output.glb")
+glb.export(skp, "output.glb")
 print(f"GLB exported successfully!")
 
 # Export to GLB with custom options
-glb.export(model, "output_yup.glb", coordinate_system="y-up", units="mm")
+glb.export(skp, "output_yup.glb", coordinate_system="y-up", units="mm")
