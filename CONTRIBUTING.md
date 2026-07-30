@@ -16,6 +16,7 @@ This project exists because someone decided a proprietary file format shouldn't 
 - [Pull Request Process](#pull-request-process)
 - [Coding Standards](#coding-standards)
 - [Adding a New Platform](#adding-a-new-platform)
+- [Releasing (maintainers)](#releasing-maintainers)
 - [Reporting Bugs](#reporting-bugs)
 - [Suggesting Features](#suggesting-features)
 
@@ -274,6 +275,35 @@ Every platform must pass the same behavioral tests against the same fixture file
 ├── tests/             # Test suite
 └── <package-config>   # pyproject.toml / package.json / pubspec.yaml
 ```
+
+---
+
+## Releasing (maintainers)
+
+Each language is released independently by pushing a tag; the corresponding
+`.github/workflows/release-*.yml` picks it up and publishes to that
+language's registry. Bump the version in every file that references it
+*before* tagging — package manifest, README platform table, and
+[docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)'s install table — then
+tag exactly as below:
+
+| Language | Version lives in | Tag to push | Registry |
+|---|---|---|---|
+| Python | `packages/python/pyproject.toml` + `src/openskp/__init__.py` | `python-vX.Y.Z` | PyPI |
+| TypeScript | `packages/typescript/package.json` (+ regenerate `package-lock.json`) | `typescript-vX.Y.Z` | npm |
+| .NET | `packages/dotnet/OpenSkp/OpenSkp.csproj` (`<Version>`) | `nuget-vX.Y.Z` | NuGet |
+| Dart | `packages/dart/pubspec.yaml` | **`vX.Y.Z`** (bare — not `dart-vX.Y.Z`) | pub.dev |
+
+The Dart entry is easy to get wrong: `release-dart.yml` listens for both
+`dart-v*` and bare `v*`, which looks like `dart-v0.3.0` should be the
+"correct", collision-avoiding choice. It isn't — pub.dev's OIDC
+trusted-publisher for this package is registered against the bare
+`vX.Y.Z` pattern specifically, so `dart-v0.3.0` builds and validates the
+package but fails at the upload step with *"Expected tag 'vX.Y.Z'"* (confirmed
+when releasing 0.3.0). No other workflow in this repo listens for bare
+`v*`, so pushing it only triggers the Dart release — verify that's still
+true (`grep -A2 "tags:" .github/workflows/*.yml`) before relying on it,
+in case a future workflow adds its own bare-`v*` trigger.
 
 ---
 
