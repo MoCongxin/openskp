@@ -1,41 +1,111 @@
 # OpenSKP — TypeScript Package
 
-> 🚧 **Under active development** — The Python package is fully functional today. The TypeScript implementation is coming soon.
+Open-source SketchUp (`.skp`) binary file parser for Node.js and the
+browser. Extract geometry, metadata, layers, and materials from SketchUp
+files without requiring SketchUp itself. Zero native dependencies —
+`fflate` handles ZIP extraction and a ported `earcut` handles
+triangulation, so it runs anywhere JavaScript does.
 
-## Planned Features
-
-- Parse SketchUp 2021+ (VFF format) files in browser and Node.js
-- Zero native dependencies (uses `fflate` for ZIP, `earcut` for triangulation)
-- Export to GLB binary format
-- Full type definitions for all SketchUp entities
-
-## Installation (Coming Soon)
+## Installation
 
 ```bash
 npm install openskp
 ```
 
-## Usage (Coming Soon)
+## Quick Start
 
 ```typescript
-import { parseSkp, toGLB } from 'openskp';
+import { SkpFile } from 'openskp';
 
-// Browser: parse from file input
-const file = document.querySelector('input').files[0];
+// Node.js
+const skp = SkpFile.open('model.skp');
+const model = skp.parse();
+
+// Browser: parse from a File/Blob's ArrayBuffer
+import { parseSkp } from 'openskp';
 const buffer = await file.arrayBuffer();
-const model = parseSkp(buffer);
+const model2 = parseSkp(buffer);
 
-// Access data
-console.log(model.layers);
-console.log(model.definitions);
+console.log(model.version, model.layers.length, 'layers');
 
-// Export to GLB
-const glb = toGLB(model);
+// Inspect definitions (component geometry) - model.definitions is a Map
+for (const [id, defn] of model.definitions) {
+  console.log(`${defn.name}: ${defn.faces.length} faces, ${defn.vertices.length} vertices`);
+}
+
+// model.root holds whatever is placed directly in the model, not inside
+// any component/group
+console.log(model.root.instances.length, 'root-level instances');
+
+// Opt-in: full placed scene graph, triangulated, world-space, GLB-ready
+const scene = skp.buildScene();
+console.log(scene.glbPrimitives.length, 'renderable mesh primitives');
 ```
+
+## Exporting
+
+```typescript
+import { toGLB, toJSON } from 'openskp';
+
+// Serialize a built scene straight to .glb bytes (in-memory, no disk I/O)
+const glbBytes = toGLB(scene);
+
+// Full metadata as a JSON-compatible object; pass scene to include the
+// resolved, world-space hierarchy
+const meta = toJSON(model, scene);
+```
+
+## Observability
+
+`parse()`/`buildScene()` accept an optional options object for progress
+reporting and structured errors — silent by default:
+
+```typescript
+const model = skp.parse({
+  onProgress: (info) => console.log(`${info.stage}: ${info.current}/${info.total}`),
+  onLog: (level, message) => console.log(`[${level}] ${message}`),
+});
+```
+
+Parse failures throw `SkpParseError`, carrying `stage`, `recordIndex`,
+`totalRecords`, `tag`, and `definitionId` context, with the original
+error preserved as `.cause`. See
+[docs/OBSERVABILITY.md](../../docs/OBSERVABILITY.md) for the full
+cross-language reference.
+
+## Known limitation: large files
+
+Memory use scales worse than the other three ports on very large files —
+a 113 MB file needs 8–16 GB of Node heap, and files beyond ~150-200 MB
+may not parse in a browser tab at all (a typical tab's heap ceiling is
+~4 GB). Root cause: V8's per-object overhead on millions of small
+geometry objects. See
+[docs/DEVELOPER_GUIDE.md](../../docs/DEVELOPER_GUIDE.md#performance) for
+verified numbers before parsing very large files in this package.
+
+## Package Structure
+
+| Module | Purpose |
+|---|---|
+| `parser.ts` | TLV binary parser for SketchUp's internal format |
+| `model.ts` | Interfaces for geometry, layers, materials, scenes |
+| `legacy.ts` | Legacy MFC container support (SketchUp 2013–2020) |
+| `vff.ts` | VFF/ZIP container handling (`fflate`-based) |
+| `triangulator.ts` | Planar polygon triangulation (ported `earcut`) |
+| `transforms.ts` | 3D matrix transforms and coordinate conversions |
+| `observability.ts` | Progress/log callback types |
+| `errors.ts` | `SkpParseError` and structured failure context |
+| `index.ts` | Public entry point — `SkpFile`, `parseSkp`, `buildScene`, `toGLB`, `toJSON` |
+
+## Requirements
+
+Node.js ≥ 16, or any modern browser. No native dependencies.
 
 ## Contributing
 
-We welcome contributions to the TypeScript implementation! The Python package in `../python/` serves as the reference implementation. See [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines.
+The Python package in `../python/` and this package are both full,
+independent implementations at parity — neither is a stub for the other.
+See [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines.
 
 ## License
 
