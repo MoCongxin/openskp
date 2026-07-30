@@ -1,6 +1,8 @@
 <div align="center">
 
-# 🏗️ OpenSKP
+<img src="assets/logo.png" width="180" alt="OpenSKP logo">
+
+# OpenSKP
 
 ### The Open-Source SketchUp File Parser
 
@@ -9,9 +11,10 @@
 ### 🌐 [Try the Live Web Viewer (Drag-and-Drop)](https://iamahsanmehmood.github.io/openskp/) · 📖 [Browse the Docs Site](https://iamahsanmehmood.github.io/openskp/docs/)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.9+](https://img.shields.io/badge/Python-3.9+-3776AB.svg?logo=python&logoColor=white)](https://python.org)
+[![PyPI](https://img.shields.io/pypi/v/openskp.svg?logo=pypi&logoColor=white&label=pypi)](https://pypi.org/project/openskp/)
 [![npm](https://img.shields.io/npm/v/openskp.svg?logo=npm&logoColor=white)](https://www.npmjs.com/package/openskp)
 [![NuGet](https://img.shields.io/nuget/v/OpenSkp.svg?logo=nuget&logoColor=white)](https://www.nuget.org/packages/OpenSkp)
+[![Pub](https://img.shields.io/pub/v/openskp.svg?logo=dart&logoColor=white&label=pub.dev)](https://pub.dev/packages/openskp)
 [![GitHub Stars](https://img.shields.io/github/stars/iamahsanmehmood/openskp?style=social)](https://github.com/iamahsanmehmood/openskp)
 
 ---
