@@ -36,7 +36,7 @@ others, that's stated plainly rather than smoothed over.
 | Language | Install | Current version |
 |---|---|---|
 | Python | `pip install openskp` | 0.3.0 |
-| TypeScript / JavaScript | `npm install openskp` | 0.2.0 |
+| TypeScript / JavaScript | `npm install openskp` | 0.3.0 |
 | .NET / C# | `dotnet add package OpenSkp` | 0.3.0 |
 | Dart / Flutter | `dart pub add openskp` | 0.3.0 |
 

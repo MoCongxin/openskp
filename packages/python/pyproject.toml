@@ -36,6 +36,7 @@ dev = [
 
 [project.urls]
 Homepage = "https://github.com/iamahsanmehmood/openskp"
+Documentation = "https://iamahsanmehmood.github.io/openskp/docs/"
 Repository = "https://github.com/iamahsanmehmood/openskp"
 Issues = "https://github.com/iamahsanmehmood/openskp/issues"
 

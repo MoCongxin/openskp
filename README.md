@@ -72,7 +72,7 @@ Using OpenSKP in your own project? [Open an issue](https://github.com/iamahsanme
 | Platform | Version | Status | Install | Package Link |
 |:---------|:--------|:------:|:--------|:-------------|
 | 🐍 **Python** | `v0.3.0` | ✅ Available | `pip install openskp` | [PyPI](https://pypi.org/project/openskp/) |
-| 📘 **TypeScript / JS** | `v0.2.0` | ✅ Available | `npm install openskp` | [npm](https://www.npmjs.com/package/openskp) |
+| 📘 **TypeScript / JS** | `v0.3.0` | ✅ Available | `npm install openskp` | [npm](https://www.npmjs.com/package/openskp) |
 | 🚀 **.NET / C#** | `v0.3.0` | ✅ Available | `dotnet add package OpenSkp` | [NuGet](https://www.nuget.org/packages/OpenSkp) |
 | 🎯 **Dart / Flutter** | `v0.3.0` | ✅ Available | `dart pub add openskp` | [pub.dev](https://pub.dev/packages/openskp) |
 
