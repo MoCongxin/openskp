@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] — TypeScript only — 2026-07-30
+
+### Fixed
+
+- **TypeScript**: `packages/typescript/README.md` — the published npm page
+  was still showing the pre-implementation placeholder README ("Under
+  active development... coming soon", planned-features list, no working
+  examples), unchanged since before the TypeScript port was actually
+  written. Rewritten to describe the real, working package: accurate
+  `parse()`/`buildScene()`/`toGLB()`/`toJSON()` quick start, observability
+  options, and the known large-file memory limitation — each snippet
+  checked against the actual exported types. Python, .NET, and Dart's
+  READMEs were audited at the same time and found already accurate; only
+  TypeScript needed this fix, which is why this release doesn't bump the
+  other three languages' versions.
+
 ## [0.3.0] — 2026-07-29
 
 All additions below are backwards-compatible (new defaulted dataclass
@@ -233,6 +249,7 @@ fields only; no existing field or behaviour removed) unless noted under
   - GitHub Actions for TypeScript
   - PyPI release workflow
 
+[0.3.1]: https://github.com/iamahsanmehmood/openskp/compare/typescript-v0.3.0...typescript-v0.3.1
 [0.3.0]: https://github.com/iamahsanmehmood/openskp/compare/python-v0.2.0...python-v0.3.0
 [0.2.0]: https://github.com/iamahsanmehmood/openskp/compare/python-v0.1.0...python-v0.2.0
 [0.1.0]: https://github.com/iamahsanmehmood/openskp/releases/tag/python-v0.1.0
