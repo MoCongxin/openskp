@@ -68,7 +68,7 @@ five languages. The *semantics* are identical everywhere (same stages, same
 ## The stage vocabulary
 
 Every structured error and every progress update carries a `stage` (or
-`Stage`) string. It's the same fixed set of six values in all four
+`Stage`) string. It's the same fixed set of six values in all five
 languages:
 
 | Stage | Meaning | Raised from |
@@ -97,7 +97,7 @@ only ever see one or the other for a given file.
 | `tag` | string | `tlv_walk` | The TLV tag hex string (e.g. `"7C15"`) of the record being processed. |
 | `offset` | int | (reserved) | Byte offset into `model.dat`, when known. |
 | `definitionId` | int | `legacy_defs`, `build_scene` | The definition (archive slot / TLV entity ID) being built when the failure happened. |
-| the original error | — | always, when wrapping | Python: `__cause__` (via `raise ... from exc`). TypeScript: `.cause`. .NET: `.InnerException`. Dart: `.cause`. |
+| the original error | — | always, when wrapping | Python: `__cause__` (via `raise ... from exc`). TypeScript: `.cause`. .NET: `.InnerException`. Dart: `.cause`. C++: `.cause()` (`std::exception_ptr`). |
 
 Only the fields relevant to the failure's stage are set; the rest are
 `null`/`None`/absent. The error's string representation includes every
@@ -245,6 +245,37 @@ try {
   print('caused by: ${e.cause}');
 }
 ```
+
+### C++
+
+```cpp
+#include <openskp/openskp.hpp>
+#include <iostream>
+
+openskp::ParseOptions options;
+options.progress = [](const openskp::ParseProgress& p) {
+  std::cout << openskp::stage_name(p.stage) << ": " << p.current << "/" << p.total << "\n";
+};
+options.log = [](openskp::LogLevel level, std::string_view message) {
+  std::cout << "[" << (level == openskp::LogLevel::debug ? "debug" : "info") << "] " << message << "\n";
+};
+
+try {
+  auto model = openskp::SkpFile::open("model.skp").parse(options);
+} catch (const openskp::SkpParseError& e) {
+  std::cerr << e.what() << "\n";               // includes stage=... etc.
+  if (e.cause()) {
+    try { std::rethrow_exception(e.cause()); }
+    catch (const std::exception& cause) { std::cerr << "caused by: " << cause.what() << "\n"; }
+  }
+}
+```
+
+`ParseOptions` is a plain aggregate with two `std::function` members, passed
+by `const&` with a default-constructed (empty) default — no allocation or
+virtual dispatch cost when a caller doesn't set them. `stage()` returns a
+`std::optional<ParseStage>`; `cause()` returns a `std::exception_ptr` you
+rethrow to recover the original exception's type and message.
 
 ## What "silent by default" actually guarantees
 

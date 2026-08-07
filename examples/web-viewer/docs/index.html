@@ -283,10 +283,10 @@ code[class*="language-"]{font-family:var(--font-code)!important;font-size:12.5px
 <!-- Hero -->
 <div id="hero">
   <div class="hero-title">OpenSKP Documentation</div>
-  <div class="hero-sub">The open-source SketchUp (.skp) file parser — Python, TypeScript, .NET, and Dart. No SketchUp SDK, no license, both the modern VFF (2021+) and classic MFC (2013–2020) formats. This page is the detailed, verified developer reference; the full write-ups live in <a href="https://github.com/iamahsanmehmood/openskp/tree/main/docs" target="_blank" rel="noopener">docs/</a> on GitHub.</div>
+  <div class="hero-sub">The open-source SketchUp (.skp) file parser — Python, TypeScript, .NET, Dart, and C++. No SketchUp SDK, no license, both the modern VFF (2021+) and classic MFC (2013–2020) formats. This page is the detailed, verified developer reference; the full write-ups live in <a href="https://github.com/iamahsanmehmood/openskp/tree/main/docs" target="_blank" rel="noopener">docs/</a> on GitHub.</div>
   <div class="hero-stats">
-    <div><div class="hero-stat-n">4</div><div class="hero-stat-l">Languages</div></div>
-    <div><div class="hero-stat-n">146</div><div class="hero-stat-l">Tests passing</div></div>
+    <div><div class="hero-stat-n">5</div><div class="hero-stat-l">Languages</div></div>
+    <div><div class="hero-stat-n">179</div><div class="hero-stat-l">Tests passing</div></div>
     <div><div class="hero-stat-n">620MB</div><div class="hero-stat-l">Largest file verified</div></div>
     <div><div class="hero-stat-n">2</div><div class="hero-stat-l">Container formats (VFF + legacy MFC)</div></div>
   </div>
@@ -298,7 +298,7 @@ code[class*="language-"]{font-family:var(--font-code)!important;font-size:12.5px
     <div class="sec-icon"><svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.73z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg></div>
     <div>
       <div class="sec-title">Installation</div>
-      <div class="sec-sub">Pick your language — the API is equivalent across all four</div>
+      <div class="sec-sub">Pick your language — the API is equivalent across all five</div>
     </div>
   </div>
 
@@ -307,6 +307,7 @@ code[class*="language-"]{font-family:var(--font-code)!important;font-size:12.5px
     <button class="tab-btn" onclick="showTab('ts')">TypeScript / JS</button>
     <button class="tab-btn" onclick="showTab('net')">.NET / C#</button>
     <button class="tab-btn" onclick="showTab('dart')">Dart / Flutter</button>
+    <button class="tab-btn" onclick="showTab('cpp')">C++17</button>
   </div>
 
   <div id="tab-py" class="tab-pane active">
@@ -381,6 +382,25 @@ final scene = SkpFile.open('my_model.skp').buildScene();
 print('${scene.glbPrimitives.length} mesh primitives');</code></pre>
     </div>
   </div>
+
+  <div id="tab-cpp" class="tab-pane">
+    <div class="code-wrap">
+      <div class="code-hdr"><span class="code-lang">cmake</span><button class="copy-btn" onclick="copy(this)">⎘ Copy</button></div>
+<pre class="language-cmake"><code class="language-cmake">find_package(OpenSkp CONFIG REQUIRED)
+target_link_libraries(your_target PRIVATE OpenSkp::OpenSkp)</code></pre>
+    </div>
+    <div class="code-wrap" style="margin-top:12px">
+      <div class="code-hdr"><span class="code-lang">cpp</span><button class="copy-btn" onclick="copy(this)">⎘ Copy</button></div>
+<pre class="language-cpp"><code class="language-cpp">#include &lt;openskp/openskp.hpp&gt;
+
+auto skp = openskp::SkpFile::open("my_model.skp");
+auto model = skp.parse();
+
+auto scene = skp.build_scene();
+std::cout &lt;&lt; scene.glb_primitives.size() &lt;&lt; " mesh primitives\n";</code></pre>
+    </div>
+    <div class="callout callout-info">No package registry today - build/install from source (or download a release tarball) via CMake, then <code>find_package(OpenSkp CONFIG REQUIRED)</code>. See <a href="https://github.com/iamahsanmehmood/openskp/releases?q=cpp-" target="_blank" rel="noopener">GitHub Releases</a> for tagged source packages.</div>
+  </div>
 </section>
 
 <!-- Core Concepts -->
@@ -407,7 +427,7 @@ print('${scene.glbPrimitives.length} mesh primitives');</code></pre>
       <div><div class="fn-name">buildScene()</div><span class="fn-badge" style="background:rgba(245,158,11,.15);color:var(--amber)">Opt-in, heavier</span></div>
     </div>
     <div class="fn-body">
-      <div class="fn-desc">Walks the <strong>entire placed scene graph</strong>: every instance of every component, nested arbitrarily deep, each with its transform resolved to world space, each face triangulated (a ported <a href="https://github.com/mapbox/earcut" target="_blank" rel="noopener">earcut</a> — the same algorithm in all four languages) and grouped by resolved color into GLB-ready mesh primitives. For a file that reuses a handful of definitions across many thousands of placements, this can produce <strong>far more data</strong> than the file's raw geometry — that's why it's a separate, opt-in call.</div>
+      <div class="fn-desc">Walks the <strong>entire placed scene graph</strong>: every instance of every component, nested arbitrarily deep, each with its transform resolved to world space, each face triangulated (a ported <a href="https://github.com/mapbox/earcut" target="_blank" rel="noopener">earcut</a> — the same algorithm in all five languages) and grouped by resolved color into GLB-ready mesh primitives. For a file that reuses a handful of definitions across many thousands of placements, this can produce <strong>far more data</strong> than the file's raw geometry — that's why it's a separate, opt-in call.</div>
       <div class="callout callout-info">Calling both <code>parse()</code> and <code>buildScene()</code> re-parses the raw TLV data <strong>twice</strong> — a deliberate trade of extra CPU time for guaranteeing <code>parse()</code> alone never pays for scene-baking's cost. They're independent, not layered.</div>
     </div>
   </div>
@@ -419,22 +439,22 @@ print('${scene.glbPrimitives.length} mesh primitives');</code></pre>
     <div class="sec-icon"><svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg></div>
     <div>
       <div class="sec-title">Data Model</div>
-      <div class="sec-sub">Structurally equivalent output across all four languages</div>
+      <div class="sec-sub">Structurally equivalent output across all five languages</div>
     </div>
   </div>
 
   <div class="fn-block">
     <div class="fn-body">
-      <div class="fn-desc">All four languages produce the same shape for the same file — cross-validated directly against each other on real fixtures, not just against each language's own idea of what the format means. Coordinates are <strong>inches, Z-up</strong> (SketchUp's native units) in <code>parse()</code>'s result; <code>buildScene()</code>'s output converts to <strong>meters, Y-up</strong> (glTF convention).</div>
+      <div class="fn-desc">All five languages produce the same shape for the same file — cross-validated directly against each other on real fixtures, not just against each language's own idea of what the format means. Coordinates are <strong>inches, Z-up</strong> (SketchUp's native units) in <code>parse()</code>'s result; <code>buildScene()</code>'s output converts to <strong>meters, Y-up</strong> (glTF convention).</div>
       <div class="tblwrap">
       <table class="doc-table">
-        <thead><tr><th>Concept</th><th>Python</th><th>TypeScript</th><th>.NET</th><th>Dart</th></tr></thead>
+        <thead><tr><th>Concept</th><th>Python</th><th>TypeScript</th><th>.NET</th><th>Dart</th><th>C++</th></tr></thead>
         <tbody>
-          <tr><td>definitions</td><td>dict[int|str, Definition]</td><td>Map&lt;number, Definition&gt;</td><td>Dictionary&lt;long, Definition&gt;</td><td>Map&lt;int, Definition&gt;</td></tr>
-          <tr><td>Vertex</td><td>id, x, y, z</td><td>{id, x, y, z}</td><td>Id, X, Y, Z</td><td>id, x, y, z</td></tr>
-          <tr><td>Edge</td><td>id, v1_id, v2_id, soft, smooth, hidden</td><td>camelCase</td><td>PascalCase</td><td>camelCase</td></tr>
-          <tr><td>Face</td><td>id, loops, normal, material_id, back_material_id, uv_transform</td><td>camelCase</td><td>PascalCase</td><td>camelCase</td></tr>
-          <tr><td>Layer</td><td>name, color_r, color_g, color_b</td><td>name, color:{r,g,b}</td><td>Name, ColorR/G/B</td><td>name, colorR/G/B</td></tr>
+          <tr><td>definitions</td><td>dict[int|str, Definition]</td><td>Map&lt;number, Definition&gt;</td><td>Dictionary&lt;long, Definition&gt;</td><td>Map&lt;int, Definition&gt;</td><td>std::map&lt;EntityId, Definition&gt;</td></tr>
+          <tr><td>Vertex</td><td>id, x, y, z</td><td>{id, x, y, z}</td><td>Id, X, Y, Z</td><td>id, x, y, z</td><td>id, x, y, z</td></tr>
+          <tr><td>Edge</td><td>id, v1_id, v2_id, soft, smooth, hidden</td><td>camelCase</td><td>PascalCase</td><td>camelCase</td><td>snake_case (matches Python)</td></tr>
+          <tr><td>Face</td><td>id, loops, normal, material_id, back_material_id, uv_transform</td><td>camelCase</td><td>PascalCase</td><td>camelCase</td><td>snake_case (matches Python)</td></tr>
+          <tr><td>Layer</td><td>name, color_r, color_g, color_b</td><td>name, color:{r,g,b}</td><td>Name, ColorR/G/B</td><td>name, colorR/G/B</td><td>name, color (std::array&lt;uint8_t,3&gt;)</td></tr>
         </tbody>
       </table>
       </div>
@@ -482,7 +502,7 @@ print('${scene.glbPrimitives.length} mesh primitives');</code></pre>
     <div class="fn-head"><div><div class="fn-name">The memory architecture</div></div></div>
     <div class="fn-body">
       <div class="fn-desc">Real production <code>.skp</code> files can have well over 100,000 separate component definitions. The naive approach — parse the entire file into one in-memory tree, then walk it — means peak memory scales with the <em>whole file's</em> node count, which is what made large files crash outright before this was fixed.</div>
-      <div class="fn-desc">All four languages now parse <strong>one top-level record at a time</strong>: a cheap flat header scan (O(sibling count), not O(total node count)) finds each top-level definition/layer-manager/material-manager/root block, fully builds <em>only that one record's</em> subtree, hands it to the caller, and lets it be garbage-collected before the next one is built. Peak memory during the walk is bounded by the size of the <strong>single largest</strong> top-level record, not the file's total size. The per-tag extraction logic was untouched — only the orchestration loop changed.</div>
+      <div class="fn-desc">All five languages now parse <strong>one top-level record at a time</strong>: a cheap flat header scan (O(sibling count), not O(total node count)) finds each top-level definition/layer-manager/material-manager/root block, fully builds <em>only that one record's</em> subtree, hands it to the caller, and lets it be garbage-collected before the next one is built. Peak memory during the walk is bounded by the size of the <strong>single largest</strong> top-level record, not the file's total size. The per-tag extraction logic was untouched — only the orchestration loop changed.</div>
       <div class="callout callout-warn"><strong>.NET's additional fix:</strong> the CLR's array and <code>MemoryStream</code> types have a hard ~2.1GB ceiling regardless of GC settings, and a decompressed <code>model.dat</code> can exceed that (SketchUp's format commonly compresses at ~10x). This needed a genuine architecture addition: <code>ChunkedBuffer</code> (a multi-segment byte buffer) plus widening every TLV offset from <code>int</code> to <code>long</code>. As a result, .NET has no practical file-size ceiling today — verified against a 620MB real file (153,586 definitions) with zero special configuration.</div>
     </div>
   </div>
@@ -646,6 +666,7 @@ except SkpParseError as e:
           <tr><td>TypeScript</td><td><span class="yes">✓</span></td><td><span class="yes">✓ toGLB(scene)</span></td><td><span class="no">✗ not yet ported</span></td><td><span class="no">✗ not yet ported</span></td></tr>
           <tr><td>.NET</td><td><span class="yes">✓</span></td><td><span class="no">✗ not yet ported</span></td><td><span class="no">✗ not yet ported</span></td><td><span class="no">✗ not yet ported</span></td></tr>
           <tr><td>Dart</td><td><span class="yes">✓</span></td><td><span class="no">✗ not yet ported</span></td><td><span class="no">✗ not yet ported</span></td><td><span class="no">✗ not yet ported</span></td></tr>
+          <tr><td>C++</td><td><span class="yes">✓</span></td><td><span class="no">✗ not included</span></td><td><span class="no">✗ not included</span></td><td><span class="no">✗ not included</span></td></tr>
         </tbody>
       </table>
       </div>
@@ -696,21 +717,21 @@ json_export.export(model, "output.json", scene=scene)</code></pre>
   <div class="fn-block">
     <div class="fn-head"><div><div class="fn-name">Root-level definition access</div></div></div>
     <div class="fn-body">
-      <div class="fn-desc"><strong>Python:</strong> <code>model.definitions</code> is a single dict that includes a <code>'ROOT'</code> string key alongside integer definition IDs — no separate <code>.root</code> attribute. <strong>TypeScript, .NET, Dart:</strong> <code>model.definitions</code> is strictly numeric-keyed; root is a separate <code>model.root</code>/<code>model.Root</code> property with the same <code>Definition</code> shape.</div>
+      <div class="fn-desc"><strong>Python:</strong> <code>model.definitions</code> is a single dict that includes a <code>'ROOT'</code> string key alongside integer definition IDs — no separate <code>.root</code> attribute. <strong>TypeScript, .NET, Dart:</strong> <code>model.definitions</code> is strictly numeric-keyed; root is a separate <code>model.root</code>/<code>model.Root</code> property with the same <code>Definition</code> shape. <strong>C++:</strong> same numeric-keyed split, but root is a <code>model.root()</code> accessor method rather than a plain field.</div>
     </div>
   </div>
 
   <div class="fn-block">
     <div class="fn-head"><div><div class="fn-name">TypeScript memory scaling</div></div></div>
     <div class="fn-body">
-      <div class="fn-desc">See <a href="#performance">Performance &amp; Memory</a> above — TypeScript needs significantly more heap than the other three languages for the same file, with no config-based workaround for files above roughly 250MB today.</div>
+      <div class="fn-desc">See <a href="#performance">Performance &amp; Memory</a> above — TypeScript needs significantly more heap than the other four languages for the same file, with no config-based workaround for files above roughly 250MB today.</div>
     </div>
   </div>
 
   <div class="fn-block">
-    <div class="fn-head"><div><div class="fn-name">GLB export</div></div></div>
+    <div class="fn-head"><div><div class="fn-name">GLB/OBJ/JSON export</div></div></div>
     <div class="fn-body">
-      <div class="fn-desc">Only TypeScript ships a complete binary <code>.glb</code> serializer today — see <a href="#export">Export Capabilities</a>.</div>
+      <div class="fn-desc">Python has a full set of disk-writing exporters (GLB/OBJ/JSON); TypeScript has a public, complete in-memory GLB serializer but no OBJ/JSON export yet; .NET, Dart, and C++ have neither — just the raw <code>Scene</code> data to serialize from. See <a href="#export">Export Capabilities</a>.</div>
     </div>
   </div>
 </section>
@@ -766,7 +787,11 @@ cd packages/typescript && npm install && npm test
 cd packages/dotnet/OpenSkp.Tests && dotnet test
 
 # Dart
-cd packages/dart && dart pub get && dart test</code></pre>
+cd packages/dart && dart pub get && dart test
+
+# C++
+cmake -S packages/cpp -B build/cpp -DOPENSKP_BUILD_TESTS=ON
+cmake --build build/cpp && ctest --test-dir build/cpp --output-on-failure</code></pre>
   </div>
 </section>
 
