@@ -394,6 +394,7 @@ This project would not be possible without:
 
 - [Noor Ali Qureshi](https://github.com/nooraliqureshi) — SketchUp 2025 support, older SKP version fixes, materials rendering support, and the TypeScript UTF-8 decoding fix.
 - [Marco Sumari](https://github.com/tuxiasumari) — material fidelity (textures, colourized materials, instance and back-side materials, per-face UV mapping), Image entities, styles, edge display flags, and full legacy MFC (SketchUp v8–v20) format support.
+- [Thomas Loockx](https://github.com/thomasloockx) — the C++17 port, including the CMake package, cross-platform CI, and test suite.
 - The open-source community for inspiration and feedback
 - [Kaitai Struct](https://kaitai.io/) for binary format analysis patterns
 - [glTF](https://www.khronos.org/gltf/) specification by Khronos Group
