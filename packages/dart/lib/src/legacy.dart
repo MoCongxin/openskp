@@ -1242,6 +1242,7 @@ class Legacy {
         r: rgba[0],
         g: rgba[1],
         b: rgba[2],
+        a: rgba[3],
         transparency: trans,
         colorized: colorized,
         // colourize type is not decoded in the legacy record; tint (1) is

@@ -87,7 +87,7 @@ class SkpFile {
       }
       final mat = Material(
         name: rawMat.name,
-        color: (rawMat.r, rawMat.g, rawMat.b, 255),
+        color: (rawMat.r, rawMat.g, rawMat.b, rawMat.a),
         transparency: rawMat.transparency,
         texture: texture,
         colorized: rawMat.colorized,
