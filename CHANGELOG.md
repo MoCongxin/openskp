@@ -14,6 +14,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   uses privately bundled TinyGLTF 2.9.7, validates scene geometry and PBR data,
   and keeps TinyGLTF out of installed headers and consumer link interfaces.
 
+## [0.3.0] — C++ only — 2026-08-07
+
+### Added
+
+- **C++ package** — new independent C++17 port covering both modern
+  VFF/ZIP (2021+) and legacy MFC (SketchUp 2013–2020) containers, at
+  parity with the other four languages: geometry, components, layers,
+  materials/textures, styles, dynamic properties, image entities,
+  `parse()`/`build_scene()` scene baking, and observability hooks
+  (progress/log callbacks). Installable CMake package with static and
+  shared library builds, cross-platform CI (Linux/macOS/Windows,
+  GCC/Clang/MSVC), and a test suite cross-validated against the same
+  real fixture files already used by the Python/TypeScript/.NET/Dart
+  ports. GLB export was not yet included in this initial release — see
+  `[Unreleased]` above. Contributed by
+  [Thomas Loockx](https://github.com/thomasloockx). Closes #29.
+
 ## [0.3.1] — TypeScript only — 2026-07-30
 
 ### Fixed
