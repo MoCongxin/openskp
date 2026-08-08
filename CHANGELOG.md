@@ -28,6 +28,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that path correctly continues to default to 255, since there's no real
   data to read there.
 
+### Changed
+
+- **Python**: `SkpModel.definitions` no longer contains an entry keyed by
+  the string `"ROOT"`. The implicit top-level model (the file's directly
+  placed, non-componentized geometry and instances) now has its own
+  dedicated `SkpModel.root` field, matching TypeScript/.NET/Dart/C++'s
+  `root`/`Root` exactly. Previously `definitions` was typed
+  `Dict[int, Definition]` but silently held one non-`int` key at
+  runtime — any code iterating `model.definitions.values()` to sum
+  geometry across the whole file (not just named components) needs to
+  also include `model.root` now, the same way the other four languages'
+  own callers already do. `len(model.definitions)` is now the count of
+  real named component/group definitions only, one lower than before.
+
 ### Removed
 
 - **Python**: `SkpModel.scene_hierarchy` and `SkpModel.mesh_index` —

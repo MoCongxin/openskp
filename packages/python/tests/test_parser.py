@@ -1026,9 +1026,12 @@ class TestLegacyRealFile:
     def test_version_and_counts(self) -> None:
         model = self._model()
         assert model.version == "{17.0.18899}"
-        n_faces = sum(len(d.faces) for d in model.definitions.values())
-        n_edges = sum(len(d.edges) for d in model.definitions.values())
-        n_verts = sum(len(d.vertices) for d in model.definitions.values())
+        # root carries its own top-level geometry alongside the named
+        # component definitions - both must be counted for the full totals.
+        all_defs = list(model.definitions.values()) + [model.root]
+        n_faces = sum(len(d.faces) for d in all_defs)
+        n_edges = sum(len(d.edges) for d in all_defs)
+        n_verts = sum(len(d.vertices) for d in all_defs)
         assert n_faces == 181
         assert n_edges == 515
         assert n_verts == 335
@@ -1038,7 +1041,7 @@ class TestLegacyRealFile:
         model = self._model()
         lo = [float("inf")] * 3
         hi = [float("-inf")] * 3
-        for d in model.definitions.values():
+        for d in list(model.definitions.values()) + [model.root]:
             for v in d.vertices.values():
                 for i, c in enumerate((v.x, v.y, v.z)):
                     lo[i] = min(lo[i], c)
@@ -1049,14 +1052,26 @@ class TestLegacyRealFile:
 
     def test_has_instances_and_geometry(self) -> None:
         model = self._model()
-        # 3 definitions (root + 2 components), and the root places instances.
-        assert len(model.definitions) == 3
-        placed = sum(len(d.instances) for d in model.definitions.values())
+        # 2 named component definitions; the implicit root (which places
+        # the instances) is its own separate field, not a 3rd entry here.
+        assert len(model.definitions) == 2
+        all_defs = list(model.definitions.values()) + [model.root]
+        placed = sum(len(d.instances) for d in all_defs)
         assert placed >= 2
         # Every face resolves a real ring of vertices.
-        a_face = next(f for d in model.definitions.values()
+        a_face = next(f for d in all_defs
                       for f in d.faces.values() if f.loops)
         assert len(a_face.loops[0]) >= 3
+
+    def test_root_is_a_separate_field_not_a_definitions_entry(self) -> None:
+        model = self._model()
+        assert model.root.name == "ROOT_MODEL"
+        assert model.root.guid == "ROOT"
+        assert len(model.root.instances) >= 2
+        # The implicit root must never leak into the definitions map under
+        # its internal "ROOT" sentinel key - it has its own field.
+        assert "ROOT" not in model.definitions
+        assert all(isinstance(k, int) for k in model.definitions)
 
 
 # ── Scene baking (opt-in build_scene(), separate from parse()) ──────────
