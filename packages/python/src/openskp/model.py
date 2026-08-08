@@ -482,7 +482,7 @@ class SkpFile:
                 )
             mat = Material(
                 name=mat_data.get("name", ""),
-                color=(c.get("r", 128), c.get("g", 128), c.get("b", 128)),
+                color=(c.get("r", 128), c.get("g", 128), c.get("b", 128), c.get("a", 255)),
                 transparency=mat_data.get("transparency", 0.5),
                 texture=texture,
                 colorized=mat_data.get("colorized", False),

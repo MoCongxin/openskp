@@ -449,7 +449,7 @@ class TestMaterialIdJoin:
         assert model.materials[0].id == 29491
         mat = model.materials_by_id[29491]
         assert mat is model.materials[0]
-        assert mat.color == (10, 20, 30)
+        assert mat.color == (10, 20, 30, 255)
 
     def test_folder_alias_resolves_to_same_material(
         self, monkeypatch, tmp_path: pathlib.Path
