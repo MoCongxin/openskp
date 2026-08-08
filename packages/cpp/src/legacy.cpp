@@ -129,6 +129,18 @@ struct Entry {
   std::shared_ptr<V> v;
 };
 
+// True when the bytes at p are an MFC class-ref to class `slot`. Mirrors both
+// encodings Archive::object() decodes: the short 16-bit form (0x8000|slot)
+// and, for slots past 0x7fff, the big-tag escape (0x7fff followed by a u32
+// of 0x80000000|slot).
+bool is_class_ref(const ByteBuffer& d, size_t p, uint64_t slot) {
+  if (slot <= 0x7fff) {
+    return p + 2 <= d.size() && read_u16(d, p) == (0x8000 | slot);
+  }
+  return p + 6 <= d.size() && read_u16(d, p) == 0x7fff &&
+         read_u32(d, p + 2) == (0x80000000u | uint32_t(slot));
+}
+
 struct Archive {
   R r;
   int ver;
@@ -450,6 +462,7 @@ struct Archive {
       r.utf16();
       r.u32();
       size_t tpos = std::string::npos;
+      auto thumb_cs = class_slot.find("CThumbnail");
       for (size_t off = 0; off < 96 && r.p + off + 26 <= r.d.size(); ++off) {
         auto p = r.p + off;
         if (r.d[p] == 255 && r.d[p + 1] == 255 && r.d[p + 4] == 10 && r.d[p + 5] == 0 &&
@@ -457,8 +470,7 @@ struct Archive {
           tpos = p;
           break;
         }
-        auto cs = class_slot.find("CThumbnail");
-        if (cs != class_slot.end() && read_u16(r.d, p) == (0x8000 | cs->second)) {
+        if (thumb_cs != class_slot.end() && is_class_ref(r.d, p, thumb_cs->second)) {
           tpos = p;
           break;
         }
