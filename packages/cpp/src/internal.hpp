@@ -105,6 +105,7 @@ std::vector<std::pair<std::string, ByteBuffer>> parse_flat(const ByteBuffer&);
 std::string extract_version(const ByteBuffer&);
 bool valid_header(const ByteBuffer&);
 bool is_legacy(const ByteBuffer&);
+bool legacy_instance_has_guid(const std::string&, std::optional<int>);
 RawParsed full_parse(const ByteBuffer&, const ParseOptions&);
 RawParsed parse_legacy(const ByteBuffer&, const ParseOptions&);
 void collect_geometry(const std::vector<TlvNode>&, GeometryBuilder&);

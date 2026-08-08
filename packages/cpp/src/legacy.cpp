@@ -6,6 +6,11 @@
 #include "internal.hpp"
 
 namespace openskp {
+bool legacy_instance_has_guid(const std::string& class_name, std::optional<int> schema) {
+  if (!schema) return true;
+  return *schema >= (class_name == "CGroup" ? 1 : 5);
+}
+
 namespace {
 struct R {
   const ByteBuffer& d;
@@ -151,6 +156,7 @@ struct Archive {
   bool in_entity_list{};
   std::unordered_map<uint64_t, Entry> slots;
   std::unordered_map<std::string, uint64_t> class_slot;
+  std::unordered_map<std::string, int> class_schema;
 
   Archive(const ByteBuffer& d, int v) : r{d}, ver(v), pid(v >= 17) {}
 
@@ -177,6 +183,7 @@ struct Archive {
       std::string name(b.begin(), b.end());
       auto cs = alloc({true, name, int(schema), {}});
       class_slot[name] = cs;
+      class_schema[name] = int(schema);
       return new_obj(name);
     }
     if (tag & 0x8000) return new_class_ref(tag & 0x7fff, expect);
@@ -487,18 +494,13 @@ struct Archive {
       v->def = std::get<0>(q);
       v->xf = r.f64s(13);
       v->name = r.utf16();
-      // The trailing instance GUID arrives with CComponentInstance schema 5 /
-      // CGroup schema 1; SketchUp 2013 writes CComponentInstance schema 4,
-      // whose record ends at the name (see openskp#38 / #40). A schema of 0
-      // means the class slot was only ever learned from an `expect` hint
-      // (new_class_ref's premodel fallback), not a real 0xffff registration
-      // - treat that the same as "unknown" and keep today's default of
-      // reading the GUID, matching the other ports' schema==null handling.
-      int min_schema = n == "CGroup" ? 1 : 5;
-      auto cs = class_slot.find(n);
-      int schema = cs != class_slot.end() ? slots[cs->second].schema : 0;
-      bool has_guid = schema == 0 || schema >= min_schema;
-      if (has_guid) r.raw(16);
+      // The trailing GUID was introduced in CComponentInstance schema 5 and
+      // CGroup schema 1. SketchUp 2013 writes component-instance schema 4,
+      // whose record ends at the name.
+      auto schema = class_schema.find(n);
+      std::optional<int> schema_number;
+      if (schema != class_schema.end()) schema_number = schema->second;
+      if (legacy_instance_has_guid(n, schema_number)) r.raw(16);
     } else
       throw std::runtime_error("no legacy reader for " + n);
     return v;
