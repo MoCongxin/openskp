@@ -71,6 +71,7 @@ struct RawMaterial {
   int r{128};
   int g{128};
   int b{128};
+  int a{255};
   double transparency{1};
   bool colorized{};
   int colorize_type{};
