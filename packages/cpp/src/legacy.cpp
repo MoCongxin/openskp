@@ -475,7 +475,18 @@ struct Archive {
       v->def = std::get<0>(q);
       v->xf = r.f64s(13);
       v->name = r.utf16();
-      r.raw(16);
+      // The trailing instance GUID arrives with CComponentInstance schema 5 /
+      // CGroup schema 1; SketchUp 2013 writes CComponentInstance schema 4,
+      // whose record ends at the name (see openskp#38 / #40). A schema of 0
+      // means the class slot was only ever learned from an `expect` hint
+      // (new_class_ref's premodel fallback), not a real 0xffff registration
+      // - treat that the same as "unknown" and keep today's default of
+      // reading the GUID, matching the other ports' schema==null handling.
+      int min_schema = n == "CGroup" ? 1 : 5;
+      auto cs = class_slot.find(n);
+      int schema = cs != class_slot.end() ? slots[cs->second].schema : 0;
+      bool has_guid = schema == 0 || schema >= min_schema;
+      if (has_guid) r.raw(16);
     } else
       throw std::runtime_error("no legacy reader for " + n);
     return v;
