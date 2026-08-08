@@ -44,6 +44,14 @@ TEST(Legacy, DetectsClassicContainer) {
   EXPECT_FALSE(is_legacy(test::read_fixture("Untitled.skp")));
 }
 
+TEST(Legacy, GatesInstanceGuidByClassSchema) {
+  EXPECT_FALSE(legacy_instance_has_guid("CComponentInstance", 4));
+  EXPECT_TRUE(legacy_instance_has_guid("CComponentInstance", 5));
+  EXPECT_FALSE(legacy_instance_has_guid("CGroup", 0));
+  EXPECT_TRUE(legacy_instance_has_guid("CGroup", 1));
+  EXPECT_TRUE(legacy_instance_has_guid("CComponentInstance", std::nullopt));
+}
+
 TEST(Transforms, Composition) {
   std::vector<double> a{1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 3, 4, 1};
   std::vector<double> b{1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 6, 7, 1};
