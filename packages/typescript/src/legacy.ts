@@ -174,6 +174,8 @@ class Archive {
   r: R;
   slots = new Map<number, SlotEntry>();
   classSlot = new Map<string, number>();
+  classSchema = new Map<string, number>();
+  currentClass: string | null = null;
   nextSlot = 0;
   walkBase = 0;
   readers: Record<string, (ar: Archive, r: R) => any> = {};
@@ -216,6 +218,7 @@ class Archive {
       const name = new TextDecoder('utf-8').decode(nameBytes);
       this.alloc(['class', name, schema]);
       this.classSlot.set(name, this.nextSlot - 1);
+      this.classSchema.set(name, schema);
       return this.newObj(r, name);
     }
     if (tag & 0x8000) {
@@ -248,7 +251,14 @@ class Archive {
     if (reader === undefined) {
       throw new LegacyParseError(`no reader for class ${name} ${r.ctx()}`);
     }
-    const value = reader(this, r);
+    const prevClass = this.currentClass;
+    this.currentClass = name;
+    let value: any;
+    try {
+      value = reader(this, r);
+    } finally {
+      this.currentClass = prevClass;
+    }
     this.slots.set(slot, ['obj', name, value]);
     return [slot, name, value];
   }
@@ -736,6 +746,7 @@ function readDefinition(ar: Archive, r: R): any {
 }
 
 function readInstance(ar: Archive, r: R): any {
+  const cls = ar.currentClass;
   preamble(ar, r);
   const db = drawbase(ar, r);
   const [ds, dn] = ar.readObject(r, 'CComponentDefinition');
@@ -744,7 +755,14 @@ function readInstance(ar: Archive, r: R): any {
   }
   const xf = r.f64s(13);
   const name = r.utf16();
-  const guid = r.raw(16);
+
+  // The trailing instance GUID arrives with CComponentInstance schema 5 /
+  // CGroup schema 1; SketchUp 2013 writes CComponentInstance schema 4,
+  // whose record ends at the name (see openskp#38 / #40).
+  const minSchema = cls === 'CGroup' ? 1 : 5;
+  const schema = cls !== null ? ar.classSchema.get(cls) : undefined;
+  const guid = schema === undefined || schema >= minSchema ? r.raw(16) : new Uint8Array(0);
+
   return { k: 'instance', db, def: ds, xf, name, guid: toHex(guid) };
 }
 
