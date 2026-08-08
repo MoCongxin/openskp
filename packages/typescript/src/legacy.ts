@@ -78,6 +78,24 @@ function toHex(data: Uint8Array): string {
   return s;
 }
 
+/**
+ * True when the bytes at `p` are an MFC class-ref to class `slot`. Mirrors
+ * both encodings Archive.readObject decodes: the short 16-bit form
+ * (0x8000|slot) and, for slots past 0x7fff, the big-tag escape (0x7fff
+ * followed by a u32 of 0x80000000|slot).
+ */
+export function isClassRef(data: Uint8Array, p: number, slot: number): boolean {
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  if (slot <= 0x7fff) {
+    return p + 2 <= data.length && view.getUint16(p, true) === (0x8000 | slot);
+  }
+  return (
+    p + 6 <= data.length &&
+    view.getUint16(p, true) === 0x7fff &&
+    view.getUint32(p + 2, true) === (0x80000000 | slot) >>> 0
+  );
+}
+
 /** Byte cursor, matching Python's `_R`. */
 class R {
   data: Uint8Array;
@@ -699,7 +717,7 @@ function readDefinition(ar: Archive, r: R): any {
 
   // undecoded block (~39-47 bytes), then the CThumbnail object
   let tpos: number | null = null;
-  const view = new DataView(r.data.buffer, r.data.byteOffset, r.data.byteLength);
+  const thumbSlot = ar.classSlot.get('CThumbnail');
   for (let off = 0; off < 96; off++) {
     const p = r.pos + off;
     if (
@@ -710,12 +728,9 @@ function readDefinition(ar: Archive, r: R): any {
       tpos = p;
       break;
     }
-    const thumbSlot = ar.classSlot.get('CThumbnail');
-    if (thumbSlot !== undefined) {
-      if (view.getUint16(p, true) === (0x8000 | thumbSlot)) {
-        tpos = p;
-        break;
-      }
+    if (thumbSlot !== undefined && isClassRef(r.data, p, thumbSlot)) {
+      tpos = p;
+      break;
     }
   }
   if (tpos === null) {
