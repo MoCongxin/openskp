@@ -28,6 +28,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that path correctly continues to default to 255, since there's no real
   data to read there.
 
+### Removed
+
+- **Python**: `SkpModel.scene_hierarchy` and `SkpModel.mesh_index` —
+  dead fields that `parse()` never populated (always empty). Leftover
+  from an earlier design; the real, populated versions of both concepts
+  live on the separate `Scene` class returned by `build_scene()`, which
+  is the pattern this project uses consistently everywhere else (a plain
+  `parse()` stays light; a scene bake is opt-in and heavier). Any code
+  reading these two fields was always seeing an empty list/dict — this
+  removal cannot change observed behavior for a correctly-written
+  caller, only surface a clear `AttributeError` instead of silently
+  succeeding with fake-empty data for one that assumed they were real.
+
 ## [0.3.0] — C++ only — 2026-08-07
 
 ### Added

@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import pathlib
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 if TYPE_CHECKING:
     from . import scene
@@ -331,10 +331,14 @@ class SkpModel:
         materials_by_id: Mapping of TLV material ID → :class:`Material`,
             the join table for :attr:`Face.material_id`.  Several IDs may
             alias the same :class:`Material` object.
-        scene_hierarchy: Top-level :class:`Instance` list forming the
-            scene graph.
-        mesh_index: Pre-built index mapping definition IDs to triangulated
-            mesh data for fast export.
+        styles: List of :class:`Style` objects found in the file.
+
+    Note:
+        The resolved, world-space scene graph (with baked instance
+        transforms and a mesh index for fast export) is a separate,
+        heavier computation — see :meth:`SkpFile.build_scene` and the
+        :class:`~openskp.scene.Scene` class it returns, rather than a
+        field on this class. ``parse()`` stays light on purpose.
     """
 
     version: str = "unknown"
@@ -342,9 +346,7 @@ class SkpModel:
     layers: List[Layer] = field(default_factory=list)
     materials: List[Material] = field(default_factory=list)
     materials_by_id: Dict[int, Material] = field(default_factory=dict)
-    scene_hierarchy: List[Instance] = field(default_factory=list)
     styles: List[Style] = field(default_factory=list)
-    mesh_index: Dict[int, Any] = field(default_factory=dict)
 
 
 # ── SkpFile entry-point ──────────────────────────────────────────────────
