@@ -870,7 +870,7 @@ def full_parse_legacy(skp_path: str) -> Dict[str, Any]:
         colorized = v.get('colorized', False)
         mat_obj: Dict[str, Any] = {
             'name': v['name'],
-            'color': {'r': rgba[0], 'g': rgba[1], 'b': rgba[2]},
+            'color': {'r': rgba[0], 'g': rgba[1], 'b': rgba[2], 'a': rgba[3]},
             'transparency': trans,
             # colourize type is not decoded in the legacy record; tint is
             # the correct rendering for the grey base textures observed
