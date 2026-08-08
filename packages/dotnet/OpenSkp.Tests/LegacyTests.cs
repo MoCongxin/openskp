@@ -114,4 +114,49 @@ namespace OpenSkp.Tests
             Assert.True(Legacy.IsLegacy(bytes));
         }
     }
+
+    /// <summary>
+    /// Both MFC class-ref encodings the definition-tail scanner must match.
+    /// Mirrors packages/python/tests/test_parser.py::TestLegacyClassRef
+    /// (openskp#28 / #39): once a class slot passes 0x7FFF the short 16-bit
+    /// form 0x8000|slot can't fit, so MFC escalates to the big-tag escape
+    /// (0x7FFF followed by a u32 of 0x80000000|slot).
+    /// </summary>
+    public class LegacyClassRefTests
+    {
+        [Fact]
+        public void ShortForm()
+        {
+            var data = BitConverter.GetBytes((ushort)(0x8000 | 278));
+            Assert.True(LegacyBytes.IsClassRef(data, 0, 278));
+            Assert.False(LegacyBytes.IsClassRef(data, 0, 279));
+        }
+
+        [Fact]
+        public void BigTagEscape()
+        {
+            // slot 65712 does not fit in 0x8000|slot: MFC writes 0x7FFF + u32
+            var data = new byte[6];
+            BitConverter.GetBytes((ushort)0x7FFF).CopyTo(data, 0);
+            BitConverter.GetBytes(0x80000000u | 65712).CopyTo(data, 2);
+            Assert.True(LegacyBytes.IsClassRef(data, 0, 65712));
+            Assert.False(LegacyBytes.IsClassRef(data, 0, 65713));
+        }
+
+        [Fact]
+        public void BigSlotNeverMatchesShortForm()
+        {
+            // the pre-fix scanner compared a u16 read against 0x8000|65712,
+            // which cannot fit in 16 bits - the truncated value must not match
+            var data = BitConverter.GetBytes(unchecked((ushort)(0x8000 | 65712)));
+            Assert.False(LegacyBytes.IsClassRef(data, 0, 65712));
+        }
+
+        [Fact]
+        public void TruncatedData()
+        {
+            var data = new byte[] { 0xFF, 0x7F, 0xB0 };
+            Assert.False(LegacyBytes.IsClassRef(data, 0, 65712));
+        }
+    }
 }
