@@ -125,6 +125,8 @@ class _Archive:
         self.r = _R(data)
         self.slots: Dict[int, tuple] = {}    # slot -> ('class'|'obj', name, value)
         self.class_slot: Dict[str, int] = {}
+        self.class_schema: Dict[str, int] = {}
+        self.current_class: Optional[str] = None  # class of the object being read
         self.next_slot = 0
         self.walk_base = 0            # slots below this are unwalked pre-model
         self.readers: Dict[str, Any] = {}
@@ -155,6 +157,7 @@ class _Archive:
             name = r.raw(namelen).decode('ascii')
             self.alloc(('class', name, schema))
             self.class_slot[name] = self.next_slot - 1
+            self.class_schema[name] = schema
             return self._new_obj(r, name)
         if tag & 0x8000:                       # class ref -> new object
             return self._new_of_class(r, tag & 0x7FFF, expect)
@@ -182,7 +185,12 @@ class _Archive:
         reader = self.readers.get(name)
         if reader is None:
             raise LegacyParseError(f"no reader for class {name} {r.ctx()}")
-        value = reader(self, r)
+        prev_class = self.current_class
+        self.current_class = name
+        try:
+            value = reader(self, r)
+        finally:
+            self.current_class = prev_class
         self.slots[slot] = ('obj', name, value)
         return slot, name, value
 
@@ -601,6 +609,7 @@ def _read_definition(ar, r):
 
 
 def _read_instance(ar, r):
+    cls = ar.current_class
     _preamble(ar, r)
     db = _drawbase(ar, r)
     ds, dn, _ = ar.read_object(r, expect='CComponentDefinition')
@@ -608,7 +617,15 @@ def _read_instance(ar, r):
         raise LegacyParseError(f"instance definition ref is {dn} {r.ctx()}")
     xf = r.f64s(13)
     name = r.utf16()
-    guid = r.raw(16)
+    # the trailing instance GUID arrives with CComponentInstance schema 5 /
+    # CGroup schema 1; SketchUp 2013 writes CComponentInstance schema 4,
+    # which ends at the name
+    schema = ar.class_schema.get(cls)
+    min_schema = 1 if cls == 'CGroup' else 5
+    if schema is None or schema >= min_schema:
+        guid = r.raw(16)
+    else:
+        guid = b''
     return {'k': 'instance', 'db': db, 'def': ds, 'xf': xf,
             'name': name, 'guid': guid.hex().upper()}
 
