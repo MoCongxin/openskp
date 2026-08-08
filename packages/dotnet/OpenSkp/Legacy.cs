@@ -72,6 +72,21 @@ namespace OpenSkp
             return -1;
         }
 
+        /// <summary>True when the bytes at <paramref name="p"/> are an MFC class-ref
+        /// to class <paramref name="slot"/>. Mirrors both encodings Archive.ReadObject
+        /// decodes: the short 16-bit form (0x8000|slot) and, for slots past 0x7FFF,
+        /// the big-tag escape (0x7FFF followed by a u32 of 0x80000000|slot).</summary>
+        public static bool IsClassRef(byte[] data, int p, int slot)
+        {
+            if (slot <= 0x7FFF)
+            {
+                return p + 2 <= data.Length && Tlv.ReadU16(data, p) == (0x8000 | slot);
+            }
+            return p + 6 <= data.Length
+                && Tlv.ReadU16(data, p) == 0x7FFF
+                && Tlv.ReadU32(data, p + 2) == (0x80000000u | (uint)slot);
+        }
+
         public static int[] AsciiCodes(string s) => s.Select(c => (int)c).ToArray();
 
         public static bool MatchesAscii(byte[] data, int offset, string str)
@@ -892,6 +907,7 @@ namespace OpenSkp
             r.U32();
 
             int? tpos = null;
+            bool haveThumbSlot = ar.ClassSlot.TryGetValue("CThumbnail", out int thumbSlot);
             for (int off = 0; off < 96; off++)
             {
                 int p = r.Pos + off;
@@ -903,13 +919,10 @@ namespace OpenSkp
                     tpos = p;
                     break;
                 }
-                if (ar.ClassSlot.TryGetValue("CThumbnail", out int thumbSlot))
+                if (haveThumbSlot && LegacyBytes.IsClassRef(r.Data, p, thumbSlot))
                 {
-                    if (p + 2 <= r.Data.Length && Tlv.ReadU16(r.Data, p) == (0x8000 | thumbSlot))
-                    {
-                        tpos = p;
-                        break;
-                    }
+                    tpos = p;
+                    break;
                 }
             }
             if (tpos == null)
