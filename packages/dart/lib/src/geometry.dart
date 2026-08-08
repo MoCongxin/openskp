@@ -49,7 +49,7 @@ class RawTexture {
 
 class RawMaterial {
   String name;
-  int r, g, b;
+  int r, g, b, a;
   double transparency;
   bool colorized;
   int colorizeType;
@@ -59,6 +59,7 @@ class RawMaterial {
     this.r = 128,
     this.g = 128,
     this.b = 128,
+    this.a = 255,
     this.transparency = 1.0,
     this.colorized = false,
     this.colorizeType = 0,
