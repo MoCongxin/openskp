@@ -180,6 +180,8 @@ class Archive {
   late final LR r;
   final Map<int, SlotEntry> slots = {};
   final Map<String, int> classSlot = {};
+  final Map<String, int> classSchema = {};
+  String? currentClass;
   int nextSlot = 0;
   int walkBase = 0;
   final Map<String, LegacyReader> readers = {};
@@ -219,6 +221,7 @@ class Archive {
       final name = ascii.decode(nameBytes);
       alloc(SlotEntry(kind: 'class', name: name, value: schema));
       classSlot[name] = nextSlot - 1;
+      classSchema[name] = schema;
       return _newObj(r, name);
     }
     if ((tag & 0x8000) != 0) {
@@ -251,7 +254,14 @@ class Archive {
     if (reader == null) {
       throw LegacyParseError('no reader for class $name ${r.ctx()}');
     }
-    final value = reader(this, r);
+    final prevClass = currentClass;
+    currentClass = name;
+    Object? value;
+    try {
+      value = reader(this, r);
+    } finally {
+      currentClass = prevClass;
+    }
     slots[slot] = SlotEntry(kind: 'obj', name: name, value: value);
     return (slot, name, value);
   }
@@ -888,6 +898,7 @@ class LegacyReaders {
   }
 
   static Object readInstance(Archive ar, LR r) {
+    final cls = ar.currentClass;
     preamble(ar, r);
     final db = drawbase(ar, r);
     final (ds, dn, _) = ar.readObject(r, 'CComponentDefinition');
@@ -896,7 +907,15 @@ class LegacyReaders {
     }
     final xf = r.f64s(13);
     final name = r.utf16();
-    final guid = r.raw(16);
+
+    // The trailing instance GUID arrives with CComponentInstance schema 5 /
+    // CGroup schema 1; SketchUp 2013 writes CComponentInstance schema 4,
+    // whose record ends at the name (see openskp#38 / #40).
+    final minSchema = cls == 'CGroup' ? 1 : 5;
+    final schema = cls != null ? ar.classSchema[cls] : null;
+    final guid =
+        (schema == null || schema >= minSchema) ? r.raw(16) : Uint8List(0);
+
     return InstanceRec(
         db: db, def: ds, xf: xf, name: name, guid: Tlv.toHexUpper(guid));
   }
