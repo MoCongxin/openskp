@@ -209,6 +209,21 @@ class _Archive:
 
 # ── shared record blocks ─────────────────────────────────────────────────
 
+def _is_class_ref(data: bytes, p: int, slot: int) -> bool:
+    """True when the bytes at *p* are an MFC class-ref to class *slot*.
+
+    Mirrors both encodings that ``_Archive.read_object`` decodes: the short
+    16-bit form ``0x8000|slot`` and, for slots past 0x7FFF, the big-tag
+    escape ``0x7FFF`` followed by a u32 of ``0x80000000|slot``.
+    """
+    if slot <= 0x7FFF:
+        return (p + 2 <= len(data)
+                and struct.unpack_from('<H', data, p)[0] == 0x8000 | slot)
+    return (p + 6 <= len(data)
+            and struct.unpack_from('<H', data, p)[0] == 0x7FFF
+            and struct.unpack_from('<I', data, p + 2)[0] == 0x80000000 | slot)
+
+
 def _preamble(ar, r):
     """Entity preamble: attribute pointer (+ pid mask/bytes on 2017+)."""
     slot, name, attrs = ar.read_object(r, expect='CAttributeContainer')
@@ -586,17 +601,16 @@ def _read_definition(ar, r):
     r.u32()                                   # timestamp
     # undecoded block (~39-47 bytes), then the CThumbnail object
     tpos = None
+    thumb_slot = ar.class_slot.get('CThumbnail')
     for off in range(0, 96):
         p = r.pos + off
         if (r.data[p:p + 2] == b'\xff\xff' and r.data[p + 4:p + 6] == b'\x0a\x00'
                 and r.data[p + 6:p + 16] == b'CThumbnail'):
             tpos = p
             break
-        if 'CThumbnail' in ar.class_slot:
-            if struct.unpack_from('<H', r.data, p)[0] == \
-                    0x8000 | ar.class_slot['CThumbnail']:
-                tpos = p
-                break
+        if thumb_slot is not None and _is_class_ref(r.data, p, thumb_slot):
+            tpos = p
+            break
     if tpos is None:
         raise LegacyParseError(f"definition tail: thumbnail not found {r.ctx()}")
     gap = r.raw(tpos - r.pos)
