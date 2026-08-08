@@ -78,6 +78,19 @@ bool _matchesAscii(Uint8List data, int offset, String str) {
   return true;
 }
 
+/// True when the bytes at [p] are an MFC class-ref to class [slot]. Mirrors
+/// both encodings Archive.readObject decodes: the short 16-bit form
+/// (0x8000|slot) and, for slots past 0x7FFF, the big-tag escape (0x7FFF
+/// followed by a u32 of 0x80000000|slot).
+bool isClassRef(Uint8List data, int p, int slot) {
+  if (slot <= 0x7FFF) {
+    return p + 2 <= data.length && Tlv.readU16(data, p) == (0x8000 | slot);
+  }
+  return p + 6 <= data.length &&
+      Tlv.readU16(data, p) == 0x7FFF &&
+      Tlv.readU32(data, p + 2) == (0x80000000 | slot);
+}
+
 /// Byte cursor, matching Python's _R.
 class LR {
   final Uint8List data;
@@ -853,6 +866,7 @@ class LegacyReaders {
     r.u32();
 
     int? tpos;
+    final thumbSlot = ar.classSlot['CThumbnail'];
     for (int off = 0; off < 96; off++) {
       final p = r.pos + off;
       if (p + 16 <= r.data.length &&
@@ -864,13 +878,9 @@ class LegacyReaders {
         tpos = p;
         break;
       }
-      final thumbSlot = ar.classSlot['CThumbnail'];
-      if (thumbSlot != null) {
-        if (p + 2 <= r.data.length &&
-            Tlv.readU16(r.data, p) == (0x8000 | thumbSlot)) {
-          tpos = p;
-          break;
-        }
+      if (thumbSlot != null && isClassRef(r.data, p, thumbSlot)) {
+        tpos = p;
+        break;
       }
     }
     if (tpos == null) {
