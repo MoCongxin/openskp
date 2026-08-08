@@ -117,7 +117,7 @@ export interface Style {
 
 export interface Material {
   name: string;
-  color: { r: number; g: number; b: number };
+  color: { r: number; g: number; b: number; a: number };
   transparency: number;
   id: number | null;
   texture: Texture | null;

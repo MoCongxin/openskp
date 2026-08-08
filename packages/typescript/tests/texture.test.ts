@@ -103,7 +103,7 @@ describe('Texture extraction', () => {
     expect(copy!.texture!.data).toEqual(png); // borrowed from materials/Fence/
     expect(copy!.colorized).toBe(true);
     expect(copy!.colorizeType).toBe(0);
-    expect(copy!.color).toEqual({ r: 27, g: 135, b: 59 });
+    expect(copy!.color).toEqual({ r: 27, g: 135, b: 59, a: 255 });
 
     const base = byName.get('Fence');
     expect(base!.colorized).toBe(false);
