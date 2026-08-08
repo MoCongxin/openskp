@@ -86,7 +86,7 @@ SkpModel build_model(RawParsed&& p) {
     auto& r = *v.second;
     Material x;
     x.name = r.name;
-    x.color = {std::uint8_t(r.r), std::uint8_t(r.g), std::uint8_t(r.b), 255};
+    x.color = {std::uint8_t(r.r), std::uint8_t(r.g), std::uint8_t(r.b), std::uint8_t(r.a)};
     x.transparency = r.transparency;
     x.colorized = r.colorized;
     x.colorize_type = r.colorize_type;

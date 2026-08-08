@@ -117,6 +117,7 @@ struct V {
   int r{128};
   int g{128};
   int b{128};
+  int a{255};
   double opacity{};
   double tw{};
   double th{};
@@ -333,6 +334,7 @@ struct Archive {
         v->r = c[0];
         v->g = c[1];
         v->b = c[2];
+        v->a = c[3];
         r.utf16();
         r.raw(8);
         v->opacity = r.f64();
@@ -356,6 +358,10 @@ struct Archive {
         v->r = c[0];
         v->g = c[1];
         v->b = c[2];
+        // c[3] here is not a colour alpha byte - it feeds the colorized
+        // check below alongside blob[4]. v->a keeps its default (255);
+        // textured materials carry no separate alpha channel in this
+        // record shape.
         r.utf16();
         auto blob = r.raw(8);
         v->opacity = r.f64();
@@ -676,6 +682,7 @@ RawParsed parse_legacy(const ByteBuffer& data, const ParseOptions& o) {
       x->r = v->r;
       x->g = v->g;
       x->b = v->b;
+      x->a = v->a;
       x->transparency = std::clamp(1.0 - v->opacity, 0.0, 1.0);
       x->colorized = v->colorized;
       x->colorize_type = v->colorized ? 1 : 0;
