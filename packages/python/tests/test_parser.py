@@ -1196,3 +1196,35 @@ class TestObservability:
                 raise SkpParseError("wrapped", stage="tlv_walk") from e
         except SkpParseError as wrapped:
             assert wrapped.__cause__ is original
+
+
+class TestLegacyClassRef:
+    """Both MFC class-ref encodings the definition-tail scanner must match."""
+
+    def test_short_form(self) -> None:
+        from openskp.legacy import _is_class_ref
+
+        data = struct.pack("<H", 0x8000 | 278)
+        assert _is_class_ref(data, 0, 278)
+        assert not _is_class_ref(data, 0, 279)
+
+    def test_big_tag_escape(self) -> None:
+        from openskp.legacy import _is_class_ref
+
+        # slot 65712 does not fit in 0x8000|slot: MFC writes 0x7FFF + u32
+        data = struct.pack("<HI", 0x7FFF, 0x80000000 | 65712)
+        assert _is_class_ref(data, 0, 65712)
+        assert not _is_class_ref(data, 0, 65713)
+
+    def test_big_slot_never_matches_short_form(self) -> None:
+        from openskp.legacy import _is_class_ref
+
+        # the pre-fix scanner compared a u16 read against 0x8000|65712,
+        # which cannot fit in 16 bits — the truncated value must not match
+        data = struct.pack("<H", (0x8000 | 65712) & 0xFFFF)
+        assert not _is_class_ref(data, 0, 65712)
+
+    def test_truncated_data(self) -> None:
+        from openskp.legacy import _is_class_ref
+
+        assert not _is_class_ref(b"\xff\x7f\xb0", 0, 65712)
