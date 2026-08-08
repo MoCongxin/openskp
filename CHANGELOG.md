@@ -14,6 +14,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   uses privately bundled TinyGLTF 2.9.7, validates scene geometry and PBR data,
   and keeps TinyGLTF out of installed headers and consumer link interfaces.
 
+### Fixed
+
+- **Python, TypeScript, Dart, C++**: `Material.color`'s alpha channel was
+  silently discarded when parsing legacy MFC (SketchUp 2013–2020) files —
+  each language read the material's real 4-byte RGBA record but only kept
+  the first three bytes, always reporting a hardcoded alpha regardless of
+  what the file actually stored. .NET already read the real byte correctly;
+  the other four now match it. Verified empirically across 2,060 materials
+  in 13 real production files that this byte is always 255 in practice, but
+  reading the real value is more correct than assuming a constant. The VFF
+  (2021+) material record has no alpha attribute at all in any language —
+  that path correctly continues to default to 255, since there's no real
+  data to read there.
+
 ## [0.3.0] — C++ only — 2026-08-07
 
 ### Added
