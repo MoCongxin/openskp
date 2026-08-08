@@ -98,7 +98,11 @@ function parseToRaw(buffer: ArrayBuffer, options?: ParseOptions): ParsedRawData 
           }
           const matObj: Material = {
             name: parsedMat.name,
-            color: { r: parsedMat.r, g: parsedMat.g, b: parsedMat.b },
+            // The VFF material XML record has no alpha attribute - only a
+            // separate transparency value (parsedMat.trans, above). Always
+            // opaque here; real per-channel alpha only exists in the legacy
+            // MFC record (see legacy.ts's own material color assignment).
+            color: { r: parsedMat.r, g: parsedMat.g, b: parsedMat.b, a: 255 },
             transparency: parsedMat.trans,
             id: null,
             texture,

@@ -1093,7 +1093,7 @@ export function parseLegacyToRaw(data: Uint8Array, options?: ParseOptions): Pars
     }
     const matObj: Material = {
       name: v.name,
-      color: { r: rgba[0], g: rgba[1], b: rgba[2] },
+      color: { r: rgba[0], g: rgba[1], b: rgba[2], a: rgba[3] },
       transparency: trans,
       id: null,
       texture,
