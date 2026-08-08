@@ -325,7 +325,14 @@ class SkpModel:
 
     Attributes:
         version: SketchUp file-format version number.
-        definitions: Mapping of definition index → :class:`Definition`.
+        definitions: Mapping of definition index → :class:`Definition`,
+            for named component/group definitions only. The implicit
+            top-level model is a separate field — see :attr:`root`.
+        root: The implicit top-level model definition: its ``instances``
+            are the entities placed directly in the model (not inside
+            any component/group), and its ``vertices``/``edges``/``faces``
+            are geometry drawn directly at the top level. Corresponds to
+            TypeScript/.NET/Dart/C++'s ``root``/``Root``.
         layers: List of :class:`Layer` objects found in the file.
         materials: List of :class:`Material` objects found in the file.
         materials_by_id: Mapping of TLV material ID → :class:`Material`,
@@ -343,6 +350,7 @@ class SkpModel:
 
     version: str = "unknown"
     definitions: Dict[int, Definition] = field(default_factory=dict)
+    root: Definition = field(default_factory=Definition)
     layers: List[Layer] = field(default_factory=list)
     materials: List[Material] = field(default_factory=list)
     materials_by_id: Dict[int, Material] = field(default_factory=dict)
@@ -463,7 +471,10 @@ class SkpFile:
                     matrix=inst.get("matrix", []),
                     material_id=inst.get("material_id"),
                 ))
-            model.definitions[def_id] = defn
+            if def_id == "ROOT":
+                model.root = defn
+            else:
+                model.definitions[def_id] = defn
 
         # Convert layers
         for name, (r, g, b) in parsed["layer_colors"].items():
