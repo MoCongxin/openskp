@@ -1,0 +1,37 @@
+name: Dart CI
+
+on:
+  push:
+    branches: [main]
+    paths: ['packages/dart/**']
+  pull_request:
+    branches: [main]
+    paths: ['packages/dart/**']
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@v1
+
+      - name: Install dependencies
+        run: |
+          cd packages/dart
+          dart pub get
+
+      - name: Analyze
+        run: |
+          cd packages/dart
+          dart analyze --fatal-infos
+
+      - name: Test
+        run: |
+          cd packages/dart
+          dart test
