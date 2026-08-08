@@ -214,6 +214,8 @@ namespace OpenSkp
         public LR R;
         public Dictionary<int, SlotEntry> Slots = new Dictionary<int, SlotEntry>();
         public Dictionary<string, int> ClassSlot = new Dictionary<string, int>();
+        public Dictionary<string, int> ClassSchema = new Dictionary<string, int>();
+        public string? CurrentClass;
         public int NextSlot;
         public int WalkBase;
         public Dictionary<string, LegacyReader> Readers = new Dictionary<string, LegacyReader>();
@@ -264,6 +266,7 @@ namespace OpenSkp
                 string name = Encoding.ASCII.GetString(nameBytes);
                 Alloc(new SlotEntry { Kind = "class", Name = name, Value = (int)schema });
                 ClassSlot[name] = NextSlot - 1;
+                ClassSchema[name] = schema;
                 return NewObj(r, name);
             }
             if ((tag & 0x8000) != 0)
@@ -300,7 +303,17 @@ namespace OpenSkp
             {
                 throw new LegacyParseError($"no reader for class {name} {r.Ctx()}");
             }
-            object? value = reader(this, r);
+            string? prevClass = CurrentClass;
+            CurrentClass = name;
+            object? value;
+            try
+            {
+                value = reader(this, r);
+            }
+            finally
+            {
+                CurrentClass = prevClass;
+            }
             Slots[slot] = new SlotEntry { Kind = "obj", Name = name, Value = value };
             return (slot, name, value);
         }
@@ -917,6 +930,7 @@ namespace OpenSkp
 
         public static object ReadInstance(Archive ar, LR r)
         {
+            string? cls = ar.CurrentClass;
             Preamble(ar, r);
             var db = Drawbase(ar, r);
             var (ds, dn, _) = ar.ReadObject(r, "CComponentDefinition");
@@ -926,7 +940,14 @@ namespace OpenSkp
             }
             var xf = r.F64s(13);
             string name = r.Utf16();
-            var guid = r.Raw(16);
+
+            // The trailing instance GUID arrives with CComponentInstance schema 5 /
+            // CGroup schema 1; SketchUp 2013 writes CComponentInstance schema 4,
+            // whose record ends at the name (see openskp#38 / #40).
+            int minSchema = cls == "CGroup" ? 1 : 5;
+            int? schema = (cls != null && ar.ClassSchema.TryGetValue(cls, out int s)) ? s : (int?)null;
+            byte[] guid = (schema == null || schema >= minSchema) ? r.Raw(16) : Array.Empty<byte>();
+
             return new InstanceRec { Db = db, Def = ds, Xf = xf, Name = name, Guid = LegacyBytes.ToHex(guid) };
         }
 
