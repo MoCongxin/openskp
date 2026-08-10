@@ -36,6 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as the front, per the documented recipe - this path has no cross-language
   reference to verify against, since no other port models back materials
   at all.
+- **Dart**: `GlbPrimitive` gained a `uvs` field, same fix as the other
+  ports. This closes out #62 across every language whose scene-baking
+  layer exposes `GlbPrimitive` - Python, .NET, TypeScript, C++, and now
+  Dart all compute numerically identical UV values (to float precision) on
+  the same real fixture. Dart has no `.glb` file writer yet (tracked
+  separately), so this reaches the `GlbPrimitive` data shape only, same as
+  the Python/.NET/TypeScript entries above.
 
 - **C++**: public `to_glb(const Scene&)` and `export_glb(const Scene&, path)`
   APIs for in-memory and file-based binary glTF 2.0 export. The implementation

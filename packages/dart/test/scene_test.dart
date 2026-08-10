@@ -34,8 +34,13 @@ void main() {
     for (final prim in scene.glbPrimitives) {
       expect(prim.positions.length % 3, 0);
       expect(prim.normals.length, prim.positions.length);
-      expect(prim.indices.length % 3, 0);
       final nVerts = prim.positions.length ~/ 3;
+      expect(prim.uvs.length, nVerts * 2);
+      for (final uv in prim.uvs) {
+        expect(uv.isNaN, false);
+        expect(uv.isFinite, true);
+      }
+      expect(prim.indices.length % 3, 0);
       for (final idx in prim.indices) {
         expect(idx, inInclusiveRange(0, nVerts - 1));
       }

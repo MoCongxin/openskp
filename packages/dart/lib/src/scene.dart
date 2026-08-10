@@ -58,7 +58,18 @@ class GlbPrimitive {
   /// Flat [x, y, z, ...] vertex normals, matching positions 1:1.
   final List<double> normals;
 
-  /// Triangle vertex indices into positions/normals (3 per triangle).
+  /// Flat [u, v, u, v, ...] texture coordinates, matching positions 1:1.
+  /// Computed from each source face's uvTransform (or the default
+  /// face-plane projection when a face has none) - see
+  /// GeometryBuilderFace.uvTransform's usage for the formula. A vertex
+  /// shared by two faces that disagree on UV is split, since indexed glTF
+  /// meshes need position/normal/uv aligned per vertex. Faces with a
+  /// PROJECTED texture (terrain-drape, e.g. Add Location) still use the
+  /// face-plane formula here, since the real projection-plane basis isn't
+  /// captured in the parsed data - their UVs will be approximate.
+  final List<double> uvs;
+
+  /// Triangle vertex indices into positions/normals/uvs (3 per triangle).
   final List<int> indices;
 
   /// Index into Scene.gltfMaterials for this primitive's resolved color.
@@ -70,6 +81,7 @@ class GlbPrimitive {
   GlbPrimitive({
     required this.positions,
     required this.normals,
+    required this.uvs,
     required this.indices,
     required this.materialIndex,
     required this.geomName,
@@ -95,14 +107,69 @@ class Scene {
 class _FaceGroup {
   final (int, int, int) color;
   final List<(double, double, double)> localVerts = [];
+  final List<(double, double)> localUvs = [];
+  final List<List<double>> normalsAccum = [];
   final List<List<int>> localFaces = [];
-  final Map<int, int> localVMap = {};
-  final List<(int, GeometryBuilderFace)> faceList = [];
+  final Map<(int, double, double), int> localVMap = {};
   _FaceGroup(this.color);
 }
 
 const double _inchesToMm = 25.4;
 const double _inchesToM = 0.0254;
+
+/// Inverse of a row-major 3x3 matrix, via the cofactor/adjugate method.
+List<double> _invert3x3(List<double> m) {
+  final a = m[0], b = m[1], c = m[2];
+  final d = m[3], e = m[4], f = m[5];
+  final g = m[6], h = m[7], i = m[8];
+  final det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
+  if (det.abs() < 1e-12) {
+    return [1, 0, 0, 0, 1, 0, 0, 0, 1];
+  }
+  final invDet = 1 / det;
+  return [
+    (e * i - f * h) * invDet, (c * h - b * i) * invDet, (b * f - c * e) * invDet,
+    (f * g - d * i) * invDet, (a * i - c * g) * invDet, (c * d - a * f) * invDet,
+    (d * h - e * g) * invDet, (b * g - a * h) * invDet, (a * e - b * d) * invDet,
+  ];
+}
+
+/// Face-plane basis vectors (xr, yr) for UV projection, from a face normal.
+((double, double, double), (double, double, double)) _faceUvBasis((double, double, double) n) {
+  final (nx, ny, nz) = n;
+  final cx = -ny, cy = nx;
+  final clen = sqrt(cx * cx + cy * cy);
+  if (clen < 1e-9) {
+    return ((1.0, 0.0, 0.0), (0.0, nz >= 0 ? 1.0 : -1.0, 0.0));
+  }
+  final xr = (cx / clen, cy / clen, 0.0);
+  final yr = (ny * xr.$3 - nz * xr.$2, nz * xr.$1 - nx * xr.$3, nx * xr.$2 - ny * xr.$1);
+  return (xr, yr);
+}
+
+/// UV of point p (inches, local/object space) on a face with the given
+/// plane basis, per-face uvTransform (or null for the default projection),
+/// and material tile size (inches).
+(double, double) _computeFaceUv(
+  (double, double, double) p,
+  (double, double, double) xr,
+  (double, double, double) yr,
+  List<double>? uvTransform,
+  double tileW,
+  double tileH,
+) {
+  final px = p.$1 * xr.$1 + p.$2 * xr.$2 + p.$3 * xr.$3;
+  final py = p.$1 * yr.$1 + p.$2 * yr.$2 + p.$3 * yr.$3;
+  if (uvTransform == null) {
+    return (px / tileW, py / tileH);
+  }
+  final inv = _invert3x3(uvTransform);
+  final u = px * inv[0] + py * inv[3] + inv[6];
+  final v = px * inv[1] + py * inv[4] + inv[7];
+  var q = px * inv[2] + py * inv[5] + inv[8];
+  if (q.abs() < 1e-12) q = 1.0;
+  return (u / q / tileW, v / q / tileH);
+}
 
 /// Bakes every instance actually placed in a parsed model into world-space,
 /// triangulated mesh data - SketchUp's own component/group nesting fully
@@ -179,14 +246,14 @@ class SceneBuilder {
         final faceGroups = <(int, int, int), _FaceGroup>{};
 
         for (final faceEntry in builder.faces.entries) {
-          final fId = faceEntry.key;
           final fData = faceEntry.value;
           (int, int, int)? faceColor = inheritedColor;
           final faceMatId = fData.materialId;
+          RawMaterial? mat;
           if (faceMatId != null) {
             final matName = materialIdToName[faceMatId];
             if (matName != null) {
-              final mat = materials[matName] ?? materialsByFolder[matName];
+              mat = materials[matName] ?? materialsByFolder[matName];
               if (mat != null) faceColor = (mat.r, mat.g, mat.b);
             }
           }
@@ -210,24 +277,50 @@ class SceneBuilder {
               stage: 'build_scene', definitionId: defId, cause: e,
             );
           }
+
+          final fn = fData.normal;
+          final tex = mat?.texture;
+          final tileW = (tex != null && tex.xScale > 1e-9) ? tex.xScale : 1.0;
+          final tileH = (tex != null && tex.yScale > 1e-9) ? tex.yScale : 1.0;
+          final (xr, yr) = _faceUvBasis(fn);
+          final uvTransform = fData.uvTransform;
+
+          // Vertices are deduped per (vId, uv) rather than just vId: UVs
+          // are inherently per-face, so a vertex position shared by two
+          // faces that disagree on texture mapping must become two
+          // distinct output vertices (glTF requires position/normal/uv
+          // aligned per index).
+          final faceLocalMap = <int, int>{};
           for (final tri in triangles) {
             final faceIndices = <int>[];
             for (final vId in tri) {
-              if (builder.vertices.containsKey(vId)) {
-                var idx = group.localVMap[vId];
+              if (!builder.vertices.containsKey(vId)) continue;
+              var idx = faceLocalMap[vId];
+              if (idx == null) {
+                final p = builder.vertices[vId]!;
+                final (u, v) = _computeFaceUv(p, xr, yr, uvTransform, tileW, tileH);
+                final key = (vId, u, v);
+                idx = group.localVMap[key];
                 if (idx == null) {
-                  group.localVerts.add(builder.vertices[vId]!);
+                  group.localVerts.add(p);
+                  group.localUvs.add((u, v));
+                  group.normalsAccum.add([fn.$1, fn.$2, fn.$3]);
                   idx = group.localVerts.length - 1;
-                  group.localVMap[vId] = idx;
+                  group.localVMap[key] = idx;
+                } else {
+                  final accum = group.normalsAccum[idx];
+                  accum[0] += fn.$1;
+                  accum[1] += fn.$2;
+                  accum[2] += fn.$3;
                 }
-                faceIndices.add(idx);
+                faceLocalMap[vId] = idx;
               }
+              faceIndices.add(idx);
             }
             if (faceIndices.length == 3) {
               group.localFaces.add(faceIndices);
             }
           }
-          group.faceList.add((fId, fData));
         }
 
         final isRootPath = pathName == 'ROOT';
@@ -259,27 +352,8 @@ class SceneBuilder {
           final vertCount = group.localVerts.length;
           final positions = List<double>.filled(vertCount * 3, 0.0);
           final normals = List<double>.filled(vertCount * 3, 0.0);
-          final vertexNormalsAccum = List.generate(vertCount, (_) => [0.0, 0.0, 0.0]);
-
-          for (final (_, fData) in group.faceList) {
-            final loops = <List<int>>[];
-            for (final loop in fData.loops) {
-              final loopVerts = reconstructLoopVertices(loop, builder.edges);
-              if (loopVerts.isNotEmpty) loops.add(loopVerts);
-            }
-            if (loops.isEmpty) continue;
-            final fn = fData.normal;
-            for (final loop in loops) {
-              for (final vId in loop) {
-                final idx = group.localVMap[vId];
-                if (idx != null) {
-                  vertexNormalsAccum[idx][0] += fn.$1;
-                  vertexNormalsAccum[idx][1] += fn.$2;
-                  vertexNormalsAccum[idx][2] += fn.$3;
-                }
-              }
-            }
-          }
+          final uvs = List<double>.filled(vertCount * 2, 0.0);
+          final vertexNormalsAccum = group.normalsAccum;
 
           for (int i = 0; i < vertCount; i++) {
             final v = group.localVerts[i];
@@ -287,6 +361,9 @@ class SceneBuilder {
             positions[i * 3] = pt.$1 * _inchesToM;
             positions[i * 3 + 1] = pt.$3 * _inchesToM;
             positions[i * 3 + 2] = -pt.$2 * _inchesToM;
+
+            uvs[i * 2] = group.localUvs[i].$1;
+            uvs[i * 2 + 1] = group.localUvs[i].$2;
 
             final raw = vertexNormalsAccum[i];
             final normLen = _len3(raw[0], raw[1], raw[2]);
@@ -337,6 +414,7 @@ class SceneBuilder {
           glbPrimitives.add(GlbPrimitive(
             positions: positions,
             normals: normals,
+            uvs: uvs,
             indices: indices,
             materialIndex: materialIndex,
             geomName: geomName,
