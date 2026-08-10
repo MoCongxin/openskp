@@ -102,10 +102,15 @@ def to_dict(model: SkpModel, scene: Optional[Scene] = None) -> Dict[str, Any]:
             pays for the heavier scene bake unless asked).
 
     Returns:
-        A nested dict containing all metadata.
+        A nested dict containing all metadata, including ``root`` (the
+        model's implicit top-level definition - non-componentized geometry
+        and instances placed directly in the model, matching
+        :attr:`SkpModel.root`) alongside ``definitions`` (numeric-ID-keyed
+        component/group definitions).
     """
     return {
         "version": model.version,
+        "root": _definition_to_dict(model.root),
         "definitions": {
             str(k): _definition_to_dict(v)
             for k, v in model.definitions.items()

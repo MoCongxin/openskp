@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Python**: `export.json_export.to_dict()`'s output gained a top-level
+  `root` key with the model's implicit top-level definition (matching
+  `SkpModel.root`) - previously only `definitions` (the numeric-ID-keyed
+  component/group definitions) was included, so the JSON export silently
+  omitted any geometry/instances placed directly in the model rather than
+  inside a component.
+
 - **TypeScript**: `Face` gained `uvProjected`/`uvProjectedBack` fields.
   The legacy MFC reader already decoded these bits internally
   (`front_projected`/`back_projected` on the `CFaceTextureCoords` record)
