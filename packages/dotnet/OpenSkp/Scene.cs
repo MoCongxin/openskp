@@ -187,6 +187,14 @@ namespace OpenSkp
             var colorToMaterialIndex = new Dictionary<(int, int, int), int>();
             var gltfMaterials = new List<object>();
 
+            // Definitions currently being instantiated on the active
+            // recursion path (not "ever visited" - the same definition
+            // legitimately reused by sibling instances is fine). Guards
+            // against a component that directly or transitively instances
+            // itself, which would otherwise recurse until the stack
+            // overflows.
+            var activeDefinitions = new HashSet<long>();
+
             (int R, int G, int B) GetLayerColor(string name)
             {
                 return layerColors.TryGetValue(name, out var c) ? c : (136, 136, 136);
@@ -217,7 +225,20 @@ namespace OpenSkp
                 {
                     return new List<InstanceNode>();
                 }
-                return InstantiateBuilder(d.Builder, d.Name ?? "", defId, currentMatrix, parentLayer, pathName, inheritedColor);
+                if (!activeDefinitions.Add(defId))
+                {
+                    throw new SkpParseException(
+                        "Recursive component definition",
+                        stage: "build_scene", definitionId: defId);
+                }
+                try
+                {
+                    return InstantiateBuilder(d.Builder, d.Name ?? "", defId, currentMatrix, parentLayer, pathName, inheritedColor);
+                }
+                finally
+                {
+                    activeDefinitions.Remove(defId);
+                }
             }
 
             List<InstanceNode> InstantiateRoot(GeometryBuilder rootBuilder, List<double> currentMatrix)
