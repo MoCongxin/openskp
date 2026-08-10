@@ -198,6 +198,13 @@ class SceneBuilder {
     final colorToMaterialIndex = <(int, int, int), int>{};
     final gltfMaterials = <Map<String, dynamic>>[];
 
+    // Definitions currently being instantiated on the active recursion path
+    // (not "ever visited" - the same definition legitimately reused by
+    // sibling instances is fine). Guards against a component that directly
+    // or transitively instances itself, which would otherwise recurse until
+    // the stack overflows.
+    final activeDefinitions = <int>{};
+
     (int, int, int) getLayerColor(String name) => layerColors[name] ?? (136, 136, 136);
 
     int getMaterialIndex((int, int, int) color) {
@@ -460,9 +467,23 @@ class SceneBuilder {
           emitLog(options, SkpLogLevel.debug, 'Processed $instanceCounter placed instances');
         }
         final childDef = refIdx != null ? defsDict[refIdx] : null;
-        final childNodes = (refIdx != null && childDef != null)
-            ? instantiateBuilder(childDef.builder, childDef.name ?? '', refIdx, newMatrix, lName, fullPathName, instColor)
-            : <InstanceNode>[];
+        List<InstanceNode> childNodes;
+        if (refIdx != null && childDef != null) {
+          if (!activeDefinitions.add(refIdx)) {
+            throw SkpParseException(
+              'Recursive component definition',
+              stage: 'build_scene', definitionId: refIdx,
+            );
+          }
+          try {
+            childNodes = instantiateBuilder(
+                childDef.builder, childDef.name ?? '', refIdx, newMatrix, lName, fullPathName, instColor);
+          } finally {
+            activeDefinitions.remove(refIdx);
+          }
+        } else {
+          childNodes = <InstanceNode>[];
+        }
 
         final itx = newMatrix.length > 9 ? newMatrix[9] * _inchesToMm : 0.0;
         final ity = newMatrix.length > 10 ? newMatrix[10] * _inchesToMm : 0.0;
