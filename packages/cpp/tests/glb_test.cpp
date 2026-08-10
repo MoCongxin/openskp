@@ -25,6 +25,7 @@ Scene triangle_scene() {
   scene.glb_primitives.push_back({
       {1.0F, 2.0F, 3.0F, -4.0F, 5.0F, 0.0F, 2.0F, -1.0F, 7.0F},
       {0.0F, 0.0F, 1.0F, 0.0F, 0.0F, 1.0F, 0.0F, 0.0F, 1.0F},
+      {0.0F, 0.0F, 1.0F, 0.0F, 0.0F, 1.0F},
       {0, 1, 2},
       0,
       "triangle",
@@ -74,6 +75,7 @@ TEST(Glb, SerializesSceneAndBinaryData) {
   EXPECT_EQ(primitive.material, 0);
   ASSERT_TRUE(primitive.attributes.count("POSITION"));
   ASSERT_TRUE(primitive.attributes.count("NORMAL"));
+  ASSERT_TRUE(primitive.attributes.count("TEXCOORD_0"));
 
   const auto& positions = model.accessors.at(primitive.attributes.at("POSITION"));
   EXPECT_EQ(positions.componentType, TINYGLTF_COMPONENT_TYPE_FLOAT);
@@ -87,6 +89,12 @@ TEST(Glb, SerializesSceneAndBinaryData) {
   const auto& normals = model.accessors.at(primitive.attributes.at("NORMAL"));
   EXPECT_EQ(normals.count, 3);
   EXPECT_FLOAT_EQ(buffer_value<float>(model, normals, 8), 1.0F);
+
+  const auto& uvs = model.accessors.at(primitive.attributes.at("TEXCOORD_0"));
+  EXPECT_EQ(uvs.componentType, TINYGLTF_COMPONENT_TYPE_FLOAT);
+  EXPECT_EQ(uvs.type, TINYGLTF_TYPE_VEC2);
+  EXPECT_EQ(uvs.count, 3);
+  EXPECT_FLOAT_EQ(buffer_value<float>(model, uvs, 2), 1.0F);
 
   const auto& indices = model.accessors.at(static_cast<std::size_t>(primitive.indices));
   EXPECT_EQ(indices.componentType, TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT);
@@ -121,6 +129,10 @@ TEST(Glb, RejectsMalformedGeometry) {
   EXPECT_THROW(to_glb(scene), std::invalid_argument);
 
   scene = triangle_scene();
+  scene.glb_primitives[0].uvs.pop_back();
+  EXPECT_THROW(to_glb(scene), std::invalid_argument);
+
+  scene = triangle_scene();
   scene.glb_primitives[0].indices.pop_back();
   EXPECT_THROW(to_glb(scene), std::invalid_argument);
 
@@ -140,6 +152,10 @@ TEST(Glb, RejectsNonFiniteAndInvalidPbrValues) {
 
   scene = triangle_scene();
   scene.glb_primitives[0].normals[0] = std::numeric_limits<float>::quiet_NaN();
+  EXPECT_THROW(to_glb(scene), std::invalid_argument);
+
+  scene = triangle_scene();
+  scene.glb_primitives[0].uvs[0] = std::numeric_limits<float>::quiet_NaN();
   EXPECT_THROW(to_glb(scene), std::invalid_argument);
 
   scene = triangle_scene();

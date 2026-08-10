@@ -130,6 +130,9 @@ void validate_scene(const Scene& scene) {
     if (primitive.normals.size() != primitive.positions.size()) {
       throw std::invalid_argument(prefix + "normals must match positions");
     }
+    if (primitive.uvs.size() != primitive.positions.size() / 3 * 2) {
+      throw std::invalid_argument(prefix + "uvs must match positions");
+    }
     if (primitive.indices.size() % 3 != 0) {
       throw std::invalid_argument(prefix + "indices must contain complete triangles");
     }
@@ -143,11 +146,12 @@ void validate_scene(const Scene& scene) {
     const auto vertex_count = primitive.positions.size() / 3;
     for (const auto value : primitive.positions) check_finite(value, prefix + "position");
     for (const auto value : primitive.normals) check_finite(value, prefix + "normal");
+    for (const auto value : primitive.uvs) check_finite(value, prefix + "uv");
     for (const auto index : primitive.indices) {
       if (index >= vertex_count) throw std::invalid_argument(prefix + "index is out of range");
     }
 
-    for (const auto* values : {&primitive.positions, &primitive.normals}) {
+    for (const auto* values : {&primitive.positions, &primitive.normals, &primitive.uvs}) {
       estimated_binary_size = (estimated_binary_size + 3) & ~std::size_t{3};
       check_binary_growth(estimated_binary_size, values->size(), sizeof(float));
       estimated_binary_size += values->size() * sizeof(float);
@@ -213,6 +217,13 @@ gltf::Model make_model(const Scene& scene) {
     const auto normal_accessor = add_accessor(model, normal_view, source.normals.size() / 3,
                                               TINYGLTF_COMPONENT_TYPE_FLOAT, TINYGLTF_TYPE_VEC3);
 
+    const auto uv_offset = append_values(
+        binary, source.uvs, [](ByteBuffer& bytes, float value) { append_f32(bytes, value); });
+    const auto uv_view =
+        add_view(model, uv_offset, source.uvs.size() * 4, TINYGLTF_TARGET_ARRAY_BUFFER);
+    const auto uv_accessor = add_accessor(model, uv_view, source.uvs.size() / 2,
+                                          TINYGLTF_COMPONENT_TYPE_FLOAT, TINYGLTF_TYPE_VEC2);
+
     const auto index_offset =
         append_values(binary, source.indices,
                       [](ByteBuffer& bytes, std::uint32_t value) { append_u32(bytes, value); });
@@ -225,6 +236,7 @@ gltf::Model make_model(const Scene& scene) {
     gltf::Primitive primitive;
     primitive.attributes["POSITION"] = position_accessor;
     primitive.attributes["NORMAL"] = normal_accessor;
+    primitive.attributes["TEXCOORD_0"] = uv_accessor;
     primitive.indices = index_accessor;
     primitive.material = static_cast<int>(source.material_index);
     primitive.mode = TINYGLTF_MODE_TRIANGLES;

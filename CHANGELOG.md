@@ -26,6 +26,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **TypeScript**: `GlbPrimitive` gained a `uvs` field, same fix as the
   Python/.NET entries above. Verified numerically identical to both on the
   same real fixture.
+- **C++**: `GlbPrimitive` gained a `uvs` field, same fix as the other three
+  ports. Unlike those, C++'s `to_glb`/`export_glb` write real `.glb` files
+  directly from this struct, so this PR also wires a `TEXCOORD_0` accessor
+  into the actual glTF output - exported files now carry real texture
+  coordinates, not just the in-memory struct. C++ also uniquely models
+  front/back materials as separate primitives; the back-side primitive
+  (when present) uses `uv_transform_back` with the same face-plane basis
+  as the front, per the documented recipe - this path has no cross-language
+  reference to verify against, since no other port models back materials
+  at all.
 
 - **C++**: public `to_glb(const Scene&)` and `export_glb(const Scene&, path)`
   APIs for in-memory and file-based binary glTF 2.0 export. The implementation
