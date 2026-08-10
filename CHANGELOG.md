@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Python**: `scene.GlbPrimitive` gained a `uvs` field with real per-vertex
+  texture coordinates, computed from each source face's `uv_transform` (or
+  the default face-plane projection when a face has none) — see
+  `Face.uv_transform`'s docstring for the formula. Vertices are now split
+  where two faces sharing a position disagree on UV, since indexed glTF
+  meshes need position/normal/uv aligned per vertex. Fixes #62 for Python;
+  other languages exposing the same `GlbPrimitive` shape are being ported
+  separately. Faces with `uv_projected` set (terrain-drape textures) still
+  use the face-plane formula, since the real projection-plane basis isn't
+  captured anywhere in the parsed data yet — their UVs are approximate.
+
 - **C++**: public `to_glb(const Scene&)` and `export_glb(const Scene&, path)`
   APIs for in-memory and file-based binary glTF 2.0 export. The implementation
   uses privately bundled TinyGLTF 2.9.7, validates scene geometry and PBR data,
