@@ -43,6 +43,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the same real fixture. Dart has no `.glb` file writer yet (tracked
   separately), so this reaches the `GlbPrimitive` data shape only, same as
   the Python/.NET/TypeScript entries above.
+- **Python**: `export.glb.export()` - the actual `.glb` file writer, a
+  separate legacy pipeline from `scene.py`'s `build_scene()` - now writes
+  real per-vertex UV coordinates too, closing the same gap as above for
+  Python's literal exported files (matching what C++'s PR already did for
+  its own file writer). Faces are now grouped into one mesh per resolved
+  color per definition, same as `scene.py`, since a single trimesh mesh
+  can only carry one material - previously this pipeline put every face
+  of a definition into one mesh with a flat per-face color array,
+  regardless of how many distinct materials were mixed in (confirmed on a
+  real fixture: 2 of 3 definitions mix colors). Verified numerically
+  identical UV output to `scene.py`'s on three real files (both legacy
+  MFC and modern VFF format).
 
 - **C++**: public `to_glb(const Scene&)` and `export_glb(const Scene&, path)`
   APIs for in-memory and file-based binary glTF 2.0 export. The implementation
@@ -51,6 +63,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Python**: `export.glb.export()` crashed on any file with a textured
+  material - the metadata JSON sidecar it writes tried to embed each
+  material's raw texture image bytes directly, which was never
+  JSON-serializable, so `json.dump` raised `TypeError`. There was no
+  existing test coverage for this function, which is how this went
+  uncaught. Now stripped before serialization - the `.glb` file itself
+  carries the actual texture data, a JSON metadata file was never the
+  right place for it.
 - **Python, TypeScript, Dart, C++**: `Material.color`'s alpha channel was
   silently discarded when parsing legacy MFC (SketchUp 2013–2020) files —
   each language read the material's real 4-byte RGBA record but only kept
