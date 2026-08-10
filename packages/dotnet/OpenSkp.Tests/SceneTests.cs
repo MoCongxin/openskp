@@ -48,6 +48,8 @@ namespace OpenSkp.Tests
                 Assert.Equal(prim.Positions.Length, prim.Normals.Length);
                 Assert.Equal(0, prim.Indices.Length % 3);
                 int nVerts = prim.Positions.Length / 3;
+                Assert.Equal(nVerts * 2, prim.Uvs.Length);
+                Assert.All(prim.Uvs, uv => Assert.False(float.IsNaN(uv) || float.IsInfinity(uv)));
                 Assert.All(prim.Indices, idx => Assert.InRange(idx, 0u, (uint)nVerts - 1));
                 Assert.InRange(prim.MaterialIndex, 0, scene.GltfMaterials.Count - 1);
             }
