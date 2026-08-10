@@ -216,6 +216,13 @@ def build_scene(parsed: Dict[str, Any]) -> Scene:
     color_to_material_index: Dict[Tuple[int, int, int], int] = {}
     gltf_materials: List[Dict[str, Any]] = []
 
+    # Definitions currently being instantiated on the active recursion
+    # path (not "ever visited" - the same definition legitimately reused
+    # by sibling instances is fine). Guards against a component that
+    # directly or transitively instances itself, which would otherwise
+    # recurse until the stack overflows.
+    active_definitions: set = set()
+
     def get_layer_color(name: str) -> Tuple[int, int, int]:
         return layer_colors.get(name, (136, 136, 136))
 
@@ -452,7 +459,15 @@ def build_scene(parsed: Dict[str, Any]) -> Scene:
             instance_counter[0] += 1
             if instance_counter[0] % _PROGRESS_INTERVAL == 0:
                 logger.debug("Processed %d placed instances", instance_counter[0])
+
+            if ref_idx in active_definitions:
+                raise SkpParseError(
+                    "Recursive component definition",
+                    stage="build_scene", definition_id=ref_idx,
+                )
+            active_definitions.add(ref_idx)
             child_nodes = instantiate(ref_idx, new_matrix, l_name, full_path_name, inst_color)
+            active_definitions.discard(ref_idx)
 
             tx = new_matrix[9] * INCHES_TO_MM if len(new_matrix) > 9 else 0.0
             ty = new_matrix[10] * INCHES_TO_MM if len(new_matrix) > 10 else 0.0
