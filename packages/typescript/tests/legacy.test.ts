@@ -124,4 +124,18 @@ describe('Legacy MFC reader (classic pre-2021 .skp)', () => {
       .sort();
     expect(rootRefNames).toEqual(['grada', 'grada', 'puerta']);
   });
+
+  it('gives every baked primitive valid uv coordinates alongside positions/normals', () => {
+    const arrayBuffer = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
+    const scene = buildScene(arrayBuffer);
+    expect(scene.glbPrimitives.length).toBeGreaterThan(0);
+    for (const prim of scene.glbPrimitives) {
+      const nVerts = prim.positions.length / 3;
+      expect(prim.uvs.length).toBe(nVerts * 2);
+      for (const uv of prim.uvs) {
+        expect(Number.isNaN(uv)).toBe(false);
+        expect(Number.isFinite(uv)).toBe(true);
+      }
+    }
+  });
 });

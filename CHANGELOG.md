@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Python entry above and the exact issue #62 was filed against (its
   `GlbPrimitive` snippet). Verified numerically identical to Python's
   output (to float precision) on the same real fixture.
+- **TypeScript**: `GlbPrimitive` gained a `uvs` field, same fix as the
+  Python/.NET entries above. Verified numerically identical to both on the
+  same real fixture.
 
 - **C++**: public `to_glb(const Scene&)` and `export_glb(const Scene&, path)`
   APIs for in-memory and file-based binary glTF 2.0 export. The implementation
