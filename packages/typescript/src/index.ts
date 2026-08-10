@@ -340,6 +340,7 @@ export function toGLB(scene: SkpScene): Uint8Array {
   for (const prim of prims) {
     totalBinaryLength += prim.positions.byteLength;
     totalBinaryLength += prim.normals.byteLength;
+    totalBinaryLength += prim.uvs.byteLength;
     totalBinaryLength += prim.indices.byteLength;
   }
 
@@ -359,6 +360,10 @@ export function toGLB(scene: SkpScene): Uint8Array {
     binaryBuffer.set(new Uint8Array(prim.normals.buffer, prim.normals.byteOffset, prim.normals.byteLength), normByteOffset);
     byteOffset += prim.normals.byteLength;
 
+    const uvByteOffset = byteOffset;
+    binaryBuffer.set(new Uint8Array(prim.uvs.buffer, prim.uvs.byteOffset, prim.uvs.byteLength), uvByteOffset);
+    byteOffset += prim.uvs.byteLength;
+
     const indByteOffset = byteOffset;
     binaryBuffer.set(new Uint8Array(prim.indices.buffer, prim.indices.byteOffset, prim.indices.byteLength), indByteOffset);
     byteOffset += prim.indices.byteLength;
@@ -376,6 +381,14 @@ export function toGLB(scene: SkpScene): Uint8Array {
       buffer: 0,
       byteOffset: normByteOffset,
       byteLength: prim.normals.byteLength,
+      target: 34962, // ARRAY_BUFFER
+    });
+
+    const uvBufferViewIdx = bufferViews.length;
+    bufferViews.push({
+      buffer: 0,
+      byteOffset: uvByteOffset,
+      byteLength: prim.uvs.byteLength,
       target: 34962, // ARRAY_BUFFER
     });
 
@@ -423,6 +436,15 @@ export function toGLB(scene: SkpScene): Uint8Array {
       type: 'VEC3',
     });
 
+    const uvAccessorIdx = accessors.length;
+    accessors.push({
+      bufferView: uvBufferViewIdx,
+      byteOffset: 0,
+      componentType: 5126, // FLOAT
+      count: prim.uvs.length / 2,
+      type: 'VEC2',
+    });
+
     const indAccessorIdx = accessors.length;
     accessors.push({
       bufferView: indBufferViewIdx,
@@ -436,6 +458,7 @@ export function toGLB(scene: SkpScene): Uint8Array {
       attributes: {
         POSITION: posAccessorIdx,
         NORMAL: normAccessorIdx,
+        TEXCOORD_0: uvAccessorIdx,
       },
       indices: indAccessorIdx,
       material: prim.materialIndex,
