@@ -900,6 +900,8 @@ def build_scene(parsed: Dict[str, Any], output_dir: str, filename_stem: str) -> 
     Returns:
         Dict with glb_path, json_path, metadata, mesh_count
     """
+    from . import scene as _scene
+
     defs_dict = parsed['defs_dict']
     layer_colors = parsed['layer_colors']
     layer_id_to_name = parsed['layer_id_to_name']
@@ -918,26 +920,32 @@ def build_scene(parsed: Dict[str, Any], output_dir: str, filename_stem: str) -> 
         builder = d['builder']
 
         if builder.faces:
-            local_verts = []
-            local_faces = []
-            local_v_map = {}
-            face_colors_list = []
+            # Faces are grouped by resolved color into one mesh each -
+            # same grouping scene.py's build_scene() uses. A single
+            # definition can legitimately mix faces of different colors
+            # (verified: 2 of 3 definitions do, in a real test fixture), so
+            # one Trimesh per color is required to give each its own
+            # material - trimesh's TextureVisuals carries one material per
+            # mesh, so a single flat-colored mesh can't represent that.
+            face_groups: Dict[Any, Dict[str, Any]] = {}
+
             for f_id, f_data in builder.faces.items():
-                # Resolve color for this face
-                face_color = None
+                face_color = inherited_color
                 face_mat_id = f_data.get('material_id')
+                mat = None
                 if face_mat_id is not None:
                     mat_name = material_id_to_name.get(face_mat_id)
                     mat = materials.get(mat_name) or materials_by_folder.get(mat_name)
                     if mat:
                         c = mat['color']
                         face_color = (c['r'], c['g'], c['b'])
-
-                if face_color is None and inherited_color is not None:
-                    face_color = inherited_color
-
                 if face_color is None:
                     face_color = layer_colors.get(parent_layer, (136, 136, 136))
+
+                group = face_groups.get(face_color)
+                if group is None:
+                    group = {'local_verts': [], 'local_uvs': [], 'local_faces': [], 'local_v_map': {}}
+                    face_groups[face_color] = group
 
                 loops = []
                 for loop in f_data['loops']:
@@ -955,30 +963,66 @@ def build_scene(parsed: Dict[str, Any], output_dir: str, filename_stem: str) -> 
                 if not loops:
                     continue
                 triangles = triangulate_face_3d(builder.vertices, loops, f_data['normal'])
+
+                tex = mat.get('texture') if mat else None
+                tile_w = tex.get('x_scale') if tex else None
+                tile_h = tex.get('y_scale') if tex else None
+                tile_w = tile_w if tile_w and tile_w > 1e-9 else 1.0
+                tile_h = tile_h if tile_h and tile_h > 1e-9 else 1.0
+                xr, yr = _scene._face_uv_basis(f_data['normal'])
+                uv_transform = f_data.get('uv_transform')
+
+                # Vertices are deduped per (v_id, uv) rather than just
+                # v_id - see scene.py's build_scene() for why: UV is
+                # inherently per-face, so a shared vertex position must
+                # split wherever two faces disagree on its texture mapping.
+                face_local_map: Dict[Any, int] = {}
                 for tri in triangles:
                     face_indices = []
                     for v_id in tri:
-                        if v_id in builder.vertices:
-                            if v_id not in local_v_map:
-                                local_verts.append(builder.vertices[v_id])
-                                local_v_map[v_id] = len(local_verts) - 1
-                            face_indices.append(local_v_map[v_id])
+                        if v_id not in builder.vertices:
+                            continue
+                        idx = face_local_map.get(v_id)
+                        if idx is None:
+                            p = builder.vertices[v_id]
+                            u, v = _scene._compute_face_uv(p, xr, yr, uv_transform, tile_w, tile_h)
+                            key = (v_id, u, v)
+                            idx = group['local_v_map'].get(key)
+                            if idx is None:
+                                group['local_verts'].append(p)
+                                group['local_uvs'].append((u, v))
+                                idx = len(group['local_verts']) - 1
+                                group['local_v_map'][key] = idx
+                            face_local_map[v_id] = idx
+                        face_indices.append(idx)
                     if len(face_indices) == 3:
-                        local_faces.append(face_indices)
-                        face_colors_list.append(list(face_color) + [255])
+                        group['local_faces'].append(face_indices)
 
-            if local_faces:
+            for face_color, group in face_groups.items():
+                if not group['local_faces']:
+                    continue
                 v_trans = []
-                for v in local_verts:
+                for v in group['local_verts']:
                     pt = transform_point(v, current_matrix)
                     ox = pt[0] * 25.4
                     oy = pt[2] * 25.4
                     oz = -pt[1] * 25.4
                     v_trans.append((ox, oy, oz))
-                mesh = trimesh.Trimesh(vertices=v_trans, faces=local_faces)
-                mesh.visual.face_colors = face_colors_list
+                # process=False: trimesh's default post-construction cleanup
+                # merges/drops vertices by position alone, which would both
+                # misalign the UV array below (built 1:1 against v_trans)
+                # and silently undo the UV-based vertex splitting above.
+                mesh = trimesh.Trimesh(
+                    vertices=v_trans, faces=group['local_faces'], process=False,
+                )
+                r, g, b = face_color
+                mesh.visual = trimesh.visual.TextureVisuals(
+                    uv=group['local_uvs'],
+                    material=trimesh.visual.material.SimpleMaterial(diffuse=(r, g, b, 255)),
+                )
                 safe_path = path_name.replace(' / ', '__').replace(' ', '_')[:80]
-                geom_name = f"mesh_{mesh_counter[0]}_{safe_path}_{parent_layer}"
+                color_suffix = f"_{r}_{g}_{b}" if len(face_groups) > 1 else ""
+                geom_name = f"mesh_{mesh_counter[0]}_{safe_path}_{parent_layer}{color_suffix}"
                 mesh_counter[0] += 1
                 scene.add_geometry(mesh, geom_name=geom_name)
 
@@ -1071,6 +1115,18 @@ def build_scene(parsed: Dict[str, Any], output_dir: str, filename_stem: str) -> 
     layers_list = [{'name': n, 'color': {'r': c[0], 'g': c[1], 'b': c[2]}}
                    for n, c in layer_colors.items()]
 
+    def json_safe_material(mat):
+        # Raw texture image bytes aren't JSON-serializable and don't
+        # belong in a text metadata sidecar anyway - the .glb file itself
+        # carries the actual texture data.
+        safe = dict(mat)
+        tex = safe.get('texture')
+        if tex is not None:
+            safe_tex = dict(tex)
+            safe_tex.pop('data', None)
+            safe['texture'] = safe_tex
+        return safe
+
     metadata = {
         'format_version': '1.0',
         'source_file': filename_stem,
@@ -1080,7 +1136,7 @@ def build_scene(parsed: Dict[str, Any], output_dir: str, filename_stem: str) -> 
         'total_meshes': len(scene.geometry),
         'total_layers': len(layers_list),
         'layers': layers_list,
-        'materials': list(materials.values()),
+        'materials': [json_safe_material(m) for m in materials.values()],
         'mesh_index': mesh_index,
         'scene_hierarchy': {
             'name': 'ROOT', 'layer': 'Layer0',

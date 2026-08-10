@@ -1133,6 +1133,71 @@ class TestBuildScene:
         assert len(scene.glb_primitives) == 13
 
 
+class TestGlbExport:
+    """``export.glb.export()`` writes a real ``.glb`` file via a separate,
+    trimesh-based pipeline (not ``scene.py``'s ``build_scene()``) - so its
+    UV/material/JSON-metadata handling needs its own coverage rather than
+    inheriting ``TestBuildScene``'s.
+
+    Before this was tested, ``export()`` crashed on any file with a
+    textured material (the metadata JSON writer tried to serialize the raw
+    texture image bytes), and no mesh actually carried real UV coordinates
+    at all - both fixed together, verified here.
+    """
+
+    import pathlib as _pathlib
+
+    FIXTURE = _pathlib.Path(__file__).parent / "fixtures" / "capilla_quiroz_v17.skp"
+
+    def _export(self, tmp_path):
+        import pytest as _pytest
+        if not self.FIXTURE.exists():
+            _pytest.skip("legacy fixture not present")
+        from openskp.export import glb as glb_export
+        from openskp.model import SkpFile
+
+        skp = SkpFile.open(str(self.FIXTURE))
+        skp.parse()
+        out_path = tmp_path / "capilla_quiroz_v17.glb"
+        return skp, glb_export.export(skp, str(out_path))
+
+    def test_export_writes_a_glb_with_real_uv_per_mesh(self, tmp_path) -> None:
+        import trimesh
+
+        skp, glb_path = self._export(tmp_path)
+        loaded = trimesh.load(glb_path, file_type="glb")
+
+        scene = skp.build_scene()
+        assert len(loaded.geometry) == len(scene.glb_primitives)
+
+        for name, geom in loaded.geometry.items():
+            assert geom.visual.kind == "texture", f"{name} has no UV/material"
+            uv = geom.visual.uv
+            assert uv is not None and len(uv) == len(geom.vertices)
+            assert not any(v != v or v in (float("inf"), float("-inf")) for row in uv for v in row)
+
+    def test_metadata_json_is_written_and_json_safe(self, tmp_path) -> None:
+        import json
+
+        _skp, glb_path = self._export(tmp_path)
+        meta_path = str(glb_path).replace(".glb", "_metadata.json")
+        with open(meta_path, encoding="utf-8") as f:
+            metadata = json.load(f)
+
+        assert metadata["total_meshes"] == 13
+        # Regression: materials carry texture data as raw bytes internally,
+        # which isn't JSON-serializable - export() must strip it before
+        # writing, not embed it (or crash).
+        for mat in metadata["materials"]:
+            tex = mat.get("texture")
+            if tex is not None:
+                assert "data" not in tex
+
+        first_child = metadata["scene_hierarchy"]["children"][0]
+        assert "definition_id" in first_child
+        assert "matrix_3x4" in first_child
+
+
 # ── Observability: progress logging + structured error context ──────────
 
 
