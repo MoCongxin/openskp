@@ -404,6 +404,13 @@ export function buildSceneFromParsed(parsed: ParsedRawData, options?: ParseOptio
   const colorToMaterialIndex = new Map<string, number>();
   const gltfMaterials: any[] = [];
 
+  // Definitions currently being instantiated on the active recursion path
+  // (not "ever visited" - the same definition legitimately reused by
+  // sibling instances is fine). Guards against a component that directly
+  // or transitively instances itself, which would otherwise recurse until
+  // the stack overflows.
+  const activeDefinitions = new Set<number | string>();
+
   function getMaterialIndex(color: { r: number; g: number; b: number }) {
     const key = `${color.r},${color.g},${color.b}`;
     if (colorToMaterialIndex.has(key)) {
@@ -667,7 +674,15 @@ export function buildSceneFromParsed(parsed: ParsedRawData, options?: ParseOptio
         emitProgress(options, 'build_scene', instanceCounter.count, instanceCounter.count);
         emitLog(options, 'debug', `Processed ${instanceCounter.count} placed instances`);
       }
+      if (activeDefinitions.has(refIdx)) {
+        throw new SkpParseError('Recursive component definition', {
+          stage: 'build_scene',
+          definitionId: refIdx,
+        });
+      }
+      activeDefinitions.add(refIdx);
       const childNodes = instantiate(refIdx, newMatrix, lName, fullPathName, instColor);
+      activeDefinitions.delete(refIdx);
 
       const tx = (newMatrix[9] ?? 0) * 25.4;
       const ty = (newMatrix[10] ?? 0) * 25.4;
