@@ -41,6 +41,13 @@ class Face {
   final List<double>? uvTransform;
   final List<double>? uvTransformBack;
 
+  /// The texture is PROJECTED (e.g. the Add Location terrain drape): its
+  /// UVs run in the projection plane's frame, not the face frame.
+  final bool uvProjected;
+
+  /// Same for the face's back side.
+  final bool uvProjectedBack;
+
   Face({
     required this.id,
     this.loops = const [],
@@ -49,6 +56,8 @@ class Face {
     this.backMaterialId,
     this.uvTransform,
     this.uvTransformBack,
+    this.uvProjected = false,
+    this.uvProjectedBack = false,
   });
 }
 

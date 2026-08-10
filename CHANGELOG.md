@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   need to know this to render it correctly. VFF/modern files don't carry
   this flag at all, so it correctly defaults to `false` there, matching
   Python's precedent.
+- **Dart**: `Face` gained `uvProjected`/`uvProjectedBack` fields, same fix
+  and same rationale as the TypeScript entry above.
 
 - **Python**: `scene.GlbPrimitive` gained a `uvs` field with real per-vertex
   texture coordinates, computed from each source face's `uv_transform` (or

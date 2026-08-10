@@ -153,6 +153,8 @@ class SkpFile {
         backMaterialId: f.backMaterialId,
         uvTransform: f.uvTransform,
         uvTransformBack: f.uvTransformBack,
+        uvProjected: f.uvProjected,
+        uvProjectedBack: f.uvProjectedBack,
       );
     }
 
