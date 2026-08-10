@@ -5,5 +5,6 @@ library openskp;
 export 'src/model.dart';
 export 'src/parser.dart' show SkpFile;
 export 'src/scene.dart' show Scene, InstanceNode, MeshMetadata, GlbPrimitive;
+export 'src/glb.dart' show toGlb, exportGlb;
 export 'src/errors.dart' show SkpParseException;
 export 'src/observability.dart' show SkpLogLevel, ParseProgress, ParseOptions;
