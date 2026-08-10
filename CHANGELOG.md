@@ -123,6 +123,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **TypeScript**: `toGLB()` never wrote a `TEXCOORD_0` accessor, despite
+  `GlbPrimitive.uvs` existing on its data model since #65 - real UV data
+  was computed but the actual exported `.glb` bytes never carried it.
+  Found while using `toGLB()` as the structural reference for porting GLB
+  export to .NET and Dart (both new writers included `TEXCOORD_0` from
+  the start rather than reproducing this gap). Same shape as the gap
+  already fixed for Python's `export/glb.py` (#68) and C++'s `glb.cpp`
+  (#66). No test coverage existed for `toGLB()` before now, which is how
+  this went unnoticed - added real coverage, including a real-fixture
+  round-trip test that decodes every primitive's `TEXCOORD_0` back out of
+  the binary chunk and confirms it matches the source `GlbPrimitive.uvs`
+  exactly.
 - **C++**: `Face.uv_transform`/`uv_transform_back` were never populated for
   *any* legacy MFC (SketchUp 2013–2020) file - every legacy face's UV
   silently fell back to the default (non-positioned) face-plane
