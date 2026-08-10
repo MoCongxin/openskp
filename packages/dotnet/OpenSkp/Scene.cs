@@ -41,8 +41,20 @@ namespace OpenSkp
         /// 1:1.</summary>
         public float[] Normals { get; set; } = Array.Empty<float>();
 
-        /// <summary>Triangle vertex indices into Positions/Normals (3 per
-        /// triangle).</summary>
+        /// <summary>Flat [u, v, u, v, ...] texture coordinates, matching
+        /// Positions 1:1. Computed from each source face's UvTransform (or
+        /// the default face-plane projection when a face has none) - see
+        /// Face.UvTransform's docs for the formula. A vertex shared by two
+        /// faces that disagree on UV is split, since indexed glTF meshes
+        /// need position/normal/uv aligned per vertex. Faces with
+        /// UvProjected set (terrain drape textures) still use the
+        /// face-plane formula here, since the real projection-plane basis
+        /// isn't captured in the parsed data - their UVs will be
+        /// approximate.</summary>
+        public float[] Uvs { get; set; } = Array.Empty<float>();
+
+        /// <summary>Triangle vertex indices into Positions/Normals/Uvs (3
+        /// per triangle).</summary>
         public uint[] Indices { get; set; } = Array.Empty<uint>();
 
         /// <summary>Index into Scene.GltfMaterials for this primitive's
@@ -79,9 +91,80 @@ namespace OpenSkp
         {
             public (int R, int G, int B) Color;
             public List<(double X, double Y, double Z)> LocalVerts = new List<(double, double, double)>();
+            public List<(double U, double V)> LocalUvs = new List<(double, double)>();
+            public List<double[]> NormalsAccum = new List<double[]>();
             public List<long[]> LocalFaces = new List<long[]>();
-            public Dictionary<long, int> LocalVMap = new Dictionary<long, int>();
-            public List<(long FId, GeometryBuilderFace FData)> FaceList = new List<(long, GeometryBuilderFace)>();
+            public Dictionary<(long VId, double U, double V), int> LocalVMap = new Dictionary<(long, double, double), int>();
+        }
+
+        /// <summary>Inverse of a row-major 3x3 matrix, via the
+        /// cofactor/adjugate method.</summary>
+        private static double[] InvertMatrix3x3(double[] m)
+        {
+            double a = m[0], b = m[1], c = m[2];
+            double d = m[3], e = m[4], f = m[5];
+            double g = m[6], h = m[7], i = m[8];
+            double det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
+            if (Math.Abs(det) < 1e-12)
+            {
+                return new double[] { 1, 0, 0, 0, 1, 0, 0, 0, 1 };
+            }
+            double invDet = 1.0 / det;
+            return new double[]
+            {
+                (e * i - f * h) * invDet, (c * h - b * i) * invDet, (b * f - c * e) * invDet,
+                (f * g - d * i) * invDet, (a * i - c * g) * invDet, (c * d - a * f) * invDet,
+                (d * h - e * g) * invDet, (b * g - a * h) * invDet, (a * e - b * d) * invDet,
+            };
+        }
+
+        /// <summary>Face-plane basis vectors (xr, yr) for UV projection,
+        /// from a face normal. See Face.UvTransform's docs for the recipe
+        /// this implements.</summary>
+        private static ((double X, double Y, double Z) Xr, (double X, double Y, double Z) Yr) FaceUvBasis((double X, double Y, double Z) n)
+        {
+            double cx = -n.Y, cy = n.X;
+            double clen = Math.Sqrt(cx * cx + cy * cy);
+            (double, double, double) xr, yr;
+            if (clen < 1e-9)
+            {
+                xr = (1.0, 0.0, 0.0);
+                yr = (0.0, n.Z >= 0 ? 1.0 : -1.0, 0.0);
+            }
+            else
+            {
+                xr = (cx / clen, cy / clen, 0.0);
+                yr = (
+                    n.Y * xr.Item3 - n.Z * xr.Item2,
+                    n.Z * xr.Item1 - n.X * xr.Item3,
+                    n.X * xr.Item2 - n.Y * xr.Item1
+                );
+            }
+            return (xr, yr);
+        }
+
+        /// <summary>UV of point p (inches, local/object space) on a face
+        /// with the given plane basis, per-face uvTransform (or null for
+        /// the default projection), and material tile size (inches).</summary>
+        private static (double U, double V) ComputeFaceUv(
+            (double X, double Y, double Z) p,
+            (double X, double Y, double Z) xr,
+            (double X, double Y, double Z) yr,
+            double[]? uvTransform,
+            double tileW, double tileH)
+        {
+            double px = p.X * xr.X + p.Y * xr.Y + p.Z * xr.Z;
+            double py = p.X * yr.X + p.Y * yr.Y + p.Z * yr.Z;
+            if (uvTransform == null)
+            {
+                return (px / tileW, py / tileH);
+            }
+            var inv = InvertMatrix3x3(uvTransform);
+            double u = px * inv[0] + py * inv[3] + inv[6];
+            double v = px * inv[1] + py * inv[4] + inv[7];
+            double q = px * inv[2] + py * inv[5] + inv[8];
+            if (Math.Abs(q) < 1e-12) q = 1.0;
+            return (u / q / tileW, v / q / tileH);
         }
 
         public static Scene Build(Core.RawParsed parsed, SkpParseOptions? options = null)
@@ -155,11 +238,12 @@ namespace OpenSkp
                         long fId = faceKv.Key;
                         var fData = faceKv.Value;
                         (int R, int G, int B)? faceColor = inheritedColor;
+                        Geometry.RawMaterial? mat = null;
                         if (fData.MaterialId is long faceMatId)
                         {
                             if (materialIdToName.TryGetValue(faceMatId, out var matName))
                             {
-                                var mat = materials.TryGetValue(matName, out var m1) ? m1
+                                mat = materials.TryGetValue(matName, out var m1) ? m1
                                     : materialsByFolder.TryGetValue(matName, out var m2) ? m2 : null;
                                 if (mat != null) faceColor = (mat.R, mat.G, mat.B);
                             }
@@ -191,28 +275,54 @@ namespace OpenSkp
                                 $"Failed to triangulate face: {e.Message}",
                                 stage: "build_scene", definitionId: defId, innerException: e);
                         }
+                        var fn = fData.Normal;
+                        double? texW = mat?.Texture?.XScale;
+                        double? texH = mat?.Texture?.YScale;
+                        double tileW = (texW.HasValue && texW.Value > 1e-9) ? texW.Value : 1.0;
+                        double tileH = (texH.HasValue && texH.Value > 1e-9) ? texH.Value : 1.0;
+                        var (xr, yr) = FaceUvBasis(fn);
+                        var uvTransform = fData.UvTransform;
+
+                        // Vertices are deduped per (vId, uv) rather than
+                        // just vId: UVs are inherently per-face, so a
+                        // vertex position shared by two faces that
+                        // disagree on texture mapping must become two
+                        // distinct output vertices (glTF requires
+                        // position/normal/uv aligned per index).
+                        var faceLocalMap = new Dictionary<long, int>();
                         foreach (var tri in triangles)
                         {
                             var faceIndices = new List<int>();
                             foreach (var vId in tri)
                             {
-                                if (builder.Vertices.ContainsKey(vId))
+                                if (!builder.Vertices.ContainsKey(vId)) continue;
+                                if (!faceLocalMap.TryGetValue(vId, out int idx))
                                 {
-                                    if (!group.LocalVMap.TryGetValue(vId, out int idx))
+                                    var p = builder.Vertices[vId];
+                                    var (u, v) = ComputeFaceUv(p, xr, yr, uvTransform, tileW, tileH);
+                                    var key = (vId, u, v);
+                                    if (!group.LocalVMap.TryGetValue(key, out idx))
                                     {
-                                        group.LocalVerts.Add(builder.Vertices[vId]);
+                                        group.LocalVerts.Add(p);
+                                        group.LocalUvs.Add((u, v));
+                                        group.NormalsAccum.Add(new double[] { fn.X, fn.Y, fn.Z });
                                         idx = group.LocalVerts.Count - 1;
-                                        group.LocalVMap[vId] = idx;
+                                        group.LocalVMap[key] = idx;
                                     }
-                                    faceIndices.Add(idx);
+                                    else
+                                    {
+                                        var accum = group.NormalsAccum[idx];
+                                        accum[0] += fn.X; accum[1] += fn.Y; accum[2] += fn.Z;
+                                    }
+                                    faceLocalMap[vId] = idx;
                                 }
+                                faceIndices.Add(idx);
                             }
                             if (faceIndices.Count == 3)
                             {
                                 group.LocalFaces.Add(new long[] { faceIndices[0], faceIndices[1], faceIndices[2] });
                             }
                         }
-                        group.FaceList.Add((fId, fData));
                     }
 
                     bool isRootPath = pathName == "ROOT";
@@ -247,33 +357,8 @@ namespace OpenSkp
                         int vertCount = group.LocalVerts.Count;
                         var positions = new float[vertCount * 3];
                         var normals = new float[vertCount * 3];
-                        var vertexNormalsAccum = new double[vertCount][];
-                        for (int i = 0; i < vertCount; i++) vertexNormalsAccum[i] = new double[3];
-
-                        foreach (var faceEntry in group.FaceList)
-                        {
-                            var fData = faceEntry.FData;
-                            var loops = new List<List<long>>();
-                            foreach (var loop in fData.Loops)
-                            {
-                                var loopVerts = ReconstructLoopVertices(loop, builder.Edges);
-                                if (loopVerts.Count > 0) loops.Add(loopVerts);
-                            }
-                            if (loops.Count == 0) continue;
-                            var fn = fData.Normal;
-                            foreach (var loop in loops)
-                            {
-                                foreach (var vId in loop)
-                                {
-                                    if (group.LocalVMap.TryGetValue(vId, out int idx))
-                                    {
-                                        vertexNormalsAccum[idx][0] += fn.X;
-                                        vertexNormalsAccum[idx][1] += fn.Y;
-                                        vertexNormalsAccum[idx][2] += fn.Z;
-                                    }
-                                }
-                            }
-                        }
+                        var uvs = new float[vertCount * 2];
+                        var vertexNormalsAccum = group.NormalsAccum;
 
                         for (int i = 0; i < vertCount; i++)
                         {
@@ -282,6 +367,9 @@ namespace OpenSkp
                             positions[i * 3] = (float)(pt.X * InchesToM);
                             positions[i * 3 + 1] = (float)(pt.Z * InchesToM);
                             positions[i * 3 + 2] = (float)(-pt.Y * InchesToM);
+
+                            uvs[i * 2] = (float)group.LocalUvs[i].U;
+                            uvs[i * 2 + 1] = (float)group.LocalUvs[i].V;
 
                             var raw = vertexNormalsAccum[i];
                             double normLen = Math.Sqrt(raw[0] * raw[0] + raw[1] * raw[1] + raw[2] * raw[2]);
@@ -328,6 +416,7 @@ namespace OpenSkp
                         {
                             Positions = positions,
                             Normals = normals,
+                            Uvs = uvs,
                             Indices = indices,
                             MaterialIndex = materialIndex,
                             GeomName = geomName,

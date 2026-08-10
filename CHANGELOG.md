@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   separately. Faces with `uv_projected` set (terrain-drape textures) still
   use the face-plane formula, since the real projection-plane basis isn't
   captured anywhere in the parsed data yet — their UVs are approximate.
+- **.NET**: `Scene.GlbPrimitive` gained a `Uvs` field, same fix as the
+  Python entry above and the exact issue #62 was filed against (its
+  `GlbPrimitive` snippet). Verified numerically identical to Python's
+  output (to float precision) on the same real fixture.
 
 - **C++**: public `to_glb(const Scene&)` and `export_glb(const Scene&, path)`
   APIs for in-memory and file-based binary glTF 2.0 export. The implementation
