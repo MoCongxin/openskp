@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **.NET**: `GlbExport.ToGlb(Scene)`/`GlbExport.ExportGlb(Scene, path)` -
+  binary glTF 2.0 (GLB) export, matching Python's and C++'s
+  `to_glb`/`export_glb` pair (TypeScript only has the bytes-returning
+  variant). A from-scratch writer with no new dependency, matching how
+  this project has stayed dependency-light everywhere except C++'s
+  bundled TinyGLTF - `netstandard2.0` has no built-in JSON support, so
+  this also adds a small internal `MiniJson` serializer (reflection-based,
+  just enough to cover the object graphs this writer builds; not a
+  general-purpose JSON library). Ported from the TypeScript reference
+  implementation's `toGLB()`, with one correction: TS's own `toGLB()`
+  still doesn't write `TEXCOORD_0` despite `GlbPrimitive.uvs` existing
+  there too (tracked as a separate follow-up) - .NET's writer includes it
+  from the start. `ExportGlb` doesn't create missing parent directories,
+  matching C++'s `export_glb` (the other language with this same pair).
+  Verified against a real fixture: magic/chunk headers, mesh/material
+  counts, and decoded UV values all confirmed correct, with the UV values
+  byte-for-byte identical to the already cross-verified Python/TypeScript/
+  C#/Dart output on the same file.
 - **Python**: `export.json_export.to_dict()`'s output gained a top-level
   `root` key with the model's implicit top-level definition (matching
   `SkpModel.root`) - previously only `definitions` (the numeric-ID-keyed
