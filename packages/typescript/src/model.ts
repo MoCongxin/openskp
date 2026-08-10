@@ -151,7 +151,18 @@ export interface GlbPrimitive {
   positions: Float32Array;
   /** Flat [x, y, z, ...] vertex normals, matching `positions` 1:1. */
   normals: Float32Array;
-  /** Triangle vertex indices into `positions`/`normals` (3 per triangle). */
+  /** Flat [u, v, u, v, ...] texture coordinates, matching `positions` 1:1.
+   * Computed from each source face's `uvTransform` (or the default
+   * face-plane projection when a face has none) - see `Face.uvTransform`'s
+   * docs for the formula. A vertex shared by two faces that disagree on UV
+   * is split, since indexed glTF meshes need position/normal/uv aligned
+   * per vertex. Faces with a PROJECTED texture (terrain-drape textures,
+   * e.g. Add Location) still use the face-plane formula here, since the
+   * real projection-plane basis isn't captured in the parsed data - their
+   * UVs will be approximate. */
+  uvs: Float32Array;
+  /** Triangle vertex indices into `positions`/`normals`/`uvs` (3 per
+   * triangle). */
   indices: Uint32Array;
   /** Index into `gltfMaterials` for this primitive's resolved color. */
   materialIndex: number;
@@ -297,6 +308,64 @@ function buildDefinition(id: number, d: ParsedDefinition): Definition {
   };
 }
 
+/** Inverse of a row-major 3x3 matrix, via the cofactor/adjugate method. */
+function invertMatrix3x3(m: number[]): number[] {
+  const [a, b, c, d, e, f, g, h, i] = m;
+  const det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
+  if (Math.abs(det) < 1e-12) {
+    return [1, 0, 0, 0, 1, 0, 0, 0, 1];
+  }
+  const invDet = 1 / det;
+  return [
+    (e * i - f * h) * invDet, (c * h - b * i) * invDet, (b * f - c * e) * invDet,
+    (f * g - d * i) * invDet, (a * i - c * g) * invDet, (c * d - a * f) * invDet,
+    (d * h - e * g) * invDet, (b * g - a * h) * invDet, (a * e - b * d) * invDet,
+  ];
+}
+
+/** Face-plane basis vectors (xr, yr) for UV projection, from a face
+ * normal. See `Face.uvTransform`'s docs for the recipe this implements. */
+function faceUvBasis(n: [number, number, number]): { xr: [number, number, number]; yr: [number, number, number] } {
+  const [nx, ny, nz] = n;
+  const cx = -ny;
+  const cy = nx;
+  const clen = Math.sqrt(cx * cx + cy * cy);
+  let xr: [number, number, number];
+  let yr: [number, number, number];
+  if (clen < 1e-9) {
+    xr = [1, 0, 0];
+    yr = [0, nz >= 0 ? 1 : -1, 0];
+  } else {
+    xr = [cx / clen, cy / clen, 0];
+    yr = [ny * xr[2] - nz * xr[1], nz * xr[0] - nx * xr[2], nx * xr[1] - ny * xr[0]];
+  }
+  return { xr, yr };
+}
+
+/** UV of point p (inches, local/object space) on a face with the given
+ * plane basis, per-face uvTransform (or null for the default projection),
+ * and material tile size (inches). */
+function computeFaceUv(
+  p: [number, number, number],
+  xr: [number, number, number],
+  yr: [number, number, number],
+  uvTransform: number[] | null | undefined,
+  tileW: number,
+  tileH: number
+): [number, number] {
+  const px = p[0] * xr[0] + p[1] * xr[1] + p[2] * xr[2];
+  const py = p[0] * yr[0] + p[1] * yr[1] + p[2] * yr[2];
+  if (!uvTransform) {
+    return [px / tileW, py / tileH];
+  }
+  const inv = invertMatrix3x3(uvTransform);
+  const u = px * inv[0] + py * inv[3] + inv[6];
+  const v = px * inv[1] + py * inv[4] + inv[7];
+  let q = px * inv[2] + py * inv[5] + inv[8];
+  if (Math.abs(q) < 1e-12) q = 1;
+  return [u / q / tileW, v / q / tileH];
+}
+
 /**
  * Bake every instance actually placed in the model into world-space,
  * triangulated mesh data - SketchUp's component/group nesting fully
@@ -361,18 +430,20 @@ export function buildSceneFromParsed(parsed: ParsedRawData, options?: ParseOptio
       const faceGroups = new Map<string, {
         color: { r: number; g: number; b: number };
         localVerts: [number, number, number][];
+        localUvs: [number, number][];
+        normalsAccum: number[][];
         localFaces: number[][];
-        localVMap: Map<number, number>;
-        faceList: { fId: number; fData: any; localFacesStart: number; localFacesEnd: number }[];
+        localVMap: Map<string, number>;
       }>();
 
       for (const [fId, fData] of builder.faces.entries()) {
         let faceColor = inheritedMaterialColor;
         const faceMatId = (fData as any).materialId;
+        let mat: Material | undefined;
         if (faceMatId !== undefined && faceMatId !== null) {
           const matName = materialIdToName.get(faceMatId);
           if (matName) {
-            const mat = materialsMap.get(matName) || materialsByFolder.get(matName);
+            mat = materialsMap.get(matName) || materialsByFolder.get(matName);
             if (mat) {
               faceColor = mat.color;
             }
@@ -388,9 +459,10 @@ export function buildSceneFromParsed(parsed: ParsedRawData, options?: ParseOptio
           group = {
             color: faceColor,
             localVerts: [],
+            localUvs: [],
+            normalsAccum: [],
             localFaces: [],
-            localVMap: new Map<number, number>(),
-            faceList: [],
+            localVMap: new Map<string, number>(),
           };
           faceGroups.set(colorKey, group);
         }
@@ -414,27 +486,50 @@ export function buildSceneFromParsed(parsed: ParsedRawData, options?: ParseOptio
             cause: e,
           });
         }
-        const startFaceIdx = group.localFaces.length;
+
+        const fn = fData.normal as [number, number, number];
+        const tex = mat?.texture;
+        const tileW = tex && tex.width > 1e-9 ? tex.width : 1;
+        const tileH = tex && tex.height > 1e-9 ? tex.height : 1;
+        const { xr, yr } = faceUvBasis(fn);
+        const uvTransform = (fData as any).uvTransform as number[] | null | undefined;
+
+        // Vertices are deduped per (vId, uv) rather than just vId: UVs are
+        // inherently per-face, so a vertex position shared by two faces
+        // that disagree on texture mapping must become two distinct
+        // output vertices (glTF requires position/normal/uv aligned per
+        // index).
+        const faceLocalMap = new Map<number, number>();
         for (const tri of triangles) {
           const faceIndices: number[] = [];
           for (const vId of tri) {
-            if (builder.vertices.has(vId)) {
-              let idx = group.localVMap.get(vId);
+            if (!builder.vertices.has(vId)) continue;
+            let idx = faceLocalMap.get(vId);
+            if (idx === undefined) {
+              const p = builder.vertices.get(vId)!;
+              const [u, v] = computeFaceUv(p, xr, yr, uvTransform, tileW, tileH);
+              const key = `${vId},${u},${v}`;
+              idx = group.localVMap.get(key);
               if (idx === undefined) {
-                const pt = builder.vertices.get(vId)!;
-                group.localVerts.push(pt);
+                group.localVerts.push(p);
+                group.localUvs.push([u, v]);
+                group.normalsAccum.push([fn[0], fn[1], fn[2]]);
                 idx = group.localVerts.length - 1;
-                group.localVMap.set(vId, idx);
+                group.localVMap.set(key, idx);
+              } else {
+                const accum = group.normalsAccum[idx];
+                accum[0] += fn[0];
+                accum[1] += fn[1];
+                accum[2] += fn[2];
               }
-              faceIndices.push(idx);
+              faceLocalMap.set(vId, idx);
             }
+            faceIndices.push(idx);
           }
           if (faceIndices.length === 3) {
             group.localFaces.push(faceIndices);
           }
         }
-        const endFaceIdx = group.localFaces.length;
-        group.faceList.push({ fId, fData, localFacesStart: startFaceIdx, localFacesEnd: endFaceIdx });
       }
 
       for (const [colorKey, group] of faceGroups.entries()) {
@@ -464,30 +559,8 @@ export function buildSceneFromParsed(parsed: ParsedRawData, options?: ParseOptio
         const scale = 0.0254;
         const positions = new Float32Array(group.localVerts.length * 3);
         const normals = new Float32Array(group.localVerts.length * 3);
-
-        const vertexNormalsAccum = new Array(group.localVerts.length).fill(null).map(() => [0, 0, 0]);
-        for (const faceItem of group.faceList) {
-          const loops: number[][] = [];
-          for (const loop of faceItem.fData.loops) {
-            const loopVerts = reconstructLoopVertices(loop, builder.edges);
-            if (loopVerts.length > 0) {
-              loops.push(loopVerts);
-            }
-          }
-          if (loops.length === 0) continue;
-
-          const fn = faceItem.fData.normal;
-          for (const loop of loops) {
-            for (const vId of loop) {
-              const idx = group.localVMap.get(vId);
-              if (idx !== undefined) {
-                vertexNormalsAccum[idx][0] += fn[0];
-                vertexNormalsAccum[idx][1] += fn[1];
-                vertexNormalsAccum[idx][2] += fn[2];
-              }
-            }
-          }
-        }
+        const uvs = new Float32Array(group.localVerts.length * 2);
+        const vertexNormalsAccum = group.normalsAccum;
 
         for (let i = 0; i < group.localVerts.length; i++) {
           const v = group.localVerts[i];
@@ -495,6 +568,9 @@ export function buildSceneFromParsed(parsed: ParsedRawData, options?: ParseOptio
           positions[i * 3] = pt[0] * scale;
           positions[i * 3 + 1] = pt[2] * scale;
           positions[i * 3 + 2] = -pt[1] * scale;
+
+          uvs[i * 2] = group.localUvs[i][0];
+          uvs[i * 2 + 1] = group.localUvs[i][1];
 
           const rawNorm = vertexNormalsAccum[i];
           const normLen = Math.sqrt(rawNorm[0] ** 2 + rawNorm[1] ** 2 + rawNorm[2] ** 2);
@@ -528,6 +604,7 @@ export function buildSceneFromParsed(parsed: ParsedRawData, options?: ParseOptio
         glbPrimitives.push({
           positions,
           normals,
+          uvs,
           indices,
           materialIndex,
           geomName,
