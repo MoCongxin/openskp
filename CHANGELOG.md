@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Python's precedent.
 - **Dart**: `Face` gained `uvProjected`/`uvProjectedBack` fields, same fix
   and same rationale as the TypeScript entry above.
+- **.NET**: `Face` gained `UvProjected`/`UvProjectedBack` properties, same
+  fix and same rationale as the TypeScript/Dart entries above.
 
 - **Python**: `scene.GlbPrimitive` gained a `uvs` field with real per-vertex
   texture coordinates, computed from each source face's `uv_transform` (or
