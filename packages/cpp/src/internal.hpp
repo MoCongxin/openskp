@@ -29,6 +29,8 @@ struct RawFace {
   std::optional<EntityId> back_material_id;
   std::optional<std::array<double, 9>> uv_transform;
   std::optional<std::array<double, 9>> uv_transform_back;
+  bool uv_projected{};
+  bool uv_projected_back{};
 };
 
 struct RawInstance {
