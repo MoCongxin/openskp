@@ -6,8 +6,8 @@ construction, and transform maths without requiring a real ``.skp`` file.
 
 from __future__ import annotations
 
+import pathlib
 import struct
-from typing import List
 
 import pytest
 
@@ -303,10 +303,28 @@ class TestJsonExport:
         model = SkpModel()
         d = to_dict(model)
         assert d["version"] == "unknown"
+        assert d["root"] == {
+            "id": 0, "guid": "", "name": "", "vertex_count": 0,
+            "edge_count": 0, "face_count": 0, "vertices": [], "instances": [],
+        }
         assert d["definitions"] == {}
         assert d["layers"] == []
         assert d["materials"] == []
         assert d["scene_hierarchy"] is None
+
+    def test_root_is_included_alongside_definitions(self) -> None:
+        from openskp.model import Definition, SkpModel
+        from openskp.export.json_export import to_dict
+
+        model = SkpModel()
+        model.root = Definition(id=0, guid="ROOT", name="ROOT_MODEL")
+        d = to_dict(model)
+        # root is its own top-level key, not folded into "definitions" -
+        # matching SkpModel.root being a separate field, not a
+        # definitions[...] entry (see TestDataModel's root tests).
+        assert d["root"]["guid"] == "ROOT"
+        assert d["root"]["name"] == "ROOT_MODEL"
+        assert "ROOT" not in d["definitions"]
 
 
 # ── SkpFile tests ────────────────────────────────────────────────────────
@@ -322,7 +340,6 @@ class TestSkpFile:
             SkpFile.open("/nonexistent/path/model.skp")
 
     def test_open_wrong_extension(self, tmp_path: pathlib.Path) -> None:
-        import pathlib
         from openskp.model import SkpFile
 
         fake = tmp_path / "test.txt"
@@ -339,7 +356,6 @@ class TestUseTrans:
 
     def _skp_with(self, tmp_path, mat_xml: bytes):
         import io
-        import struct as _struct
         import zipfile
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w") as zf:
@@ -546,7 +562,6 @@ class TestStyles:
 
     def test_style_colors_via_synthetic_skp(self, tmp_path: pathlib.Path) -> None:
         import io
-        import struct as _struct
         import zipfile
         from openskp.model import SkpFile
 
@@ -932,10 +947,6 @@ class TestTextureExtraction:
         assert copy.color[:3] == (27, 135, 59)
         base = by_name["Fence"]
         assert base.colorized is False
-
-
-# Need pathlib for tmp_path fixture
-import pathlib
 
 
 # ── Legacy (classic MFC) container tests ─────────────────────────────────
