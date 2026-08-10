@@ -44,12 +44,12 @@ OpenSKP is the **first and only** open-source, cross-platform parser for SketchU
 | **3D Geometry Extraction** | ✅ | Vertices, edges, faces, normals, and UV coordinates |
 | **Component Hierarchy** | ✅ | Nested component definitions and instance transforms |
 | **Scene Baking / Triangulation** | ✅ | Opt-in scene baking: full placed scene graph resolved to world-space, triangulated, GLB-ready — in all five languages |
-| **Layers / Tags** | ✅ | Layer definitions with colors and visibility state |
+| **Layers / Tags** | ⚠️ | Layer definitions with colors — on/off visibility state is read from the file internally but not yet exposed on the public model in any language |
 | **Materials & Textures** | ✅ | Material properties, colors, transparency, colorized materials, and embedded texture images |
 | **Styles** | ✅ | Front/back face colors for unpainted faces |
-| **Dynamic Components** | ✅ | Extract dynamic component attribute key-value pairs |
+| **Dynamic Components** | ⚠️ | Extracts dynamic component attribute key-value pairs for modern (2021+) files in Python, TypeScript, and C++ — not yet supported for legacy (2013–2020) files in any language, or for modern files in Dart/.NET |
 | **Observability** | ✅ | Opt-in progress reporting + structured, location-carrying parse errors — see [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md) |
-| **Export to GLB / OBJ / JSON** | ⚠️ | Full GLB/OBJ/JSON exporters in Python; GLB export in TypeScript and C++; .NET and Dart expose scene data only — see [Export capabilities](docs/DEVELOPER_GUIDE.md#export-capabilities) |
+| **Export to GLB / OBJ / JSON** | ⚠️ | GLB export is available in all five languages; OBJ and JSON metadata export are currently Python-only (JSON also in TypeScript) — see [Export capabilities](docs/DEVELOPER_GUIDE.md#export-capabilities) |
 | **Streaming / low-memory parsing** | ✅ | Peak memory bounded by the largest single definition, not the whole file — see [Memory architecture](docs/ARCHITECTURE.md#memory-architecture) |
 | **Pure Implementation** | ✅ | No SketchUp SDK, no native dependencies, no license required |
 | **Cross-Platform** | ✅ | Works on Linux, macOS, and Windows |
@@ -74,7 +74,7 @@ Using OpenSKP in your own project? [Open an issue](https://github.com/iamahsanme
 | Platform | Version | Status | Install | Package Link |
 |:---------|:--------|:------:|:--------|:-------------|
 | 🐍 **Python** | `v0.3.0` | ✅ Available | `pip install openskp` | [PyPI](https://pypi.org/project/openskp/) |
-| 📘 **TypeScript / JS** | `v0.3.0` | ✅ Available | `npm install openskp` | [npm](https://www.npmjs.com/package/openskp) |
+| 📘 **TypeScript / JS** | `v0.3.1` | ✅ Available | `npm install openskp` | [npm](https://www.npmjs.com/package/openskp) |
 | 🚀 **.NET / C#** | `v0.3.0` | ✅ Available | `dotnet add package OpenSkp` | [NuGet](https://www.nuget.org/packages/OpenSkp) |
 | 🎯 **Dart / Flutter** | `v0.3.0` | ✅ Available | `dart pub add openskp` | [pub.dev](https://pub.dev/packages/openskp) |
 | ⚙️ **C++17** | `v0.3.0` | ✅ Source package | `find_package(OpenSkp CONFIG REQUIRED)` | [`packages/cpp`](packages/cpp) |
@@ -110,8 +110,6 @@ print(f"SketchUp version: {model.version}")
 print(f"Layers: {[l.name for l in model.layers]}")
 
 for def_id, defn in model.definitions.items():
-    if not isinstance(def_id, int):
-        continue  # skip the implicit 'ROOT' entry
     print(f"{defn.name}: {len(defn.vertices)} verts, {len(defn.faces)} faces")
 
 for material in model.materials:
@@ -160,6 +158,9 @@ Console.WriteLine($"{model.Version} - {model.Layers.Count} layers");
 // Opt-in: full placed scene graph, triangulated, world-space, GLB-ready
 var scene = SkpFile.BuildScene("my_model.skp");
 Console.WriteLine($"{scene.GlbPrimitives.Count} renderable mesh primitives");
+
+var glb = GlbExport.ToGlb(scene);       // ready to write to a .glb file
+GlbExport.ExportGlb(scene, "my_model.glb");
 ```
 
 ### 🎯 Dart / Flutter
@@ -177,6 +178,9 @@ print('${model.version} - ${model.layers.length} layers');
 // Opt-in: full placed scene graph, triangulated, world-space, GLB-ready
 final scene = SkpFile.open('my_model.skp').buildScene();
 print('${scene.glbPrimitives.length} renderable mesh primitives');
+
+final glb = toGlb(scene);               // ready to write to a .glb file
+exportGlb(scene, 'my_model.glb');
 ```
 
 ### ⚙️ C++17 / CMake
@@ -211,7 +215,7 @@ graph TB
     WALK --> RAW["Raw parsed data<br/>defs · layers · materials · styles"]
     RAW --> PARSE["parse() -> SkpModel<br/>per-definition geometry,<br/>no scene resolution"]
     RAW --> SCENE["buildScene() -> Scene<br/>full placed instance tree,<br/>triangulated, world-space"]
-    SCENE --> GLB["GLB export<br/>(Python + TypeScript + C++)"]
+    SCENE --> GLB["GLB export<br/>(all five languages)"]
 
     style SKP fill:#f59e0b,color:#000,stroke:#d97706
     style RAW fill:#8b5cf6,color:#fff,stroke:#7c3aed
@@ -307,13 +311,19 @@ Some tags are *containers* — their payload is a sequence of nested TLV element
 OpenSKP maps known tags to geometry primitives, component hierarchies, layers, and materials to build a structured, queryable model object.
 
 ### 5. Coordinate Conversion
-SketchUp uses a **Z-up, inches** coordinate system. When exporting to glTF (which uses Y-up, meters), OpenSKP applies:
+SketchUp uses a **Z-up, inches** coordinate system. The same Y-up axis swap
+applies everywhere in OpenSKP's output; only the unit scale differs by
+context. For GLB vertex positions (Y-up, **meters**, per the glTF spec):
 
 ```
-x_mm =  x_inches × 25.4
-y_mm =  z_inches × 25.4
-z_mm = -y_inches × 25.4
+x_m =  x_inches × 0.0254
+y_m =  z_inches × 0.0254
+z_m = -y_inches × 0.0254
 ```
+
+The scene graph's `position_mm` fields (`InstanceNode`/`MeshMetadata`) use
+the same axis swap but **millimeters** (`× 25.4`) instead, since they're
+metadata for placement/inspection rather than renderer-facing vertex data.
 
 > 📖 The above covers the modern VFF (2021+) container. Pre-2021 files use a
 > completely different container (a classic MFC `CArchive` object-graph
