@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Dart**: `toGlb(Scene)`/`exportGlb(Scene, path)` - binary glTF 2.0
+  (GLB) export, matching Python's and C++'s `to_glb`/`export_glb` pair
+  (same scope as the .NET entry below). A from-scratch writer with no new
+  dependency - `dart:convert`'s built-in `jsonEncode` covers the JSON
+  chunk directly, no custom serializer needed (simpler than .NET's port,
+  which had to hand-roll one since `netstandard2.0` has no built-in JSON
+  support). Same TEXCOORD_0 correction as .NET's port relative to the
+  TypeScript reference. `exportGlb` doesn't create missing parent
+  directories, matching C++/.NET's `export_glb`/`ExportGlb`. One
+  Dart-specific wrinkle: `GlbPrimitive`'s fields are `List<double>`
+  (64-bit) here, but the binary accessor data is float32 - min/max
+  bounds are now read back from the already-written float32 buffer
+  rather than computed from the raw doubles, so they match what's
+  actually in the accessor. Verified against the real fixture: chunk
+  headers, mesh/material counts, and decoded UV values all confirmed
+  correct, byte-for-byte identical (after accounting for float32
+  rounding) to the already cross-verified Python/TypeScript/C#/.NET
+  output on the same file.
 - **.NET**: `GlbExport.ToGlb(Scene)`/`GlbExport.ExportGlb(Scene, path)` -
   binary glTF 2.0 (GLB) export, matching Python's and C++'s
   `to_glb`/`export_glb` pair (TypeScript only has the bytes-returning
