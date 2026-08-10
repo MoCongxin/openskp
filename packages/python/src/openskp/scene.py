@@ -74,7 +74,17 @@ class GlbPrimitive:
             metres, Y-up.
         normals: Flat [x, y, z, ...] vertex normals, matching *positions*
             1:1.
-        indices: Triangle vertex indices into *positions*/*normals*
+        uvs: Flat [u, v, u, v, ...] texture coordinates, matching
+            *positions* 1:1. Computed from each source face's
+            ``uv_transform`` (or the default face-plane projection when a
+            face has none) - see ``Face.uv_transform`` in model.py for the
+            formula. A vertex shared by two faces that disagree on UV is
+            split, since indexed glTF meshes need position/normal/uv
+            aligned per vertex. Faces with ``uv_projected`` set (terrain
+            drape textures) still use the face-plane formula here, since
+            the real projection-plane basis isn't captured in the parsed
+            data - their UVs will be approximate.
+        indices: Triangle vertex indices into *positions*/*normals*/*uvs*
             (3 per triangle).
         material_index: Index into :attr:`Scene.gltf_materials` for this
             primitive's resolved color.
@@ -84,6 +94,7 @@ class GlbPrimitive:
 
     positions: array
     normals: array
+    uvs: array
     indices: array
     material_index: int
     geom_name: str
@@ -98,6 +109,66 @@ class Scene:
     mesh_index: Dict[str, MeshMetadata] = field(default_factory=dict)
     glb_primitives: List[GlbPrimitive] = field(default_factory=list)
     gltf_materials: List[Dict[str, Any]] = field(default_factory=list)
+
+
+def _invert_3x3(m: Tuple[float, ...]) -> Tuple[float, ...]:
+    """Inverse of a row-major 3x3 matrix, via the cofactor/adjugate method."""
+    a, b, c, d, e, f, g, h, i = m
+    det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g)
+    if abs(det) < 1e-12:
+        return (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+    inv_det = 1.0 / det
+    return (
+        (e * i - f * h) * inv_det, (c * h - b * i) * inv_det, (b * f - c * e) * inv_det,
+        (f * g - d * i) * inv_det, (a * i - c * g) * inv_det, (c * d - a * f) * inv_det,
+        (d * h - e * g) * inv_det, (b * g - a * h) * inv_det, (a * e - b * d) * inv_det,
+    )
+
+
+def _face_uv_basis(n: Tuple[float, float, float]) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
+    """Face-plane basis vectors (xr, yr) for UV projection, from a face
+    normal. See ``Face.uv_transform`` in model.py for the recipe this
+    implements."""
+    nx, ny, nz = n
+    # xr = normalize(Z x n) = normalize((-ny, nx, 0))
+    cx, cy = -ny, nx
+    clen = (cx * cx + cy * cy) ** 0.5
+    if clen < 1e-9:
+        xr = (1.0, 0.0, 0.0)
+        yr = (0.0, 1.0 if nz >= 0 else -1.0, 0.0)
+    else:
+        xr = (cx / clen, cy / clen, 0.0)
+        # yr = n x xr
+        yr = (
+            ny * xr[2] - nz * xr[1],
+            nz * xr[0] - nx * xr[2],
+            nx * xr[1] - ny * xr[0],
+        )
+    return xr, yr
+
+
+def _compute_face_uv(
+    p: Tuple[float, float, float],
+    xr: Tuple[float, float, float],
+    yr: Tuple[float, float, float],
+    uv_transform: Optional[Tuple[float, ...]],
+    tile_w: float,
+    tile_h: float,
+) -> Tuple[float, float]:
+    """UV of point *p* (inches, local/object space) on a face with the
+    given plane basis, per-face ``uv_transform`` (or ``None`` for the
+    default projection), and material tile size (inches)."""
+    px = p[0] * xr[0] + p[1] * xr[1] + p[2] * xr[2]
+    py = p[0] * yr[0] + p[1] * yr[1] + p[2] * yr[2]
+    if uv_transform is None:
+        return px / tile_w, py / tile_h
+    inv = _invert_3x3(uv_transform)
+    u = px * inv[0] + py * inv[3] + inv[6]
+    v = px * inv[1] + py * inv[4] + inv[7]
+    q = px * inv[2] + py * inv[5] + inv[8]
+    if abs(q) < 1e-12:
+        q = 1.0
+    return (u / q) / tile_w, (v / q) / tile_h
 
 
 def _reconstruct_loop_vertices(loop, edges) -> List[int]:
@@ -186,6 +257,7 @@ def build_scene(parsed: Dict[str, Any]) -> Scene:
             for f_id, f_data in builder.faces.items():
                 face_color = inherited_color
                 face_mat_id = f_data.get("material_id")
+                mat = None
                 if face_mat_id is not None:
                     mat_name = material_id_to_name.get(face_mat_id)
                     mat = materials.get(mat_name) or materials_by_folder.get(mat_name)
@@ -200,9 +272,10 @@ def build_scene(parsed: Dict[str, Any]) -> Scene:
                     group = {
                         "color": face_color,
                         "local_verts": [],
+                        "local_uvs": [],
+                        "normals_accum": [],
                         "local_faces": [],
                         "local_v_map": {},
-                        "face_list": [],
                     }
                     face_groups[face_color] = group
 
@@ -221,21 +294,48 @@ def build_scene(parsed: Dict[str, Any]) -> Scene:
                         f"Failed to triangulate face: {e}",
                         stage="build_scene", definition_id=def_id,
                     ) from e
-                start_face_idx = len(group["local_faces"])
+
+                fn = f_data["normal"]
+                tex = mat.get("texture") if mat else None
+                tile_w = tex.get("x_scale") if tex else None
+                tile_h = tex.get("y_scale") if tex else None
+                tile_w = tile_w if tile_w and tile_w > 1e-9 else 1.0
+                tile_h = tile_h if tile_h and tile_h > 1e-9 else 1.0
+                xr, yr = _face_uv_basis(fn)
+                uv_transform = f_data.get("uv_transform")
+
+                # Vertices are deduped per (v_id, uv) rather than just
+                # v_id: UVs are inherently per-face, so a vertex position
+                # shared by two faces that disagree on texture mapping
+                # must become two distinct output vertices (glTF requires
+                # position/normal/uv aligned per index).
+                face_local_map: Dict[int, int] = {}
                 for tri in triangles:
                     face_indices = []
                     for v_id in tri:
-                        if v_id in builder.vertices:
-                            idx = group["local_v_map"].get(v_id)
+                        if v_id not in builder.vertices:
+                            continue
+                        idx = face_local_map.get(v_id)
+                        if idx is None:
+                            p = builder.vertices[v_id]
+                            u, v = _compute_face_uv(p, xr, yr, uv_transform, tile_w, tile_h)
+                            key = (v_id, u, v)
+                            idx = group["local_v_map"].get(key)
                             if idx is None:
-                                group["local_verts"].append(builder.vertices[v_id])
+                                group["local_verts"].append(p)
+                                group["local_uvs"].append((u, v))
+                                group["normals_accum"].append([fn[0], fn[1], fn[2]])
                                 idx = len(group["local_verts"]) - 1
-                                group["local_v_map"][v_id] = idx
-                            face_indices.append(idx)
+                                group["local_v_map"][key] = idx
+                            else:
+                                accum = group["normals_accum"][idx]
+                                accum[0] += fn[0]
+                                accum[1] += fn[1]
+                                accum[2] += fn[2]
+                            face_local_map[v_id] = idx
+                        face_indices.append(idx)
                     if len(face_indices) == 3:
                         group["local_faces"].append(face_indices)
-                end_face_idx = len(group["local_faces"])
-                group["face_list"].append((f_id, f_data, start_face_idx, end_face_idx))
 
             for face_color, group in face_groups.items():
                 local_faces = group["local_faces"]
@@ -262,32 +362,20 @@ def build_scene(parsed: Dict[str, Any]) -> Scene:
                 )
 
                 local_verts = group["local_verts"]
+                local_uvs = group["local_uvs"]
                 positions = array("f", [0.0]) * (len(local_verts) * 3)
                 normals = array("f", [0.0]) * (len(local_verts) * 3)
-                vertex_normals_accum = [[0.0, 0.0, 0.0] for _ in local_verts]
-
-                for f_id, f_data, _start, _end in group["face_list"]:
-                    loops = []
-                    for loop in f_data["loops"]:
-                        loop_verts = _reconstruct_loop_vertices(loop, builder.edges)
-                        if loop_verts:
-                            loops.append(loop_verts)
-                    if not loops:
-                        continue
-                    fn = f_data["normal"]
-                    for loop in loops:
-                        for v_id in loop:
-                            idx = group["local_v_map"].get(v_id)
-                            if idx is not None:
-                                vertex_normals_accum[idx][0] += fn[0]
-                                vertex_normals_accum[idx][1] += fn[1]
-                                vertex_normals_accum[idx][2] += fn[2]
+                uvs = array("f", [0.0]) * (len(local_verts) * 2)
+                vertex_normals_accum = group["normals_accum"]
 
                 for i, v in enumerate(local_verts):
                     pt = _core.transform_point(v, current_matrix)
                     positions[i * 3] = pt[0] * INCHES_TO_M
                     positions[i * 3 + 1] = pt[2] * INCHES_TO_M
                     positions[i * 3 + 2] = -pt[1] * INCHES_TO_M
+
+                    uvs[i * 2] = local_uvs[i][0]
+                    uvs[i * 2 + 1] = local_uvs[i][1]
 
                     raw_n = vertex_normals_accum[i]
                     norm_len = (raw_n[0] ** 2 + raw_n[1] ** 2 + raw_n[2] ** 2) ** 0.5
@@ -320,6 +408,7 @@ def build_scene(parsed: Dict[str, Any]) -> Scene:
                     GlbPrimitive(
                         positions=positions,
                         normals=normals,
+                        uvs=uvs,
                         indices=indices,
                         material_index=material_index,
                         geom_name=geom_name,
