@@ -1144,6 +1144,89 @@ class TestBuildScene:
         assert len(scene.glb_primitives) == 13
 
 
+class TestBuildSceneRecursionGuard:
+    """A component definition that (directly or transitively) instances
+    itself must raise, not recurse until the stack overflows. Real .skp
+    files can't easily be hand-crafted to exercise this, so these tests
+    build a synthetic ``defs_dict`` directly using the same
+    ``_GeometryBuilder`` shape ``_core.py`` produces.
+    """
+
+    @staticmethod
+    def _instance(ref_idx, name="child"):
+        return {
+            "offset": 0, "ref_guid": "", "ref_idx": ref_idx, "name": name,
+            "matrix": [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1.0],
+            "material_id": None, "children": [],
+        }
+
+    @staticmethod
+    def _parsed(defs_dict):
+        return {
+            "defs_dict": defs_dict,
+            "layer_colors": {},
+            "layer_id_to_name": {},
+            "material_id_to_name": {},
+            "materials": {},
+            "materials_by_folder": {},
+        }
+
+    def test_self_referencing_definition_raises(self) -> None:
+        from openskp._core import _GeometryBuilder
+        from openskp.errors import SkpParseError
+        from openskp.scene import build_scene
+
+        builder = _GeometryBuilder()
+        builder.instances.append(self._instance(1))
+        root_builder = _GeometryBuilder()
+        root_builder.instances.append(self._instance(1))
+        defs_dict = {
+            1: {"guid": "g1", "name": "self_ref", "builder": builder},
+            "ROOT": {"guid": "ROOT", "name": "ROOT_MODEL", "builder": root_builder},
+        }
+
+        with pytest.raises(SkpParseError, match="Recursive component definition"):
+            build_scene(self._parsed(defs_dict))
+
+    def test_indirect_cycle_raises(self) -> None:
+        from openskp._core import _GeometryBuilder
+        from openskp.errors import SkpParseError
+        from openskp.scene import build_scene
+
+        builder_a = _GeometryBuilder()
+        builder_a.instances.append(self._instance(2))
+        builder_b = _GeometryBuilder()
+        builder_b.instances.append(self._instance(1))
+        root_builder = _GeometryBuilder()
+        root_builder.instances.append(self._instance(1))
+        defs_dict = {
+            1: {"guid": "g1", "name": "a", "builder": builder_a},
+            2: {"guid": "g2", "name": "b", "builder": builder_b},
+            "ROOT": {"guid": "ROOT", "name": "ROOT_MODEL", "builder": root_builder},
+        }
+
+        with pytest.raises(SkpParseError, match="Recursive component definition"):
+            build_scene(self._parsed(defs_dict))
+
+    def test_legitimate_sibling_reuse_does_not_raise(self) -> None:
+        """The same definition instanced twice as siblings (not nested
+        inside itself) is normal and must not trip the guard."""
+        from openskp._core import _GeometryBuilder
+        from openskp.scene import build_scene
+
+        shared = _GeometryBuilder()
+        root_builder = _GeometryBuilder()
+        root_builder.instances.append(self._instance(1, "child_a"))
+        root_builder.instances.append(self._instance(1, "child_b"))
+        defs_dict = {
+            1: {"guid": "g1", "name": "shared", "builder": shared},
+            "ROOT": {"guid": "ROOT", "name": "ROOT_MODEL", "builder": root_builder},
+        }
+
+        scene = build_scene(self._parsed(defs_dict))
+        assert len(scene.scene_hierarchy.children) == 2
+
+
 class TestGlbExport:
     """``export.glb.export()`` writes a real ``.glb`` file via a separate,
     trimesh-based pipeline (not ``scene.py``'s ``build_scene()``) - so its
