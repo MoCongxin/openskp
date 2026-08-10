@@ -39,6 +39,14 @@ namespace OpenSkp
         /// the face plane.</summary>
         public double[]? UvTransform { get; set; }
         public double[]? UvTransformBack { get; set; }
+
+        /// <summary>The texture is PROJECTED (e.g. the Add Location terrain
+        /// drape): its UVs run in the projection plane's frame, not the face
+        /// frame.</summary>
+        public bool UvProjected { get; set; }
+
+        /// <summary>Same for the face's back side.</summary>
+        public bool UvProjectedBack { get; set; }
     }
 
     public sealed class Layer

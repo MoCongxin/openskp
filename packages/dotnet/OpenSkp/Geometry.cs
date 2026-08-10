@@ -15,6 +15,8 @@ namespace OpenSkp
         public long? BackMaterialId;
         public double[]? UvTransform;
         public double[]? UvTransformBack;
+        public bool UvProjected;
+        public bool UvProjectedBack;
     }
 
     internal sealed class GeometryBuilderInstance

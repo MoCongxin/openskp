@@ -122,6 +122,8 @@ namespace OpenSkp
                     BackMaterialId = f.BackMaterialId,
                     UvTransform = f.UvTransform,
                     UvTransformBack = f.UvTransformBack,
+                    UvProjected = f.UvProjected,
+                    UvProjectedBack = f.UvProjectedBack,
                 };
             }
 

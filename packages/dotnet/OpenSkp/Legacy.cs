@@ -1222,6 +1222,8 @@ namespace OpenSkp
                             {
                                 face.UvTransform = (double[])ftc.Front.Clone();
                                 face.UvTransformBack = (double[])ftc.Back.Clone();
+                                face.UvProjected = ftc.FrontProjected;
+                                face.UvProjectedBack = ftc.BackProjected;
                             }
                         }
                     }
