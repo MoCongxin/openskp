@@ -1004,6 +1004,8 @@ function fillBuilder(builder: LegacyBuilder, ents: [number, string | null, any][
         backMaterialId: v.back_mat || null,
         uvTransform: null,
         uvTransformBack: null,
+        uvProjected: false,
+        uvProjectedBack: false,
       };
       const attrs = v.attrs;
       if (attrs && typeof attrs === 'object') {
@@ -1011,6 +1013,8 @@ function fillBuilder(builder: LegacyBuilder, ents: [number, string | null, any][
           if (cv && typeof cv === 'object' && cv.k === 'ftc') {
             face.uvTransform = [...cv.front];
             face.uvTransformBack = [...cv.back];
+            face.uvProjected = cv.front_projected;
+            face.uvProjectedBack = cv.back_projected;
           }
         }
       }

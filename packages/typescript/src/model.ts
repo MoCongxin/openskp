@@ -73,6 +73,11 @@ export interface Face {
   uvTransform: number[] | null;
   /** Same for the face's back side, or null. */
   uvTransformBack: number[] | null;
+  /** The texture is PROJECTED (e.g. the Add Location terrain drape): its
+   * UVs run in the projection plane's frame, not the face frame. */
+  uvProjected: boolean;
+  /** Same for the face's back side. */
+  uvProjectedBack: boolean;
 }
 
 export interface CoEdge {
@@ -286,6 +291,8 @@ function buildDefinition(id: number, d: ParsedDefinition): Definition {
     backMaterialId: fData.backMaterialId ?? null,
     uvTransform: fData.uvTransform ?? null,
     uvTransformBack: fData.uvTransformBack ?? null,
+    uvProjected: fData.uvProjected ?? false,
+    uvProjectedBack: fData.uvProjectedBack ?? false,
   }));
   const instances: Instance[] = d.builder.instances.map((inst) => ({
     name: inst.name,

@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **TypeScript**: `Face` gained `uvProjected`/`uvProjectedBack` fields.
+  The legacy MFC reader already decoded these bits internally
+  (`front_projected`/`back_projected` on the `CFaceTextureCoords` record)
+  but discarded them instead of exposing them, same gap Python closed in
+  #61. A PROJECTED texture (e.g. the Add Location terrain drape) has UVs
+  that run in the projection plane's frame, not the face frame - callers
+  need to know this to render it correctly. VFF/modern files don't carry
+  this flag at all, so it correctly defaults to `false` there, matching
+  Python's precedent.
+
 - **Python**: `scene.GlbPrimitive` gained a `uvs` field with real per-vertex
   texture coordinates, computed from each source face's `uv_transform` (or
   the default face-plane projection when a face has none) — see
