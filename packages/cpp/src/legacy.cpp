@@ -99,11 +99,17 @@ struct V {
   std::vector<double> xf;
   std::vector<double> uvf;
   std::vector<double> uvb;
+  bool front_projected{};
+  bool back_projected{};
   std::uint64_t v1{};
   std::uint64_t v2{};
   std::uint64_t edge{};
   std::uint64_t def{};
-  std::uint64_t attrs{};
+  // Slot of this entity's CAttributeContainer (resolved through
+  // Archive::slots), or nullopt when it has none. Not a bare slot number:
+  // slot 0 is a legitimate real slot (the first object allocated in the
+  // archive), so 0 can't double as a sentinel for "absent."
+  std::optional<std::uint64_t> attrs;
   std::uint64_t tex_dib{};
   bool sense{};
   bool faces_camera{};
@@ -214,13 +220,18 @@ struct Archive {
     return {s, i->second.name, i->second.v};
   }
 
-  void preamble() {
-    object("CAttributeContainer");
+  // Returns the CAttributeContainer's slot, or nullopt when this entity
+  // has none (a null object reference: tag 0, Archive::object() returns a
+  // default-constructed tuple with an empty class name).
+  std::optional<std::uint64_t> preamble() {
+    auto attrs = object("CAttributeContainer");
     if (pid) {
       auto mask = r.u8();
       for (int i = 0; i < 8; ++i)
         if (mask & (1 << i)) r.u8();
     }
+    if (std::get<1>(attrs).empty()) return std::nullopt;
+    return std::get<0>(attrs);
   }
 
   void draw(V& v) {
@@ -283,7 +294,7 @@ struct Archive {
       r.u16();
       current_loop = old;
     } else if (n == "CFace") {
-      preamble();
+      v->attrs = preamble();
       v->k = "face";
       draw(*v);
       v->plane = r.f64s(4);
@@ -297,7 +308,8 @@ struct Archive {
     } else if (n == "CAttributeContainer") {
       preamble();
       v->k = "attrs";
-      while (r.p + 2 <= r.d.size() && read_u16(r.d, r.p)) object("CAttributeNamed");
+      while (r.p + 2 <= r.d.size() && read_u16(r.d, r.p))
+        v->ents.push_back(object("CAttributeNamed"));
       r.u16();
     } else if (n == "CAttributeNamed") {
       preamble();
@@ -385,8 +397,10 @@ struct Archive {
       while (z--) r.f64s(4);
       z = r.u32();
       while (z--) r.f64s(4);
-      r.u32();
-      r.u32();
+      auto fflags = r.u32();
+      auto bflags = r.u32();
+      v->front_projected = (fflags & 2) != 0;
+      v->back_projected = (bflags & 2) != 0;
     } else if (n == "CCamera") {
       r.raw(137);
       r.u16();
@@ -599,6 +613,32 @@ void fill(GeometryBuilder& b,
           }
         }
         f.loops.push_back(std::move(co));
+      }
+      // A positioned/photo-fitted texture mapping (CFaceTextureCoords)
+      // lives as a child of this face's attribute container, alongside
+      // any CAttributeNamed dictionaries - so it has to be found by
+      // scanning the resolved attrs' children for one tagged "ftc"
+      // rather than read directly off the face record.
+      if (v->attrs) {
+        auto ai = slots.find(*v->attrs);
+        if (ai != slots.end() && ai->second.v) {
+          for (auto& ent : ai->second.v->ents) {
+            auto& ev = std::get<2>(ent);
+            if (!ev || ev->k != "ftc") continue;
+            if (ev->uvf.size() == 9) {
+              std::array<double, 9> m{};
+              std::copy(ev->uvf.begin(), ev->uvf.end(), m.begin());
+              f.uv_transform = m;
+            }
+            if (ev->uvb.size() == 9) {
+              std::array<double, 9> m{};
+              std::copy(ev->uvb.begin(), ev->uvb.end(), m.begin());
+              f.uv_transform_back = m;
+            }
+            f.uv_projected = ev->front_projected;
+            f.uv_projected_back = ev->back_projected;
+          }
+        }
       }
       b.faces[s] = std::move(f);
     } else if (v->k == "instance") {

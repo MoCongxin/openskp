@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and same rationale as the TypeScript entry above.
 - **.NET**: `Face` gained `UvProjected`/`UvProjectedBack` properties, same
   fix and same rationale as the TypeScript/Dart entries above.
+- **C++**: `Face` gained `uv_projected`/`uv_projected_back` fields, same
+  rationale as the TypeScript/Dart/.NET entries above. See the Fixed
+  section for why this needed more than exposing two bits.
 
 - **Python**: `scene.GlbPrimitive` gained a `uvs` field with real per-vertex
   texture coordinates, computed from each source face's `uv_transform` (or
@@ -77,6 +80,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **C++**: `Face.uv_transform`/`uv_transform_back` were never populated for
+  *any* legacy MFC (SketchUp 2013–2020) file - every legacy face's UV
+  silently fell back to the default (non-positioned) face-plane
+  projection, even when the SketchUp author had explicitly positioned or
+  photo-fitted a texture. Root cause: `CFace`'s attribute container (the
+  MFC record that holds its `CFaceTextureCoords` mapping, alongside any
+  other attribute dictionaries) was being read - correctly advancing the
+  archive cursor - and then discarded, never linked back to the face.
+  Found while investigating a smaller, originally-scoped task (exposing
+  the already-decoded PROJECTED-texture bit); turned out the bit lived in
+  a record that was never reachable at all. Fixed by capturing the
+  attribute container's slot on `CFace`, capturing attribute-container
+  children as they're read (previously discarded there too), and
+  resolving both when building each face. Verified against a real fixture
+  the count of faces with a real `uv_transform` now matches Python's
+  independently-verified count exactly (32) - previously this would have
+  been 0 for every legacy file, always.
 - **Python**: `export.glb.export()` crashed on any file with a textured
   material - the metadata JSON sidecar it writes tried to embed each
   material's raw texture image bytes directly, which was never

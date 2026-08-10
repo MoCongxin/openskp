@@ -49,6 +49,8 @@ static Definition definition(EntityId id, RawDefinition&& r) {
     x.back_material_id = f.second.back_material_id;
     x.uv_transform = f.second.uv_transform;
     x.uv_transform_back = f.second.uv_transform_back;
+    x.uv_projected = f.second.uv_projected;
+    x.uv_projected_back = f.second.uv_projected_back;
     d.faces.emplace(f.first, std::move(x));
   }
   for (auto& i : r.builder.instances)

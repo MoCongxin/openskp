@@ -50,6 +50,11 @@ struct Face {
   std::optional<EntityId> back_material_id;
   std::optional<std::array<double, 9>> uv_transform;
   std::optional<std::array<double, 9>> uv_transform_back;
+  // The texture is PROJECTED (e.g. the Add Location terrain drape): its
+  // UVs run in the projection plane's frame, not the face frame.
+  bool uv_projected{};
+  // Same for the face's back side.
+  bool uv_projected_back{};
 };
 
 struct Layer {

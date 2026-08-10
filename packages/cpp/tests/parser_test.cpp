@@ -158,6 +158,26 @@ TEST(Parser, LegacyMatchesReference) {
   EXPECT_NEAR(maximum[2], 133.071, 0.01);
   EXPECT_EQ(model.root().instances.size(), 3);
 
+  // Regression: CFace's attribute container (which carries any positioned/
+  // photo-fitted CFaceTextureCoords record) was read and then silently
+  // discarded, so uv_transform never got populated for legacy files at
+  // all - every legacy face fell back to the default face-plane
+  // projection even when the SketchUp author had explicitly positioned a
+  // texture. 32 matches Python's independently-verified count of faces
+  // with a real uv_transform on this exact fixture (0 have uv_projected -
+  // this file has no PROJECTED/terrain-drape textures).
+  int with_uv_transform = 0, with_uv_projected = 0;
+  auto count_uv = [&](const Definition& d) {
+    for (const auto& [face_id, face] : d.faces) {
+      if (face.uv_transform.has_value()) ++with_uv_transform;
+      if (face.uv_projected) ++with_uv_projected;
+    }
+  };
+  count_uv(model.root());
+  for (const auto& [id, definition] : model.definitions) count_uv(definition);
+  EXPECT_EQ(with_uv_transform, 32);
+  EXPECT_EQ(with_uv_projected, 0);
+
   auto scene = file.build_scene();
   EXPECT_EQ(scene.glb_primitives.size(), 21);
   EXPECT_EQ(scene.mesh_index.size(), 21);
