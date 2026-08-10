@@ -13,6 +13,8 @@ class GeometryBuilderFace {
   int? backMaterialId;
   List<double>? uvTransform;
   List<double>? uvTransformBack;
+  bool uvProjected = false;
+  bool uvProjectedBack = false;
 }
 
 class GeometryBuilderInstance {

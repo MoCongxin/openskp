@@ -1152,6 +1152,8 @@ class Legacy {
             if (cv is FtcRec) {
               face.uvTransform = List<double>.from(cv.front);
               face.uvTransformBack = List<double>.from(cv.back);
+              face.uvProjected = cv.frontProjected;
+              face.uvProjectedBack = cv.backProjected;
             }
           }
         }
