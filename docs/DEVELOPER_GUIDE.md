@@ -316,9 +316,9 @@ ships file-writing exporters on top of that data:
 | Language | Scene data (`buildScene()`) | GLB | OBJ | JSON metadata |
 |---|---|---|---|---|
 | Python | ✅ | ✅ `openskp.export.glb` | ✅ `openskp.export.obj` | ✅ `openskp.export.json_export` |
-| TypeScript | ✅ | ✅ `toGLB(scene)` in `index.ts` | ❌ not yet ported | ❌ not yet ported |
-| .NET | ✅ | ❌ not yet ported | ❌ not yet ported | ❌ not yet ported |
-| Dart | ✅ | ❌ not yet ported | ❌ not yet ported | ❌ not yet ported |
+| TypeScript | ✅ | ✅ `toGLB(scene)` in `index.ts` | ❌ not yet ported | ✅ `toJSON(model, scene?)` in `index.ts` |
+| .NET | ✅ | ✅ `GlbExport.ToGlb(scene)` / `GlbExport.ExportGlb(scene, path)` | ❌ not yet ported | ❌ not yet ported |
+| Dart | ✅ | ✅ `toGlb(scene)` / `exportGlb(scene, path)` | ❌ not yet ported | ❌ not yet ported |
 | C++ | ✅ | ✅ `to_glb(scene)` / `export_glb(scene, path)` | ❌ not included | ❌ not included |
 
 Python is the only port with a full set of disk-writing exporters today,
@@ -354,14 +354,22 @@ Notes on each:
   `None` unless a built `Scene` is passed via `scene=`, in which case it's
   the real, resolved, world-space instance tree.
 
-TypeScript's `toGLB(scene)` and C++'s `to_glb(scene)` provide complete,
-public, in-memory-to-`.glb` bytes; C++ also provides `export_glb(scene,
-path)` for direct file output. The C++ writer uses a private, pinned
-TinyGLTF dependency that does not appear in installed consumer interfaces.
-.NET and Dart consumers who need a `.glb`/`.obj`/JSON file today need to serialize
-`Scene`'s `GlbPrimitive`s themselves (the format is simple — see the glTF
-2.0 spec, or read TypeScript's `toGLB()` or Python's `openskp.export.obj`
-for reference implementations of exactly this data shape).
+TypeScript's `toGLB(scene)` provides complete, public, in-memory-to-`.glb`
+bytes only (no file-write variant). C++, .NET, and Dart all provide both:
+in-memory bytes (`to_glb`/`ToGlb`/`toGlb`) and direct file output
+(`export_glb`/`ExportGlb`/`exportGlb`). All three of the newer writers
+(C++, .NET, Dart) are from-scratch implementations with no new
+dependency — .NET added a small internal JSON serializer since
+`netstandard2.0` has none built in; C++'s writer uses a private, pinned
+TinyGLTF dependency that does not appear in installed consumer
+interfaces; Dart's uses `dart:convert`'s built-in JSON support directly.
+None of the five GLB writers include OBJ or JSON-metadata export except
+Python (both) and TypeScript (JSON metadata only) — .NET and Dart
+consumers who need an `.obj`/JSON file today still need to serialize
+`Scene`'s `GlbPrimitive`s themselves for those two formats specifically
+(the OBJ format in particular is simple — see Python's
+`openskp.export.obj` for a reference implementation of exactly this data
+shape).
 
 ## The web viewer
 
@@ -397,26 +405,23 @@ directly to another's without adjustment.
 
 ### Root-level definition access
 
-- **Python**: `model.definitions` is a single dict that includes a
-  `'ROOT'` **string key** alongside the integer definition IDs. There is
-  no separate `.root` attribute. Consumers must check
-  `isinstance(key, int)` to distinguish real definitions from the root.
-- **TypeScript, .NET, Dart, C++**: `model.definitions`/`model.Definitions` is
-  strictly numeric-keyed (no root entry mixed in); the root is a separate
-  `model.root` / `model.Root` / `model.root()` property with the same `Definition` shape.
-
-(TypeScript used to drop root-level data from `parse()` entirely — fixed
-this session to add `model.root`, matching .NET/Dart. Python's differing
-shape predates this session and is tracked as a follow-up, not yet
-changed, since Python's `.definitions` shape may have existing consumers
-relying on the string-keyed `'ROOT'` entry.)
+Resolved as of this session — all five languages now agree.
+`model.definitions`/`model.Definitions` is strictly numeric-keyed (no
+root entry mixed in) in every language; the implicit top-level
+definition is always a separate `model.root` / `model.Root` /
+`model.root()` property with the same `Definition` shape. (Python
+previously mixed a string `'ROOT'` key into `model.definitions`, requiring
+consumers to `isinstance(key, int)`-check every key — fixed to match the
+other four; TypeScript previously dropped root-level data from `parse()`
+entirely — also fixed, earlier in the same session.)
 
 ### GLB/OBJ/JSON export
 
-Covered above under [Export capabilities](#export-capabilities) — Python
-has a full set of disk-writing exporters (GLB/OBJ/JSON); TypeScript has a
-public in-memory `.glb` serializer; C++ has in-memory and disk GLB export but
-no OBJ/JSON writer; .NET and Dart have only the raw `Scene` data.
+Covered above under [Export capabilities](#export-capabilities) — GLB
+export is now available in all five languages. Python has the fullest set
+of disk-writing exporters (GLB/OBJ/JSON); TypeScript also has JSON
+metadata export alongside its in-memory `.glb` serializer; C++, .NET, and
+Dart all have in-memory and disk GLB export but no OBJ/JSON writer yet.
 
 ### Progress/logging mechanism
 
