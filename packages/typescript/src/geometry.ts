@@ -20,6 +20,8 @@ export interface GeometryBuilderFace {
   backMaterialId?: number | null;
   uvTransform?: number[] | null;
   uvTransformBack?: number[] | null;
+  uvProjected?: boolean;
+  uvProjectedBack?: boolean;
 }
 
 export class GeometryBuilder {
