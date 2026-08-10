@@ -31,6 +31,17 @@ struct MeshMetadata {
 struct GlbPrimitive {
   std::vector<float> positions;
   std::vector<float> normals;
+  // Flat [u, v, u, v, ...] texture coordinates, matching positions 1:1.
+  // Computed from the source face's uv_transform (or the default
+  // face-plane projection when a face has none): a face-plane basis from
+  // the normal, inverting uv_transform when present, divided by the
+  // material's texture tile size. A vertex shared by two faces that
+  // disagree on UV is split, since indexed glTF meshes need
+  // position/normal/uv aligned per vertex. Faces with a PROJECTED texture
+  // (terrain-drape, e.g. Add Location) still use the face-plane formula
+  // here, since the real projection-plane basis isn't captured in the
+  // parsed data - their UVs will be approximate.
+  std::vector<float> uvs;
   std::vector<std::uint32_t> indices;
   std::size_t material_index{};
   std::string geom_name;

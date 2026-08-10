@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cmath>
 #include <gtest/gtest.h>
 #include <limits>
 #include <set>
@@ -171,6 +172,8 @@ TEST(Parser, LegacyMatchesReference) {
 
   for (const auto& primitive : scene.glb_primitives) {
     EXPECT_EQ(primitive.positions.size(), primitive.normals.size());
+    EXPECT_EQ(primitive.uvs.size(), primitive.positions.size() / 3 * 2);
+    for (auto value : primitive.uvs) EXPECT_TRUE(std::isfinite(value));
     EXPECT_EQ(primitive.indices.size() % 3, 0);
     for (auto index : primitive.indices) EXPECT_LT(index, primitive.positions.size() / 3);
   }
