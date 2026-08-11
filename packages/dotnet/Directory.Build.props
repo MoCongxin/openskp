@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup>
+    <!-- Shared analyzer/code-style settings for every project under
+         packages/dotnet/ - the built-in Roslyn analyzers plus
+         .editorconfig-based style rules, enforced as build warnings
+         (matching Dart's `dart analyze` and C++'s clang-format CI gates;
+         see item 19). -->
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+</Project>

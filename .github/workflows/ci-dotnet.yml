@@ -32,3 +32,27 @@ jobs:
 
       - name: Test
         run: dotnet test packages/dotnet/OpenSkp.Tests/OpenSkp.Tests.csproj --no-build --configuration Release
+
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0'
+
+      - name: Restore
+        run: |
+          dotnet restore packages/dotnet/OpenSkp/OpenSkp.csproj
+          dotnet restore packages/dotnet/OpenSkp.Tests/OpenSkp.Tests.csproj
+
+      - name: Verify formatting (.editorconfig)
+        run: |
+          dotnet format packages/dotnet/OpenSkp/OpenSkp.csproj --verify-no-changes
+          dotnet format packages/dotnet/OpenSkp.Tests/OpenSkp.Tests.csproj --verify-no-changes
+
+      - name: Build with analyzers as errors
+        run: |
+          dotnet build packages/dotnet/OpenSkp.Tests/OpenSkp.Tests.csproj --no-restore --configuration Release -warnaserror

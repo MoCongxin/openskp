@@ -33,12 +33,17 @@ namespace OpenSkp
 
         private static Dictionary<string, object?> VertexToJson(Vertex v) => new Dictionary<string, object?>
         {
-            ["id"] = v.Id, ["x"] = v.X, ["y"] = v.Y, ["z"] = v.Z,
+            ["id"] = v.Id,
+            ["x"] = v.X,
+            ["y"] = v.Y,
+            ["z"] = v.Z,
         };
 
         private static Dictionary<string, object?> EdgeToJson(Edge e) => new Dictionary<string, object?>
         {
-            ["id"] = e.Id, ["v1_id"] = e.V1Id, ["v2_id"] = e.V2Id,
+            ["id"] = e.Id,
+            ["v1_id"] = e.V1Id,
+            ["v2_id"] = e.V2Id,
         };
 
         private static Dictionary<string, object?> FaceToJson(Face f)
@@ -119,7 +124,10 @@ namespace OpenSkp
                 ["name"] = m.Name,
                 ["color"] = new Dictionary<string, object?>
                 {
-                    ["r"] = m.Color.R, ["g"] = m.Color.G, ["b"] = m.Color.B, ["a"] = m.Color.A,
+                    ["r"] = m.Color.R,
+                    ["g"] = m.Color.G,
+                    ["b"] = m.Color.B,
+                    ["a"] = m.Color.A,
                 },
                 ["transparency"] = m.Transparency,
             }).ToList();
