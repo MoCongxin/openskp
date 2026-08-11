@@ -101,5 +101,45 @@ namespace OpenSkp
             var stream = new MemoryStream(data, zipOffset, data.Length - zipOffset, writable: false);
             return new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
         }
+
+        // A ZIP entry's declared uncompressed size (ZipArchiveEntry.Length)
+        // is untrusted central-directory metadata - it does not have to
+        // match what the compressed stream actually decompresses to. Code
+        // that pre-sizes an allocation off it (e.g. ChunkedBuffer.FromStream
+        // for model.dat) can be made to allocate an arbitrary amount of
+        // memory from a tiny malicious file before a single byte is read.
+        // Real production model.dat entries are observed at ~10x
+        // compression, so both limits below leave generous headroom for
+        // legitimate files while rejecting the kind of declared-size lie a
+        // genuine file would never need.
+        private const long MaxUncompressedEntryBytes = 16L * 1024 * 1024 * 1024; // 16 GB
+        private const long MaxCompressionRatio = 1000;
+        private const long RatioCheckThresholdBytes = 1024 * 1024; // 1 MB
+
+        /// <summary>Reject a ZIP entry whose declared uncompressed size is
+        /// implausible, before any code allocates memory sized off it.</summary>
+        public static void ValidateEntrySize(ZipArchiveEntry entry)
+        {
+            long declared = entry.Length;
+            if (declared <= 0) return;
+
+            if (declared > MaxUncompressedEntryBytes)
+            {
+                throw new SkpParseException(
+                    $"ZIP entry '{entry.FullName}' declares {declared} bytes uncompressed, exceeding the {MaxUncompressedEntryBytes}-byte safety ceiling",
+                    stage: "zip_extract");
+            }
+
+            if (declared >= RatioCheckThresholdBytes)
+            {
+                long compressed = entry.CompressedLength;
+                if (compressed <= 0 || declared / compressed > MaxCompressionRatio)
+                {
+                    throw new SkpParseException(
+                        $"ZIP entry '{entry.FullName}' declares an implausible compression ratio ({declared} bytes from {compressed} bytes compressed) - likely a decompression bomb",
+                        stage: "zip_extract");
+                }
+            }
+        }
     }
 }

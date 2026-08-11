@@ -64,6 +64,7 @@ namespace OpenSkp
                 string name = entry.FullName;
                 if (name.EndsWith("material.xml", StringComparison.Ordinal) && name.StartsWith("materials/", StringComparison.Ordinal))
                 {
+                    Vff.ValidateEntrySize(entry);
                     byte[] xmlData;
                     using (var s = entry.Open())
                     using (var ms = new System.IO.MemoryStream())
@@ -105,6 +106,7 @@ namespace OpenSkp
                 {
                     continue;
                 }
+                Vff.ValidateEntrySize(entry);
                 byte[] xmlData;
                 using (var s = entry.Open())
                 using (var ms = new System.IO.MemoryStream())
@@ -126,6 +128,7 @@ namespace OpenSkp
             {
                 throw new SkpParseException("model.dat not found in ZIP container", stage: "zip_extract");
             }
+            Vff.ValidateEntrySize(modelDatEntry);
             // model.dat routinely decompresses to several GB on real
             // production files (SketchUp's binary format has been observed
             // compressing at ~10x) - well past .NET's ~2.1GB single-array
