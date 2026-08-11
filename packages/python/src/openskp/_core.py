@@ -395,6 +395,7 @@ def _extract_geometry_from_nodes(elements, builder):
                             loops.append(co_edges)
                 face_mat_id = None
                 uv_front = uv_back = None
+                face_hidden = False
                 d007 = next((c for c in el['children'] if c['tag'] == 'D007'), None)
                 if d007:
                     d107 = next((c for c in d007['children'] if c['tag'] == 'D107'), None)
@@ -403,6 +404,12 @@ def _extract_geometry_from_nodes(elements, builder):
                     dc05 = next((c for c in d007['children'] if c['tag'] == 'DC05'), None)
                     if dc05 is not None:
                         uv_front, uv_back = _extract_uv_transforms(dc05['payload'])
+                    # D307 = display flags, same record edges already read
+                    # (base 0x06, +0x01 hidden) - faces carry the identical
+                    # tag under their own D007 container.
+                    d307 = next((c for c in d007['children'] if c['tag'] == 'D307'), None)
+                    if d307 is not None and d307['payload']:
+                        face_hidden = bool(d307['payload'][0] & 0x01)
                 # Back-side material: the AF0D child of the face node (a face
                 # painted only on its back — common when the author paints the
                 # visible side of a downward-facing cap — carries AF0D but no
@@ -415,7 +422,8 @@ def _extract_geometry_from_nodes(elements, builder):
                                        'material_id': face_mat_id,
                                        'back_material_id': back_mat_id,
                                        'uv_transform': uv_front,
-                                       'uv_transform_back': uv_back}
+                                       'uv_transform_back': uv_back,
+                                       'hidden': face_hidden}
 
         elif tag == '6419':
             nodes_to_search = el['children'] if el['children'] else [el]
@@ -442,6 +450,7 @@ def _extract_geometry_from_nodes(elements, builder):
             # is None inherit this — the SDK resolves that inheritance when
             # exporting, so consumers need the raw value to do the same.
             inst_mat_id = None
+            inst_hidden = False
             d007 = next((c for c in el['children'] if c['tag'] == 'D007'),
                         None)
             if d007:
@@ -450,6 +459,12 @@ def _extract_geometry_from_nodes(elements, builder):
                 if d107:
                     inst_mat_id = parse_var_int(
                         d107['payload'], 0, len(d107['payload']))
+                # D307 = display flags, same record edges/faces already
+                # read (base 0x06, +0x01 hidden).
+                d307 = next((c for c in d007['children']
+                             if c['tag'] == 'D307'), None)
+                if d307 is not None and d307['payload']:
+                    inst_hidden = bool(d307['payload'][0] & 0x01)
 
             builder.instances.append({
                 'offset': el['offset'],
@@ -458,6 +473,7 @@ def _extract_geometry_from_nodes(elements, builder):
                 'name': name,
                 'matrix': matrix,
                 'material_id': inst_mat_id,
+                'hidden': inst_hidden,
                 'children': el['children']
             })
 

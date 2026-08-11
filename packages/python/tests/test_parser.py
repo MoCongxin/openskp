@@ -654,6 +654,106 @@ class TestLayerHidden:
         assert model.layers[0].hidden is False
 
 
+class TestFaceInstanceHidden:
+    """``Face.hidden`` / ``Instance.hidden`` - the same per-element "Hide"
+    bit edges already exposed. Both the legacy MFC drawbase record
+    (``_drawbase``'s ``'hidden'`` key) and the VFF/modern D007->D307
+    display-flags record (confirmed present on every single face and
+    instance in a real VFF fixture - 1588/1588 faces, 46/46 instances in
+    Untitled.skp) already carried this bit; it was just discarded when
+    building the final ``Face``/``Instance`` objects.
+
+    ``full_parse`` is stubbed for the VFF-shaped case (constructing a
+    synthetic ``_GeometryBuilder``); the legacy real-fixture case is
+    checked separately below since it can't exercise the True branch.
+    """
+
+    @staticmethod
+    def _parse_with(monkeypatch, tmp_path: pathlib.Path, parsed: dict):
+        import openskp._core as _core
+        from openskp.model import SkpFile
+
+        monkeypatch.setattr(_core, "full_parse", lambda path: parsed)
+        fake = tmp_path / "model.skp"
+        fake.write_bytes(b"")
+        return SkpFile.open(str(fake)).parse()
+
+    def test_hidden_face_and_instance_are_reported_hidden(
+        self, monkeypatch, tmp_path: pathlib.Path
+    ) -> None:
+        from openskp._core import _GeometryBuilder
+
+        builder = _GeometryBuilder()
+        builder.faces[1] = {"loops": [], "normal": (0.0, 0.0, 1.0), "hidden": True}
+        builder.faces[2] = {"loops": [], "normal": (0.0, 0.0, 1.0), "hidden": False}
+        builder.instances.append({
+            "offset": 0, "ref_guid": "", "ref_idx": None, "name": "hidden_one",
+            "matrix": [], "material_id": None, "hidden": True, "children": [],
+        })
+        builder.instances.append({
+            "offset": 0, "ref_guid": "", "ref_idx": None, "name": "visible_one",
+            "matrix": [], "material_id": None, "hidden": False, "children": [],
+        })
+        parsed = {
+            "version": "test",
+            "defs_dict": {"ROOT": {"guid": "ROOT", "name": "ROOT_MODEL", "builder": builder}},
+            "layer_colors": {},
+            "materials": {},
+            "materials_by_folder": {},
+            "material_id_to_name": {},
+        }
+        model = self._parse_with(monkeypatch, tmp_path, parsed)
+
+        assert model.root.faces[1].hidden is True
+        assert model.root.faces[2].hidden is False
+        by_name = {i.name: i for i in model.root.instances}
+        assert by_name["hidden_one"].hidden is True
+        assert by_name["visible_one"].hidden is False
+
+    def test_missing_hidden_key_defaults_to_visible(
+        self, monkeypatch, tmp_path: pathlib.Path
+    ) -> None:
+        from openskp._core import _GeometryBuilder
+
+        builder = _GeometryBuilder()
+        builder.faces[1] = {"loops": [], "normal": (0.0, 0.0, 1.0)}
+        builder.instances.append({
+            "offset": 0, "ref_guid": "", "ref_idx": None, "name": "n",
+            "matrix": [], "material_id": None, "children": [],
+        })
+        parsed = {
+            "version": "test",
+            "defs_dict": {"ROOT": {"guid": "ROOT", "name": "ROOT_MODEL", "builder": builder}},
+            "layer_colors": {},
+            "materials": {},
+            "materials_by_folder": {},
+            "material_id_to_name": {},
+        }
+        model = self._parse_with(monkeypatch, tmp_path, parsed)
+
+        assert model.root.faces[1].hidden is False
+        assert model.root.instances[0].hidden is False
+
+    def test_real_legacy_fixture_faces_and_instances_are_not_hidden(self) -> None:
+        # Real-fixture sanity check: nothing in this file is hidden, but
+        # this confirms the field is actually populated end-to-end through
+        # the real legacy parser (not silently dropped), even though it
+        # can't exercise the True branch.
+        import pytest as _pytest
+        fixture = pathlib.Path(__file__).parent / "fixtures" / "capilla_quiroz_v17.skp"
+        if not fixture.exists():
+            _pytest.skip("legacy fixture not present")
+        from openskp.model import SkpFile
+
+        model = SkpFile.open(str(fixture)).parse()
+        assert len(model.definitions) > 0
+        for defn in model.definitions.values():
+            for face in defn.faces.values():
+                assert face.hidden is False
+        for inst in model.root.instances:
+            assert inst.hidden is False
+
+
 # ── Instance material tests ──────────────────────────────────────────────
 
 
