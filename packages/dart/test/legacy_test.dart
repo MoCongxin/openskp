@@ -75,6 +75,7 @@ void main() {
 
     expect(model.layers.length, 1);
     expect(model.layers[0].name, 'Layer0');
+    expect(model.layers[0].hidden, false);
 
     double minX = double.infinity,
         minY = double.infinity,

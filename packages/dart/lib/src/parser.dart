@@ -71,7 +71,8 @@ class SkpFile {
 
     for (final entry in parsed.layerColors.entries) {
       final (r, g, b) = entry.value;
-      model.layers.add(Layer(name: entry.key, colorR: r, colorG: g, colorB: b));
+      final hidden = parsed.layerHidden[entry.key] ?? false;
+      model.layers.add(Layer(name: entry.key, colorR: r, colorG: g, colorB: b, hidden: hidden));
     }
 
     final matForData = <RawMaterial, Material>{};

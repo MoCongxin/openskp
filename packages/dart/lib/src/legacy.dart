@@ -1257,15 +1257,20 @@ class Legacy {
     }
 
     final layerColors = <String, (int, int, int)>{};
+    final layerHidden = <String, bool>{};
     final layerIdToName = <int, String>{};
     for (final (s, vObj) in walkResult.layers) {
       final v = vObj as LayerRec;
       final rgba = v.rgba;
       layerColors[v.name] = (rgba[0], rgba[1], rgba[2]);
+      layerHidden[v.name] = v.hidden != 0;
       layerIdToName[s] = v.name;
     }
     if (!layerColors.containsKey('Layer0')) {
       layerColors['Layer0'] = (136, 136, 136);
+    }
+    if (!layerHidden.containsKey('Layer0')) {
+      layerHidden['Layer0'] = false;
     }
 
     final defsDict = <int, RawDefinition>{};
@@ -1313,6 +1318,7 @@ class Legacy {
     return RawParsed()
       ..version = version
       ..layerColors.addAll(layerColors)
+      ..layerHidden.addAll(layerHidden)
       ..layerIdToName.addAll(layerIdToName)
       ..materialIdToName.addAll(materialIdToName)
       ..materials.addAll(materialsMap)
