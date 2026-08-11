@@ -110,6 +110,10 @@ struct V {
   // slot 0 is a legitimate real slot (the first object allocated in the
   // archive), so 0 can't double as a sentinel for "absent."
   std::optional<std::uint64_t> attrs;
+  // Only populated for "dict" (CAttributeNamed) entities: this
+  // dictionary's own key/value pairs, already stringified (see
+  // Archive::typed()).
+  std::map<std::string, std::string> entries;
   std::uint64_t tex_dib{};
   bool sense{};
   bool faces_camera{};
@@ -319,7 +323,7 @@ struct Archive {
       while (true) {
         auto key = r.utf16();
         if (key.empty()) break;
-        typed(r.u8());
+        v->entries[key] = typed(r.u8());
       }
       r.u32();
     } else if (n == "CLayer") {
@@ -508,7 +512,7 @@ struct Archive {
       v->faces_camera = gap.size() >= 9 && (gap[gap.size() - 9] & 1);
       object("CThumbnail");
     } else if (n == "CComponentInstance" || n == "CGroup") {
-      preamble();
+      v->attrs = preamble();
       v->k = "instance";
       draw(*v);
       auto q = object("CComponentDefinition");
@@ -527,34 +531,37 @@ struct Archive {
     return v;
   }
 
-  void typed(uint8_t t) {
+  // Reads one typed CAttributeNamed value off the stream and returns its
+  // string representation, matching the string-valued properties contract
+  // extract_legacy_dynamic_properties() (below) produces.
+  std::string typed(uint8_t t) {
     switch (t) {
       case 0:
-        return;
+        return "";
       case 4:
-        r.raw(4);
-        return;
+        return std::to_string(read_i32(r.raw(4), 0));
       case 6:
-        r.f64();
-        return;
+        return std::to_string(r.f64());
       case 7:
-        r.u8();
-        return;
+        return std::to_string(r.u8());
       case 9:
-        r.u32();
-        return;
+        return std::to_string(r.u32());
       case 10:
-        r.utf16();
-        return;
+        return r.utf16();
       case 11: {
         auto n = r.u32();
         if (n > 100000) throw std::runtime_error("attr array too large");
-        while (n--) typed(r.u8());
-        return;
+        std::string joined;
+        while (n--) {
+          if (!joined.empty()) joined += ",";
+          joined += typed(r.u8());
+        }
+        return joined;
       }
-      case 18:
-        r.f64s(3);
-        return;
+      case 18: {
+        auto v = r.f64s(3);
+        return std::to_string(v[0]) + "," + std::to_string(v[1]) + "," + std::to_string(v[2]);
+      }
       default:
         throw std::runtime_error("unknown legacy attribute type");
     }
@@ -588,6 +595,27 @@ void add_edge(GeometryBuilder& b, uint64_t s, const V& e,
   b.edges[s] = {EntityId(e.v1), EntityId(e.v2)};
   int f = (e.soft ? 8 : 0) | (e.smooth ? 16 : 0) | (e.hidden ? 1 : 0);
   if (f) b.edge_flags[s] = f;
+}
+
+// SketchUp's Dynamic Components extension stores its data in an attribute
+// dictionary literally named "dynamic_attributes" - a stable, publicly
+// documented part of the SketchUp Ruby API
+// (Entity#attribute_dictionary("dynamic_attributes")). CAttributeContainer/
+// CAttributeNamed reading above already fully decodes an entity's
+// attribute dictionaries for other purposes (CFaceTextureCoords lookup on
+// faces) - this just looks up that one dictionary by name, mirroring what
+// the VFF path's dynamic-properties extraction does for D007/DC05 TLV
+// data.
+std::map<std::string, std::string> extract_legacy_dynamic_properties(
+    std::optional<uint64_t> attrs_slot, const std::unordered_map<uint64_t, Entry>& slots) {
+  if (!attrs_slot) return {};
+  auto ai = slots.find(*attrs_slot);
+  if (ai == slots.end() || !ai->second.v) return {};
+  for (auto& ent : ai->second.v->ents) {
+    auto& ev = std::get<2>(ent);
+    if (ev && ev->k == "dict" && ev->name == "dynamic_attributes") return ev->entries;
+  }
+  return {};
 }
 
 void fill(GeometryBuilder& b,
@@ -651,6 +679,7 @@ void fill(GeometryBuilder& b,
       if (v->mat) i.material_id = v->mat;
       if (v->layer) i.layer = std::to_string(v->layer);
       i.hidden = v->hidden != 0;
+      i.properties = extract_legacy_dynamic_properties(v->attrs, slots);
       b.instances.push_back(std::move(i));
     }
   }

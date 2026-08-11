@@ -110,6 +110,18 @@ TEST(Parser, LegacyMatchesReference) {
   // Legacy (pre-2021 MFC) files carry no meta/meta.dat container, so there
   // is no known source for the model's unit-system string.
   EXPECT_FALSE(model.units.has_value());
+  // Legacy instances now carry their already-parsed CAttributeContainer
+  // through to the public model (previously read off the wire, correctly
+  // advancing the cursor, then discarded). This fixture (a plain chapel
+  // model) has no Dynamic Component data on any instance - confirmed by
+  // direct inspection before writing the fix - so this proves the
+  // plumbing doesn't crash or silently drop instances, not the
+  // dynamic_attributes dictionary lookup itself (which has no legacy
+  // fixture available to exercise end-to-end).
+  for (const auto& kv : model.definitions) {
+    for (const auto& inst : kv.second.instances) EXPECT_TRUE(inst.properties.empty());
+  }
+  for (const auto& inst : model.root().instances) EXPECT_TRUE(inst.properties.empty());
   ASSERT_EQ(model.definitions.size(), 2);
 
   const auto& puerta = model.definitions.at(40);
