@@ -175,4 +175,43 @@ describe('Legacy MFC reader (classic pre-2021 .skp)', () => {
       }
     }
   });
+
+  it('renders back-face materials correctly (item 14 regression)', () => {
+    // Faces with genuinely different front/back materials must produce two
+    // correctly-colored, correctly-wound single-sided primitives (not one
+    // primitive using only the front material, and not a hidden/invisible
+    // back side). Faces 133/152 in this fixture's puerta definition are a
+    // real, concrete example: front material 29 (a blue, (2, 0, 237)),
+    // back material 27 (a light blue, (204, 235, 244)) - confirmed by
+    // direct inspection before writing this test.
+    const arrayBuffer = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
+    const scene = buildScene(arrayBuffer);
+
+    const hasColor = (r: number, g: number, b: number) =>
+      scene.gltfMaterials.some((m: any) => {
+        const c = m.pbrMetallicRoughness.baseColorFactor;
+        return (
+          Math.abs(c[0] - r / 255) < 1e-6 &&
+          Math.abs(c[1] - g / 255) < 1e-6 &&
+          Math.abs(c[2] - b / 255) < 1e-6
+        );
+      });
+
+    expect(hasColor(2, 0, 237)).toBe(true);
+    expect(hasColor(204, 235, 244)).toBe(true);
+
+    // Faces whose front/back colors coincide (or have no back material at
+    // all) are emitted once with doubleSided=true instead of being split -
+    // confirmed count from direct inspection of this fixture.
+    const doubleSidedCount = scene.gltfMaterials.filter((m: any) => m.doubleSided).length;
+    expect(doubleSidedCount).toBe(4);
+
+    // Full scene counts: matches C++'s independently-verified reference
+    // for this exact fixture (parser_test.cpp) - 21 primitives/mesh
+    // entries instead of the pre-fix 13, since 30 faces in this fixture
+    // now correctly split into two single-sided primitives each.
+    expect(scene.glbPrimitives.length).toBe(21);
+    expect(Object.keys(scene.meshIndex).length).toBe(21);
+    expect(scene.gltfMaterials.length).toBe(13);
+  });
 });
