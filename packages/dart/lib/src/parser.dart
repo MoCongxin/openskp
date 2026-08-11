@@ -67,9 +67,10 @@ class SkpFile {
       ..units = parsed.units;
 
     for (final entry in parsed.defsDict.entries) {
-      model.definitions[entry.key] = _buildDefinition(entry.key, entry.value);
+      model.definitions[entry.key] =
+          _buildDefinition(entry.key, entry.value, parsed.layerIdToName);
     }
-    model.root = _buildDefinition(0, parsed.root);
+    model.root = _buildDefinition(0, parsed.root, parsed.layerIdToName);
 
     for (final entry in parsed.layerColors.entries) {
       final (r, g, b) = entry.value;
@@ -119,7 +120,8 @@ class SkpFile {
     return model;
   }
 
-  static Definition _buildDefinition(int defId, RawDefinition d) {
+  static Definition _buildDefinition(
+      int defId, RawDefinition d, Map<int, String> layerIdToName) {
     final defn = Definition(
       id: defId,
       guid: d.guid ?? '',
@@ -163,6 +165,7 @@ class SkpFile {
     }
 
     for (final inst in d.builder.instances) {
+      final layerId = inst.layerId;
       defn.instances.add(Instance(
         name: inst.name ?? '',
         refIdx: inst.refIdx,
@@ -170,6 +173,8 @@ class SkpFile {
         matrix: inst.matrix,
         materialId: inst.materialId,
         hidden: inst.hidden,
+        layer: layerId != null ? (layerIdToName[layerId] ?? '') : '',
+        properties: inst.properties ?? const {},
       ));
     }
 

@@ -83,6 +83,23 @@ TEST(Parser, ModernUntitled) {
   EXPECT_EQ(model.styles[0].name, "[Construction Documentation Style]");
   EXPECT_EQ(model.styles[0].front_color, (Color3{255, 255, 255}));
   EXPECT_EQ(model.styles[0].back_color, (Color3{208, 209, 189}));
+
+  // Instance layer/properties (item 17): populated from each instance's
+  // own D207 (layer override)/DC05 (dynamic properties) TLV children -
+  // C++ was already correct here (the reference the other 4 languages
+  // were ported to match). Cross-checked directly against Python's/
+  // Dart's/.NET's independent parses of this same fixture.
+  const auto batten =
+      std::find_if(model.root().instances.begin(), model.root().instances.end(),
+                   [](const Instance& i) { return i.name == "BattenHatSection_1"; });
+  ASSERT_NE(batten, model.root().instances.end());
+  EXPECT_EQ(batten->layer, "Hat Sections");
+
+  const auto w1 = std::find_if(model.root().instances.begin(), model.root().instances.end(),
+                               [](const Instance& i) { return i.name == "W1"; });
+  ASSERT_NE(w1, model.root().instances.end());
+  EXPECT_EQ(w1->properties.at("generator"), "SteelFramer::Engine::PanelGenerator");
+  EXPECT_EQ(w1->properties.at("profile"), "362S200-43");
 }
 
 TEST(Parser, ModernRootOnly) {

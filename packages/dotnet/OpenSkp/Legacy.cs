@@ -1289,6 +1289,7 @@ namespace OpenSkp
                         Matrix = instRec.Xf.ToList(),
                         MaterialId = instRec.Db.Mat != 0 ? instRec.Db.Mat : (long?)null,
                         Hidden = instRec.Db.Hidden != 0,
+                        LayerId = instRec.Db.Layer != 0 ? instRec.Db.Layer : (long?)null,
                         Children = new List<TlvNode>(),
                         Properties = LegacyReaders.ExtractLegacyDynamicProperties(instRec.Attrs),
                     });

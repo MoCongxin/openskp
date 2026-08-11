@@ -93,6 +93,20 @@ namespace OpenSkp.Tests
             Assert.False(firstEdge.Smooth);
             Assert.False(firstEdge.Hidden);
 
+            // Instance Layer/Properties (item 17): previously always ""
+            // / {} - declared but never assigned. Now genuinely
+            // populated from each instance's own D207 (layer
+            // override)/DC05 (dynamic properties) TLV children, matching
+            // C++'s existing behavior. Cross-checked directly against
+            // Python's independent parse of this same fixture.
+            var battens = model.Root.Instances.Where(i => i.Name == "BattenHatSection_1").ToList();
+            Assert.NotEmpty(battens);
+            Assert.Equal("Hat Sections", battens[0].Layer);
+            var w1 = model.Root.Instances.Where(i => i.Name == "W1").ToList();
+            Assert.NotEmpty(w1);
+            Assert.Equal("SteelFramer::Engine::PanelGenerator", w1[0].Properties["generator"]);
+            Assert.Equal("362S200-43", w1[0].Properties["profile"]);
+
             Assert.False(def66.IsImage);
             Assert.False(def66.AlwaysFacesCamera);
 

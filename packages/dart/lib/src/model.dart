@@ -142,9 +142,16 @@ class Instance {
   /// (empty when the entity carried none).
   final List<double> matrix;
 
+  /// This instance's own explicit layer override, or "" when it has
+  /// none. An instance without an explicit override inherits its
+  /// *placement's* layer, which can only be resolved once the scene
+  /// graph is flattened - see SkpFile.buildScene()'s InstanceNode.layer
+  /// for that resolved value.
   final String layer;
+
+  /// Arbitrary key/value dynamic attributes attached directly to this
+  /// instance (SketchUp's Dynamic Components).
   final Map<String, String> properties;
-  final List<Instance> children;
   final int? materialId;
 
   /// Whether the instance itself is hidden (SketchUp's "Hide" on this
@@ -159,7 +166,6 @@ class Instance {
     this.matrix = const [],
     this.layer = '',
     this.properties = const {},
-    this.children = const [],
     this.materialId,
     this.hidden = false,
   });

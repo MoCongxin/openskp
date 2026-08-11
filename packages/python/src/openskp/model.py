@@ -272,9 +272,14 @@ class Instance:
         guid: Globally-unique identifier string.
         matrix: 4×4 transformation matrix stored as a flat 16-element list
             in **column-major** order.
-        layer: Layer name this instance belongs to.
-        properties: Arbitrary key/value dynamic attributes.
-        children: Nested child instances forming a subtree.
+        layer: This instance's own explicit layer override, or ``""``
+            when it has none. An instance without an explicit override
+            inherits its *placement's* layer, which can only be resolved
+            once the scene graph is flattened - see
+            :meth:`SkpFile.build_scene`'s ``InstanceNode.layer`` for that
+            resolved value.
+        properties: Arbitrary key/value dynamic attributes attached
+            directly to this instance (SketchUp's Dynamic Components).
         material_id: Numeric material ID painted onto the instance itself
             (SketchUp's "paint the component"), or ``None``.  Faces inside
             the placed definition whose own :attr:`Face.material_id` is
@@ -296,7 +301,6 @@ class Instance:
     ])
     layer: str = ""
     properties: Dict[str, str] = field(default_factory=dict)
-    children: List["Instance"] = field(default_factory=list)
     material_id: Optional[int] = None
     hidden: bool = False
 
@@ -455,6 +459,8 @@ class SkpFile:
         model.version = parsed.get("version", "unknown")
         model.units = parsed.get("units")
 
+        layer_id_to_name = parsed.get("layer_id_to_name", {})
+
         # Convert defs_dict to Definition dataclasses
         for def_id, d in parsed["defs_dict"].items():
             builder = d["builder"]
@@ -492,6 +498,7 @@ class SkpFile:
                 )
             # Populate instances
             for inst in builder.instances:
+                layer_id = inst.get("layer_id")
                 defn.instances.append(Instance(
                     name=inst.get("name", "") or "",
                     ref_idx=inst.get("ref_idx"),
@@ -499,6 +506,8 @@ class SkpFile:
                     matrix=inst.get("matrix", []),
                     material_id=inst.get("material_id"),
                     hidden=inst.get("hidden", False),
+                    layer=layer_id_to_name.get(layer_id, "") if layer_id is not None else "",
+                    properties=inst.get("properties", {}),
                 ))
             if def_id == "ROOT":
                 model.root = defn

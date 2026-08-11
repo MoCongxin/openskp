@@ -28,10 +28,16 @@ class GeometryBuilderInstance {
   int? materialId;
   bool hidden = false;
   List<TlvNode> children = const [];
-  /// Dynamic Component properties precomputed for legacy (pre-2021 MFC)
-  /// instances (see legacy.dart's extractLegacyDynamicProperties) - VFF
-  /// instances don't set this, since their properties come from a lazy
-  /// D007/DC05 TLV walk over [children] instead (see scene.dart).
+  /// This instance's own explicit layer override (unresolved numeric
+  /// TLV ID), or null when it has none - an instance without one
+  /// inherits its *placement's* layer, only resolvable once the scene
+  /// graph is flattened (see scene.dart's InstanceNode.layer).
+  int? layerId;
+  /// Dynamic Component key/value properties attached directly to this
+  /// instance - populated eagerly here for both legacy (pre-2021 MFC,
+  /// via legacy.dart's extractLegacyDynamicProperties) and VFF
+  /// instances (via extractDynamicProperties on this instance's own
+  /// D007/DC05 children).
   Map<String, String>? properties;
 }
 
@@ -371,6 +377,8 @@ class Geometry {
 
         int? instMatId;
         var instHidden = false;
+        int? instLayerId;
+        Map<String, String>? instProperties;
         final instD007 = el.children.where((c) => c.tag == 'D007').firstOrNull;
         if (instD007 != null) {
           final d107 =
@@ -378,6 +386,12 @@ class Geometry {
           if (d107 != null) {
             instMatId = Tlv.parseVarInt(d107.payload, 0, d107.payload.length);
           }
+          final d207 =
+              instD007.children.where((c) => c.tag == 'D207').firstOrNull;
+          if (d207 != null && d207.payload.isNotEmpty) {
+            instLayerId = Tlv.parseVarInt(d207.payload, 0, d207.payload.length);
+          }
+          instProperties = extractDynamicProperties(instD007);
           // D307 = display flags, same record edges/faces already read
           // (base 0x06, +0x01 hidden).
           final instD307 =
@@ -395,6 +409,8 @@ class Geometry {
           ..matrix = matrix
           ..materialId = instMatId
           ..hidden = instHidden
+          ..layerId = instLayerId
+          ..properties = instProperties
           ..children = el.children);
       } else if (el.children.isNotEmpty) {
         extractGeometryFromNodes(el.children, builder);
