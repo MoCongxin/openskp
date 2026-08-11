@@ -671,7 +671,11 @@ export function buildSceneFromParsed(parsed: ParsedRawData, options?: ParseOptio
 
       let lName = parentLayer;
       let instColor = inheritedMaterialColor;
-      let properties: Record<string, string> = {};
+      // Legacy (pre-2021 MFC) instances carry a precomputed `properties`
+      // record (see legacy.ts's extractLegacyDynamicProperties) - VFF
+      // instances don't set this, so this stays {} for them and gets
+      // overwritten below via the D007/DC05 TLV walk instead.
+      let properties: Record<string, string> = { ...(inst.properties || {}) };
 
       // Layer and instance-material resolution use the fields already
       // extracted onto the builder instance (same source data for VFF -
@@ -691,9 +695,9 @@ export function buildSceneFromParsed(parsed: ParsedRawData, options?: ParseOptio
         }
       }
 
-      // Dynamic properties are TLV-specific (no legacy equivalent decoded
-      // yet); inst.children is empty for legacy instances, so this is a
-      // no-op there.
+      // D007/DC05 TLV walk (VFF only); inst.children is always empty for
+      // legacy instances, so this is a no-op there and the precomputed
+      // `properties` seeded above survives unchanged.
       const d007 = inst.children.find((c) => c.tag === 'D007');
       if (d007) {
         try {
