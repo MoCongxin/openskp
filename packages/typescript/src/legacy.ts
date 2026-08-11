@@ -1006,6 +1006,7 @@ function fillBuilder(builder: LegacyBuilder, ents: [number, string | null, any][
         uvTransformBack: null,
         uvProjected: false,
         uvProjectedBack: false,
+        hidden: Boolean(v.db.hidden),
       };
       const attrs = v.attrs;
       if (attrs && typeof attrs === 'object') {
@@ -1028,6 +1029,7 @@ function fillBuilder(builder: LegacyBuilder, ents: [number, string | null, any][
         matrix: [...v.xf],
         materialId: v.db.mat || null,
         layerId: v.db.layer || null,
+        hidden: Boolean(v.db.hidden),
         children: [],
       });
     }

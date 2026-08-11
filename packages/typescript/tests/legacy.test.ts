@@ -124,6 +124,14 @@ describe('Legacy MFC reader (classic pre-2021 .skp)', () => {
       .map((i) => model.definitions.get(i.refIdx)?.name)
       .sort();
     expect(rootRefNames).toEqual(['grada', 'grada', 'puerta']);
+    for (const inst of model.root.instances) {
+      expect(inst.hidden).toBe(false);
+    }
+    for (const def of model.definitions.values()) {
+      for (const face of def.faces) {
+        expect(face.hidden).toBe(false);
+      }
+    }
   });
 
   it('gives every baked primitive valid uv coordinates alongside positions/normals', () => {
