@@ -22,6 +22,7 @@ namespace OpenSkp.Tests
             var model = SkpFile.Open(FixturePath("Untitled.skp"));
 
             Assert.Equal("{25.0.575}", model.Version);
+            Assert.Equal("Millimeter", model.Units);
 
             Assert.Equal(14, model.Layers.Count);
             var expectedLayers = new[]

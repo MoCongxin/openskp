@@ -19,7 +19,7 @@ namespace OpenSkp
         {
             var parsed = Core.FullParse(buffer, options);
 
-            var model = new SkpModel { Version = parsed.Version };
+            var model = new SkpModel { Version = parsed.Version, Units = parsed.Units };
 
             foreach (var kv in parsed.DefsDict)
             {

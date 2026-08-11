@@ -1394,6 +1394,11 @@ namespace OpenSkp
             return new Core.RawParsed
             {
                 Version = version,
+                // Legacy (pre-2021 MFC) files carry no meta/meta.dat
+                // container - that's a VFF/ZIP-only construct - so there
+                // is no known source for the model's unit-system string
+                // here.
+                Units = null,
                 LayerColors = layerColors,
                 LayerHidden = layerHidden,
                 LayerIdToName = layerIdToName,
