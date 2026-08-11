@@ -532,6 +532,46 @@ def extract_dynamic_properties(d007):
     return properties
 
 
+# ── ZIP entry size validation ────────────────────────────────────────────
+
+# A ZIP entry's declared uncompressed size (ZipInfo.file_size) is
+# untrusted central-directory metadata: it can be set independently of
+# what the compressed stream actually decompresses to, and even when
+# genuine, DEFLATE can expand highly compressible data by three orders of
+# magnitude. zipfile.ZipFile.read() decompresses (and so allocates) up to
+# that declared size with no ceiling of its own. Real production
+# model.dat entries are observed at ~10x compression, so both limits below
+# leave generous headroom for legitimate files while rejecting the kind
+# of declared-size lie or extreme ratio a genuine file would never need.
+_MAX_UNCOMPRESSED_ENTRY_BYTES = 16 * 1024 ** 3  # 16 GB
+_MAX_COMPRESSION_RATIO = 1000
+_RATIO_CHECK_THRESHOLD_BYTES = 1024 ** 2  # 1 MB
+
+
+def _validate_zip_entry_size(zf: "zipfile.ZipFile", name: str) -> None:
+    """Reject a ZIP entry whose declared uncompressed size is implausible,
+    before any code reads (and so decompresses/allocates for) it."""
+    info = zf.getinfo(name)
+    declared = info.file_size
+    if declared <= 0:
+        return
+    if declared > _MAX_UNCOMPRESSED_ENTRY_BYTES:
+        raise SkpParseError(
+            f"ZIP entry '{name}' declares {declared} bytes uncompressed, "
+            f"exceeding the {_MAX_UNCOMPRESSED_ENTRY_BYTES}-byte safety ceiling",
+            stage="zip_extract",
+        )
+    if declared >= _RATIO_CHECK_THRESHOLD_BYTES:
+        compressed = info.compress_size
+        if compressed <= 0 or declared / compressed > _MAX_COMPRESSION_RATIO:
+            raise SkpParseError(
+                f"ZIP entry '{name}' declares an implausible compression ratio "
+                f"({declared} bytes from {compressed} bytes compressed) - "
+                "likely a decompression bomb",
+                stage="zip_extract",
+            )
+
+
 # ── Texture extraction ───────────────────────────────────────────────────
 
 def _extract_texture(zf, xml_name, mat_elem, ns):
@@ -571,6 +611,7 @@ def _extract_texture(zf, xml_name, mat_elem, ns):
     candidate = folder + '/' + filename if filename else None
     names = zf.namelist()
     if candidate and candidate in names:
+        _validate_zip_entry_size(zf, candidate)
         data = zf.read(candidate)
     else:
         # Image name may differ from textureFilename (observed: e.g.
@@ -578,6 +619,7 @@ def _extract_texture(zf, xml_name, mat_elem, ns):
         for entry in names:
             if (entry.startswith(folder + '/') and entry != xml_name
                     and not entry.lower().endswith('.xml')):
+                _validate_zip_entry_size(zf, entry)
                 data = zf.read(entry)
                 if not filename:
                     filename = entry.rsplit('/', 1)[-1]
@@ -591,6 +633,7 @@ def _extract_texture(zf, xml_name, mat_elem, ns):
         img_path = img_path.lstrip('./')
         for cand in (img_path, folder + '/' + img_path):
             if cand and cand in names:
+                _validate_zip_entry_size(zf, cand)
                 data = zf.read(cand)
                 if not filename:
                     filename = cand.rsplit('/', 1)[-1]
@@ -666,6 +709,7 @@ def full_parse(skp_path: str) -> Dict[str, Any]:
     MAT_NS = {'mat': 'http://sketchup.google.com/schemas/sketchup/1.0/material'}
     for name in zf.namelist():
         if name.endswith('material.xml') and name.startswith('materials/'):
+            _validate_zip_entry_size(zf, name)
             xml_data = zf.read(name)
             try:
                 root = ET.fromstring(xml_data)
@@ -714,6 +758,7 @@ def full_parse(skp_path: str) -> Dict[str, Any]:
     # Thumbnail
     thumbnail_data = None
     if 'meta/model_thumbnail.png' in zf.namelist():
+        _validate_zip_entry_size(zf, 'meta/model_thumbnail.png')
         thumbnail_data = zf.read('meta/model_thumbnail.png')
 
     # Styles: face colors live in styles/*/style.xml as signed-int32 ARGB
@@ -726,6 +771,7 @@ def full_parse(skp_path: str) -> Dict[str, Any]:
         if not (name.startswith('styles/') and name.endswith('style.xml')):
             continue
         try:
+            _validate_zip_entry_size(zf, name)
             sroot = ET.fromstring(zf.read(name))
         except ET.ParseError:
             continue
@@ -750,6 +796,7 @@ def full_parse(skp_path: str) -> Dict[str, Any]:
 
     logger.debug("Parsed %d materials, %d styles", len(materials), len(styles))
 
+    _validate_zip_entry_size(zf, 'model.dat')
     model_dat = zf.read('model.dat')
     zf.close()
     logger.debug("Read model.dat: %d bytes", len(model_dat))
