@@ -624,7 +624,7 @@ def _read_definition(ar, r):
 
 def _read_instance(ar, r):
     cls = ar.current_class
-    _preamble(ar, r)
+    pre = _preamble(ar, r)
     db = _drawbase(ar, r)
     ds, dn, _ = ar.read_object(r, expect='CComponentDefinition')
     if dn != 'CComponentDefinition':
@@ -641,7 +641,7 @@ def _read_instance(ar, r):
     else:
         guid = b''
     return {'k': 'instance', 'db': db, 'def': ds, 'xf': xf,
-            'name': name, 'guid': guid.hex().upper()}
+            'name': name, 'guid': guid.hex().upper(), 'attrs': pre['attrs']}
 
 
 _READERS = {
@@ -829,6 +829,46 @@ def _walk_model(data: bytes, ver: int, start: int, mat_count: int,
     return ar, root, layers, materials
 
 
+# ── legacy dynamic-component properties ─────────────────────────────────
+
+# SketchUp's Dynamic Components extension stores its data in an attribute
+# dictionary literally named "dynamic_attributes" - a stable, publicly
+# documented part of the SketchUp Ruby API
+# (Entity#attribute_dictionary("dynamic_attributes")). The legacy walker
+# already fully decodes an entity's CAttributeContainer into typed
+# (dict-name, {key: value}) pairs via _read_attr_container/_read_attr_named
+# for other purposes (CFaceTextureCoords lookup) - this just looks up that
+# one dictionary by name, mirroring what the VFF path's
+# _core.extract_dynamic_properties() does for D007/DC05 TLV data.
+_DYNAMIC_ATTRIBUTES_DICT_NAME = 'dynamic_attributes'
+
+
+def _stringify_attr_value(value):
+    """Render an already-typed legacy attribute value (int, float, str,
+    list, 3-tuple, or None) as a string, matching the string-valued
+    Dict[str, str] contract the VFF path's extract_dynamic_properties()
+    produces."""
+    if value is None:
+        return ''
+    if isinstance(value, (list, tuple)):
+        return ','.join(_stringify_attr_value(v) for v in value)
+    return str(value)
+
+
+def _extract_legacy_dynamic_properties(attrs):
+    """Extract Dynamic Component attribute key/value pairs from a legacy
+    entity's already-parsed CAttributeContainer (see _DYNAMIC_ATTRIBUTES_
+    DICT_NAME above), or {} when the entity carries no attribute
+    container or no dynamic_attributes dictionary."""
+    if not isinstance(attrs, dict):
+        return {}
+    for name, value in attrs.get('children', []):
+        if name == _DYNAMIC_ATTRIBUTES_DICT_NAME and isinstance(value, dict):
+            entries = value.get('entries', {})
+            return {k: _stringify_attr_value(v) for k, v in entries.items()}
+    return {}
+
+
 # ── adapter to the full_parse dict shape ────────────────────────────────
 
 class _Builder:
@@ -881,7 +921,8 @@ def _fill_builder(builder, ents, slots):
                 'material_id': v['db']['mat'] or None,
                 'layer_id': v['db']['layer'] or None,
                 'hidden': bool(v['db']['hidden']),
-                'children': []})
+                'children': [],
+                'properties': _extract_legacy_dynamic_properties(v.get('attrs'))})
 
 
 def _add_edge(builder, slot, e, slots):

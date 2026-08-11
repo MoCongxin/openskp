@@ -1451,6 +1451,89 @@ class TestLegacyRealFile:
         assert all(isinstance(k, int) for k in model.definitions)
 
 
+class TestLegacyDynamicProperties:
+    """Legacy (pre-2021 MFC) instances now carry their already-parsed
+    ``CAttributeContainer`` through to ``build_scene()``, instead of it
+    being read (advancing the byte cursor correctly) and then silently
+    discarded. ``_read_instance`` was calling ``_preamble(ar, r)`` and
+    dropping its return value - the exact same "already-decoded-but-
+    discarded" shape as the Tier 2 layer/face/instance-hidden fixes, just
+    one level deeper (a whole sub-object tree instead of a single byte).
+
+    SketchUp's Dynamic Components extension stores its data under a
+    dictionary literally named ``"dynamic_attributes"`` (stable, publicly
+    documented Ruby API: ``Entity#attribute_dictionary("dynamic_attributes")``
+    - not something reverse-engineered from a fixture). The real legacy
+    fixture available in this repo (``capilla_quiroz_v17.skp``, a plain
+    chapel model) has no Dynamic Component data at all - confirmed by
+    direct inspection: none of its 3 instances carry an attribute
+    container of any kind - so the dictionary-lookup logic itself can only
+    be verified with synthetic data here; the real fixture instead proves
+    the plumbing fix doesn't break or crash on entities that render no
+    attributes.
+    """
+
+    def test_stringify_scalar_values(self) -> None:
+        from openskp.legacy import _stringify_attr_value
+        assert _stringify_attr_value(None) == ""
+        assert _stringify_attr_value(42) == "42"
+        assert _stringify_attr_value(3.5) == "3.5"
+        assert _stringify_attr_value("width") == "width"
+
+    def test_stringify_list_and_tuple_values(self) -> None:
+        from openskp.legacy import _stringify_attr_value
+        assert _stringify_attr_value([1, 2, 3]) == "1,2,3"
+        assert _stringify_attr_value((1.0, 2.0, 3.0)) == "1.0,2.0,3.0"
+
+    def test_extracts_dynamic_attributes_dict_by_name(self) -> None:
+        from openskp.legacy import _extract_legacy_dynamic_properties
+        attrs = {
+            "k": "attrs",
+            "children": [
+                ("SU_DefinitionSet", {"k": "dict", "name": "SU_DefinitionSet", "entries": {"unrelated": 1}}),
+                ("dynamic_attributes", {
+                    "k": "dict", "name": "dynamic_attributes",
+                    "entries": {"width": 10.0, "_width_label": "Width", "count": 4},
+                }),
+            ],
+        }
+        props = _extract_legacy_dynamic_properties(attrs)
+        assert props == {"width": "10.0", "_width_label": "Width", "count": "4"}
+
+    def test_returns_empty_dict_when_no_dynamic_attributes_dict(self) -> None:
+        from openskp.legacy import _extract_legacy_dynamic_properties
+        attrs = {"k": "attrs", "children": [
+            ("SU_DefinitionSet", {"k": "dict", "name": "SU_DefinitionSet", "entries": {"a": 1}}),
+        ]}
+        assert _extract_legacy_dynamic_properties(attrs) == {}
+
+    def test_returns_empty_dict_for_no_attribute_container(self) -> None:
+        from openskp.legacy import _extract_legacy_dynamic_properties
+        assert _extract_legacy_dynamic_properties(None) == {}
+
+    import pathlib as _pathlib
+
+    FIXTURE = _pathlib.Path(__file__).parent / "fixtures" / "capilla_quiroz_v17.skp"
+
+    def test_real_legacy_fixture_wires_through_without_crashing(self) -> None:
+        if not self.FIXTURE.exists():
+            pytest.skip("legacy fixture not present")
+        from openskp.model import SkpFile
+        scene = SkpFile.open(str(self.FIXTURE)).build_scene()
+
+        def walk(node):
+            assert isinstance(node.properties, dict)
+            # This fixture carries no Dynamic Component data on any
+            # instance (verified by direct inspection of the raw
+            # CAttributeContainer reads) - properties stay empty, but the
+            # plumbing must not raise or silently drop the instance.
+            assert node.properties == {}
+            for child in node.children:
+                walk(child)
+
+        walk(scene.scene_hierarchy)
+
+
 # ── Scene baking (opt-in build_scene(), separate from parse()) ──────────
 
 
