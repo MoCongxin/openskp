@@ -430,7 +430,12 @@ def build_scene(parsed: Dict[str, Any]) -> Scene:
 
             l_name = parent_layer
             inst_color = inherited_color
-            properties: Dict[str, str] = {}
+            # Legacy (pre-2021 MFC) instances carry a precomputed
+            # "properties" dict (see legacy._extract_legacy_dynamic_
+            # properties) - VFF instances don't set this key at all, so
+            # this stays {} for them and gets overwritten below via the
+            # D007/DC05 TLV walk instead.
+            properties: Dict[str, str] = dict(inst.get("properties") or {})
 
             d007 = next((c for c in inst["children"] if c["tag"] == "D007"), None)
             if d007:
