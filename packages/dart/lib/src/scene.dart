@@ -503,8 +503,11 @@ class SceneBuilder {
           }
           try {
             properties = Geometry.extractDynamicProperties(d007);
-          } catch (_) {
-            // Ignore
+          } catch (e) {
+            emitLog(
+              options, SkpLogLevel.debug,
+              'Failed to extract dynamic properties for instance ${inst.name} (refIdx=$refIdx): $e',
+            );
           }
         }
 

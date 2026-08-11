@@ -1,4 +1,5 @@
 import { TlvNode, readF64, readU32, parseVarInt, parseTlvRecursive } from './parser';
+import { ParseOptions, emitLog } from './observability';
 
 export interface GeometryBuilderInstance {
   offset: number;
@@ -162,7 +163,8 @@ export function extractUvTransforms(
 
 export function extractGeometryFromNodes(
   elements: TlvNode[],
-  builder: GeometryBuilder
+  builder: GeometryBuilder,
+  options?: ParseOptions
 ): void {
   for (const el of elements) {
     const tag = el.tag;
@@ -310,8 +312,9 @@ export function extractGeometryFromNodes(
         try {
           const decoder = new TextDecoder('utf-8');
           name = decoder.decode(nameNode.payload).replace(/\0/g, '').trim();
-        } catch {
+        } catch (e) {
           name = '';
+          emitLog(options, 'debug', `Failed to decode instance name: ${(e as Error).message}`);
         }
       }
 
@@ -360,14 +363,15 @@ export function extractGeometryFromNodes(
         children: el.children,
       });
     } else if (el.children && el.children.length > 0) {
-      extractGeometryFromNodes(el.children, builder);
+      extractGeometryFromNodes(el.children, builder, options);
     }
   }
 }
 
 export function collectLayers(
   nodes: TlvNode[],
-  layerIdToName: Map<number, string> = new Map()
+  layerIdToName: Map<number, string> = new Map(),
+  options?: ParseOptions
 ): Map<number, string> {
   for (const el of nodes) {
     if (el.tag === '993A') {
@@ -388,8 +392,8 @@ export function collectLayers(
             try {
               const decoder = new TextDecoder('utf-8');
               lName = decoder.decode(nameNode.payload).replace(/\0/g, '').trim();
-            } catch {
-              // Ignore
+            } catch (e) {
+              emitLog(options, 'debug', `Failed to decode layer name for id ${lId}: ${(e as Error).message}`);
             }
             layerIdToName.set(lId, lName);
           }
@@ -397,7 +401,7 @@ export function collectLayers(
       }
     }
     if (el.children && el.children.length > 0) {
-      collectLayers(el.children, layerIdToName);
+      collectLayers(el.children, layerIdToName, options);
     }
   }
   return layerIdToName;
@@ -405,7 +409,8 @@ export function collectLayers(
 
 export function collectDefs(
   nodes: TlvNode[],
-  defsDict: Map<number | string, ParsedDefinition> = new Map()
+  defsDict: Map<number | string, ParsedDefinition> = new Map(),
+  options?: ParseOptions
 ): Map<number | string, ParsedDefinition> {
   for (const el of nodes) {
     if (el.tag === '7C15') {
@@ -425,8 +430,9 @@ export function collectDefs(
           try {
             const decoder = new TextDecoder('utf-8');
             name = decoder.decode(child.payload).replace(/\0/g, '').trim();
-          } catch {
+          } catch (e) {
             name = '';
+            emitLog(options, 'debug', `Failed to decode definition name: ${(e as Error).message}`);
           }
         } else if (child.tag === '8315' && child.payload.length > 0) {
           // Definition kind: observed 0/1 for ordinary component/group
@@ -451,7 +457,7 @@ export function collectDefs(
       const entId = extractEntityId(el);
       if (entId !== null) {
         const builder = new GeometryBuilder();
-        extractGeometryFromNodes(el.children, builder);
+        extractGeometryFromNodes(el.children, builder, options);
         defsDict.set(entId, {
           guid: guid || '',
           name: name || '',
@@ -462,13 +468,13 @@ export function collectDefs(
       }
     }
     if (el.children && el.children.length > 0) {
-      collectDefs(el.children, defsDict);
+      collectDefs(el.children, defsDict, options);
     }
   }
   return defsDict;
 }
 
-export function extractDynamicProperties(d007: TlvNode): Record<string, string> {
+export function extractDynamicProperties(d007: TlvNode, options?: ParseOptions): Record<string, string> {
   const dc05 = d007.children.find((c) => c.tag === 'DC05');
   if (!dc05) {
     return {};
@@ -498,16 +504,20 @@ export function extractDynamicProperties(d007: TlvNode): Record<string, string> 
         try {
           const decoder = new TextDecoder('utf-8');
           currentKey = decoder.decode(n.payload).replace(/\0/g, '').trim();
-        } catch {
+        } catch (e) {
           currentKey = null;
+          emitLog(options, 'debug', `Failed to decode dynamic property key: ${(e as Error).message}`);
         }
       } else if (tag === 'AD38' && currentKey) {
         try {
           const decoder = new TextDecoder('utf-8');
           const val = decoder.decode(n.payload).replace(/\0/g, '').trim();
           properties[currentKey] = val;
-        } catch {
-          // Ignore
+        } catch (e) {
+          emitLog(
+            options, 'debug',
+            `Failed to decode dynamic property value for key ${currentKey}: ${(e as Error).message}`
+          );
         }
         currentKey = null;
       }

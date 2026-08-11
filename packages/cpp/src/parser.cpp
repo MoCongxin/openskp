@@ -30,7 +30,7 @@ SkpModel SkpFile::parse(const ParseOptions& o) const { return parse_skp(data_, o
 
 Scene SkpFile::build_scene(const ParseOptions& o) const { return openskp::build_scene(data_, o); }
 
-SkpModel parse_skp(ByteBuffer b, const ParseOptions& o) { return build_model(full_parse(b, o)); }
+SkpModel parse_skp(ByteBuffer b, const ParseOptions& o) { return build_model(full_parse(b, o), o); }
 
 Scene build_scene(ByteBuffer b, const ParseOptions& o) {
   return build_scene_raw(full_parse(b, o), o);
