@@ -1,10 +1,10 @@
-#include <openskp/json_export.hpp>
-
 #include <cassert>
 #include <cstdio>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
+
+#include <openskp/json_export.hpp>
 
 namespace openskp {
 
@@ -323,7 +323,7 @@ JsonValue to_json(const SkpModel& model, const Scene* scene) {
 }
 
 void export_json(const SkpModel& model, const std::filesystem::path& output_path,
-                  const Scene* scene, int indent) {
+                 const Scene* scene, int indent) {
   auto json = to_json(model, scene);
   auto text = to_json_string(json, indent);
   std::ofstream out(output_path, std::ios::binary);
