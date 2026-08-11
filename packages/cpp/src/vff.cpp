@@ -22,6 +22,31 @@ std::string extract_version(const ByteBuffer& d) {
   return a != std::string::npos && b != std::string::npos ? s.substr(a, b - a + 1) : "unknown";
 }
 
+namespace {
+// meta/meta.dat uses the exact same low-level TLV framing as model.dat
+// (2-byte tag + 4-byte little-endian length + payload), but as one flat,
+// non-recursive record list wrapped in a single outer record (tag
+// 0x6400/"6400"). Tag 0x6D00/"6D00" carries the model's unit-system
+// string ("Millimeter" etc.) as plain text. Confirmed byte-for-byte
+// against a real fixture - never opened by any parser in this codebase
+// before.
+constexpr const char* kMetaWrapperTag = "6400";
+constexpr const char* kMetaUnitsTag = "6D00";
+}  // namespace
+
+// Extract the model's unit-system string from a VFF file's meta/meta.dat
+// contents, or nullopt if the expected tags aren't found.
+std::optional<std::string> read_meta_units(const ByteBuffer& meta_bytes) {
+  auto records = parse_flat(meta_bytes);
+  for (auto& [tag, body] : records) {
+    if (tag == kMetaWrapperTag) return read_meta_units(body);
+  }
+  for (auto& [tag, body] : records) {
+    if (tag == kMetaUnitsTag) return std::string(body.begin(), body.end());
+  }
+  return std::nullopt;
+}
+
 bool is_legacy(const ByteBuffer& d) {
   if (!valid_header(d)) return false;
   auto v = extract_version(d);

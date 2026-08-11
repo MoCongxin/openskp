@@ -125,6 +125,11 @@ struct Definition {
 class OPENSKP_EXPORT SkpModel {
  public:
   std::string version{"unknown"};
+  // The model's unit-system string (e.g. "Millimeter"), read from
+  // meta/meta.dat in modern (VFF) files. Unset for legacy (pre-2021 MFC)
+  // files, which carry no equivalent container, or when the tag isn't
+  // found.
+  std::optional<std::string> units;
   std::map<EntityId, Definition> definitions;
   std::vector<Layer> layers;
   std::deque<Material> materials;

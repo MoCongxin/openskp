@@ -662,6 +662,9 @@ RawParsed parse_legacy(const ByteBuffer& data, const ParseOptions& o) {
            "Parsing legacy MFC container (" + std::to_string(data.size()) + " bytes)");
   RawParsed out;
   out.version = extract_version(data);
+  // Legacy (pre-2021 MFC) files carry no meta/meta.dat container - that's
+  // a VFF/ZIP-only construct - so there is no known source for the
+  // model's unit-system string here (out.units stays unset).
   try {
     std::string ascii;
     for (size_t i = 0; i < std::min<size_t>(96, data.size()); ++i)

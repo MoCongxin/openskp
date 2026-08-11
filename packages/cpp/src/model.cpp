@@ -70,6 +70,7 @@ static Definition definition(EntityId id, RawDefinition&& r) {
 SkpModel build_model(RawParsed&& p) {
   SkpModel m;
   m.version = std::move(p.version);
+  m.units = std::move(p.units);
   auto resolve_layers = [&](RawDefinition& d) {
     for (auto& i : d.builder.instances)
       if (!i.layer.empty()) try {
