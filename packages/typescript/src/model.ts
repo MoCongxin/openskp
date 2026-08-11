@@ -581,7 +581,7 @@ export function buildSceneFromParsed(parsed: ParsedRawData, options?: ParseOptio
         }
       };
 
-      for (const [fId, fData] of builder.faces.entries()) {
+      for (const [_fId, fData] of builder.faces.entries()) {
         const fallbackColor = inheritedMaterialColor ?? getLayerColor(parentLayer);
 
         const frontMat = resolveMaterial((fData as any).materialId);
@@ -747,7 +747,7 @@ export function buildSceneFromParsed(parsed: ParsedRawData, options?: ParseOptio
       if (d007) {
         try {
           properties = extractDynamicProperties(d007);
-        } catch (e) {
+        } catch {
           // Ignore
         }
       }

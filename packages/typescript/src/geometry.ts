@@ -310,7 +310,7 @@ export function extractGeometryFromNodes(
         try {
           const decoder = new TextDecoder('utf-8');
           name = decoder.decode(nameNode.payload).replace(/\0/g, '').trim();
-        } catch (e) {
+        } catch {
           name = '';
         }
       }
@@ -388,7 +388,7 @@ export function collectLayers(
             try {
               const decoder = new TextDecoder('utf-8');
               lName = decoder.decode(nameNode.payload).replace(/\0/g, '').trim();
-            } catch (e) {
+            } catch {
               // Ignore
             }
             layerIdToName.set(lId, lName);
@@ -425,7 +425,7 @@ export function collectDefs(
           try {
             const decoder = new TextDecoder('utf-8');
             name = decoder.decode(child.payload).replace(/\0/g, '').trim();
-          } catch (e) {
+          } catch {
             name = '';
           }
         } else if (child.tag === '8315' && child.payload.length > 0) {
@@ -498,7 +498,7 @@ export function extractDynamicProperties(d007: TlvNode): Record<string, string> 
         try {
           const decoder = new TextDecoder('utf-8');
           currentKey = decoder.decode(n.payload).replace(/\0/g, '').trim();
-        } catch (e) {
+        } catch {
           currentKey = null;
         }
       } else if (tag === 'AD38' && currentKey) {
@@ -506,7 +506,7 @@ export function extractDynamicProperties(d007: TlvNode): Record<string, string> 
           const decoder = new TextDecoder('utf-8');
           const val = decoder.decode(n.payload).replace(/\0/g, '').trim();
           properties[currentKey] = val;
-        } catch (e) {
+        } catch {
           // Ignore
         }
         currentKey = null;
