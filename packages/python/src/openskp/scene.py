@@ -65,9 +65,11 @@ class MeshMetadata:
 
 @dataclass
 class GlbPrimitive:
-    """One triangulated, world-space mesh: all faces sharing a single
-    resolved color from one flattened scene-graph position. Ready to hand
-    straight to a GLB/glTF exporter or any other renderer.
+    """One triangulated, world-space mesh: all faces (or, for a face whose
+    front/back colors genuinely differ, all *one side* of those faces)
+    sharing a single resolved color from one flattened scene-graph
+    position. Ready to hand straight to a GLB/glTF exporter or any other
+    renderer.
 
     Attributes:
         positions: Flat [x, y, z, x, y, z, ...] vertex positions, in
@@ -213,7 +215,7 @@ def build_scene(parsed: Dict[str, Any]) -> Scene:
     mesh_index: Dict[str, MeshMetadata] = {}
     glb_primitives: List[GlbPrimitive] = []
 
-    color_to_material_index: Dict[Tuple[int, int, int], int] = {}
+    color_to_material_index: Dict[Tuple[Tuple[int, int, int], bool], int] = {}
     gltf_materials: List[Dict[str, Any]] = []
 
     # Definitions currently being instantiated on the active recursion
@@ -226,21 +228,23 @@ def build_scene(parsed: Dict[str, Any]) -> Scene:
     def get_layer_color(name: str) -> Tuple[int, int, int]:
         return layer_colors.get(name, (136, 136, 136))
 
-    def get_material_index(color: Tuple[int, int, int]) -> int:
-        if color in color_to_material_index:
-            return color_to_material_index[color]
+    def get_material_index(color: Tuple[int, int, int], double_sided: bool) -> int:
+        key = (color, double_sided)
+        if key in color_to_material_index:
+            return color_to_material_index[key]
         idx = len(gltf_materials)
         r, g, b = color
-        gltf_materials.append(
-            {
-                "pbrMetallicRoughness": {
-                    "baseColorFactor": [r / 255, g / 255, b / 255, 1.0],
-                    "metallicFactor": 0.0,
-                    "roughnessFactor": 0.8,
-                }
+        mat_dict: Dict[str, Any] = {
+            "pbrMetallicRoughness": {
+                "baseColorFactor": [r / 255, g / 255, b / 255, 1.0],
+                "metallicFactor": 0.0,
+                "roughnessFactor": 0.8,
             }
-        )
-        color_to_material_index[color] = idx
+        }
+        if double_sided:
+            mat_dict["doubleSided"] = True
+        gltf_materials.append(mat_dict)
+        color_to_material_index[key] = idx
         return idx
 
     def instantiate(
@@ -256,35 +260,107 @@ def build_scene(parsed: Dict[str, Any]) -> Scene:
         builder = d["builder"]
 
         if builder.faces:
-            # Group faces sharing a resolved color into one mesh each -
-            # same grouping the TS reference uses, to keep primitive count
-            # proportional to actual color variety rather than face count.
-            face_groups: Dict[Tuple[int, int, int], Dict[str, Any]] = {}
+            # Group faces sharing a resolved (color, double_sided) pair into
+            # one mesh each - same grouping the C++ reference uses (the only
+            # port that already had this before this port): a face whose
+            # front/back resolve to the SAME color is emitted once, with its
+            # glTF material marked doubleSided so it's visible from either
+            # side without needing duplicate geometry; a face whose
+            # front/back genuinely differ is emitted as TWO single-sided
+            # triangle sets - one normal-wound using the front material, one
+            # reverse-wound using the back material - so each side renders
+            # its own correct color instead of the front material leaking
+            # onto (or the back vanishing from) the far side.
+            face_groups: Dict[Tuple[Tuple[int, int, int], bool], Dict[str, Any]] = {}
 
-            for f_id, f_data in builder.faces.items():
-                face_color = inherited_color
-                face_mat_id = f_data.get("material_id")
-                mat = None
-                if face_mat_id is not None:
-                    mat_name = material_id_to_name.get(face_mat_id)
-                    mat = materials.get(mat_name) or materials_by_folder.get(mat_name)
-                    if mat:
-                        c = mat["color"]
-                        face_color = (c["r"], c["g"], c["b"])
-                if face_color is None:
-                    face_color = get_layer_color(parent_layer)
+            def resolve_material(mat_id: Optional[int]) -> Optional[Dict[str, Any]]:
+                if mat_id is None:
+                    return None
+                mat_name = material_id_to_name.get(mat_id)
+                return materials.get(mat_name) or materials_by_folder.get(mat_name)
 
-                group = face_groups.get(face_color)
+            def resolve_color(mat: Optional[Dict[str, Any]]) -> Optional[Tuple[int, int, int]]:
+                if mat is None:
+                    return None
+                c = mat["color"]
+                return (c["r"], c["g"], c["b"])
+
+            def add_side(
+                triangles,
+                fn: Tuple[float, float, float],
+                color: Tuple[int, int, int],
+                double_sided: bool,
+                reverse: bool,
+                mat: Optional[Dict[str, Any]],
+                uv_transform: Optional[Tuple[float, ...]],
+                xr: Tuple[float, float, float],
+                yr: Tuple[float, float, float],
+            ) -> None:
+                key = (color, double_sided)
+                group = face_groups.get(key)
                 if group is None:
                     group = {
-                        "color": face_color,
+                        "color": color,
+                        "double_sided": double_sided,
                         "local_verts": [],
                         "local_uvs": [],
                         "normals_accum": [],
                         "local_faces": [],
                         "local_v_map": {},
                     }
-                    face_groups[face_color] = group
+                    face_groups[key] = group
+
+                tex = mat.get("texture") if mat else None
+                tile_w = tex.get("x_scale") if tex else None
+                tile_h = tex.get("y_scale") if tex else None
+                tile_w = tile_w if tile_w and tile_w > 1e-9 else 1.0
+                tile_h = tile_h if tile_h and tile_h > 1e-9 else 1.0
+
+                side_normal = (-fn[0], -fn[1], -fn[2]) if reverse else fn
+
+                # Vertices are deduped per (v_id, uv) rather than just
+                # v_id: UVs are inherently per-face, so a vertex position
+                # shared by two faces that disagree on texture mapping
+                # must become two distinct output vertices (glTF requires
+                # position/normal/uv aligned per index).
+                face_local_map: Dict[int, int] = {}
+                for tri in triangles:
+                    tri_ids = list(tri)
+                    if reverse:
+                        tri_ids[1], tri_ids[2] = tri_ids[2], tri_ids[1]
+                    face_indices = []
+                    for v_id in tri_ids:
+                        if v_id not in builder.vertices:
+                            continue
+                        idx = face_local_map.get(v_id)
+                        if idx is None:
+                            p = builder.vertices[v_id]
+                            u, v = _compute_face_uv(p, xr, yr, uv_transform, tile_w, tile_h)
+                            vkey = (v_id, u, v)
+                            idx = group["local_v_map"].get(vkey)
+                            if idx is None:
+                                group["local_verts"].append(p)
+                                group["local_uvs"].append((u, v))
+                                group["normals_accum"].append([side_normal[0], side_normal[1], side_normal[2]])
+                                idx = len(group["local_verts"]) - 1
+                                group["local_v_map"][vkey] = idx
+                            else:
+                                accum = group["normals_accum"][idx]
+                                accum[0] += side_normal[0]
+                                accum[1] += side_normal[1]
+                                accum[2] += side_normal[2]
+                            face_local_map[v_id] = idx
+                        face_indices.append(idx)
+                    if len(face_indices) == 3:
+                        group["local_faces"].append(face_indices)
+
+            for f_id, f_data in builder.faces.items():
+                fallback_color = inherited_color if inherited_color is not None else get_layer_color(parent_layer)
+
+                front_mat = resolve_material(f_data.get("material_id"))
+                back_mat = resolve_material(f_data.get("back_material_id"))
+                front_color = resolve_color(front_mat) or fallback_color
+                back_color = resolve_color(back_mat) or fallback_color
 
                 loops = []
                 for loop in f_data["loops"]:
@@ -303,48 +379,18 @@ def build_scene(parsed: Dict[str, Any]) -> Scene:
                     ) from e
 
                 fn = f_data["normal"]
-                tex = mat.get("texture") if mat else None
-                tile_w = tex.get("x_scale") if tex else None
-                tile_h = tex.get("y_scale") if tex else None
-                tile_w = tile_w if tile_w and tile_w > 1e-9 else 1.0
-                tile_h = tile_h if tile_h and tile_h > 1e-9 else 1.0
                 xr, yr = _face_uv_basis(fn)
-                uv_transform = f_data.get("uv_transform")
 
-                # Vertices are deduped per (v_id, uv) rather than just
-                # v_id: UVs are inherently per-face, so a vertex position
-                # shared by two faces that disagree on texture mapping
-                # must become two distinct output vertices (glTF requires
-                # position/normal/uv aligned per index).
-                face_local_map: Dict[int, int] = {}
-                for tri in triangles:
-                    face_indices = []
-                    for v_id in tri:
-                        if v_id not in builder.vertices:
-                            continue
-                        idx = face_local_map.get(v_id)
-                        if idx is None:
-                            p = builder.vertices[v_id]
-                            u, v = _compute_face_uv(p, xr, yr, uv_transform, tile_w, tile_h)
-                            key = (v_id, u, v)
-                            idx = group["local_v_map"].get(key)
-                            if idx is None:
-                                group["local_verts"].append(p)
-                                group["local_uvs"].append((u, v))
-                                group["normals_accum"].append([fn[0], fn[1], fn[2]])
-                                idx = len(group["local_verts"]) - 1
-                                group["local_v_map"][key] = idx
-                            else:
-                                accum = group["normals_accum"][idx]
-                                accum[0] += fn[0]
-                                accum[1] += fn[1]
-                                accum[2] += fn[2]
-                            face_local_map[v_id] = idx
-                        face_indices.append(idx)
-                    if len(face_indices) == 3:
-                        group["local_faces"].append(face_indices)
+                if front_color == back_color:
+                    add_side(triangles, fn, front_color, True, False, front_mat,
+                              f_data.get("uv_transform"), xr, yr)
+                else:
+                    add_side(triangles, fn, front_color, False, False, front_mat,
+                              f_data.get("uv_transform"), xr, yr)
+                    add_side(triangles, fn, back_color, False, True, back_mat,
+                              f_data.get("uv_transform_back"), xr, yr)
 
-            for face_color, group in face_groups.items():
+            for (face_color, double_sided), group in face_groups.items():
                 local_faces = group["local_faces"]
                 if not local_faces:
                     continue
@@ -355,7 +401,10 @@ def build_scene(parsed: Dict[str, Any]) -> Scene:
                 tz = 0.0 if is_root else (current_matrix[11] if len(current_matrix) > 11 else 0.0) * INCHES_TO_MM
 
                 safe_path = path_name.replace(" / ", "__").replace(" ", "_")[:80]
-                color_suffix = f"_{face_color[0]}_{face_color[1]}_{face_color[2]}" if len(face_groups) > 1 else ""
+                color_suffix = (
+                    f"_{face_color[0]}_{face_color[1]}_{face_color[2]}_{'ds' if double_sided else 'ss'}"
+                    if len(face_groups) > 1 else ""
+                )
                 geom_name = f"mesh_{mesh_counter[0]}_{safe_path}_{parent_layer}{color_suffix}"
                 mesh_counter[0] += 1
 
@@ -410,7 +459,7 @@ def build_scene(parsed: Dict[str, Any]) -> Scene:
                     indices[i * 3 + 1] = tri[1]
                     indices[i * 3 + 2] = tri[2]
 
-                material_index = get_material_index(face_color)
+                material_index = get_material_index(face_color, double_sided)
                 glb_primitives.append(
                     GlbPrimitive(
                         positions=positions,

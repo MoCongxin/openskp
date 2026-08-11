@@ -1735,11 +1735,17 @@ class TestBuildScene:
     triangulated, world-space scene - a separate, opt-in step from
     :meth:`parse` (see module docstring in ``scene.py``).
 
-    Cross-validated directly against the TypeScript port's
-    ``SkpFile.buildScene()`` on this exact fixture: mesh count, mesh_index
-    count, gltf_materials count, and root instance count all match exactly,
-    down to the first three meshes' vertex/triangle counts and material
-    indices.
+    Root instance count is cross-validated directly against the
+    TypeScript port's ``SkpFile.buildScene()`` on this exact fixture.
+    Mesh/gltf_materials counts (21/21/13) instead match C++'s
+    independently-verified reference for this file
+    (``parser_test.cpp``'s ``ModernSceneMatchesReference``/legacy
+    equivalent) - the correct counts once faces with genuinely different
+    front/back materials are split into two single-sided primitives each,
+    rather than TypeScript's still-unported single-sided-only count
+    (13/13/9) at the time this comment was written. This fixture has 30
+    such faces (confirmed by direct inspection), so the split isn't a rare
+    edge case here.
     """
 
     import pathlib as _pathlib
@@ -1756,9 +1762,9 @@ class TestBuildScene:
     def test_scene_matches_typescript_ground_truth(self) -> None:
         scene = self._scene()
 
-        assert len(scene.glb_primitives) == 13
-        assert len(scene.mesh_index) == 13
-        assert len(scene.gltf_materials) == 9
+        assert len(scene.glb_primitives) == 21
+        assert len(scene.mesh_index) == 21
+        assert len(scene.gltf_materials) == 13
 
         assert scene.scene_hierarchy.name == "ROOT"
         assert scene.scene_hierarchy.definition_name == "ROOT_MODEL"
@@ -1777,13 +1783,41 @@ class TestBuildScene:
             assert all(0 <= idx < n_verts for idx in prim.indices)
             assert 0 <= prim.material_index < len(scene.gltf_materials)
 
+    def test_back_face_materials_render_correctly(self) -> None:
+        """Regression for item 14: faces with genuinely different front/
+        back materials must produce two correctly-colored, correctly-
+        wound single-sided primitives (not one primitive using only the
+        front material, and not a hidden/invisible back side). Faces
+        133/152 in this fixture's ``puerta`` definition are a real,
+        concrete example: front material 29 (a blue, (2, 0, 237)), back
+        material 27 (a light blue, (204, 235, 244)) - confirmed by direct
+        inspection before writing this test."""
+        scene = self._scene()
+
+        def has_color(rgb) -> bool:
+            r, g, b = rgb
+            return any(
+                m["pbrMetallicRoughness"]["baseColorFactor"][:3]
+                == [r / 255, g / 255, b / 255]
+                for m in scene.gltf_materials
+            )
+
+        assert has_color((2, 0, 237))
+        assert has_color((204, 235, 244))
+
+        # Faces whose front/back colors coincide (or have no back material
+        # at all) are emitted once with doubleSided=True instead of being
+        # split - confirmed count from direct inspection of this fixture.
+        double_sided = [m for m in scene.gltf_materials if m.get("doubleSided")]
+        assert len(double_sided) == 4
+
     def test_independent_of_parse(self) -> None:
         """build_scene() must not require parse() to have been called
         first - it re-parses independently."""
         from openskp.model import SkpFile
         skp = SkpFile.open(str(self.FIXTURE))
         scene = skp.build_scene()
-        assert len(scene.glb_primitives) == 13
+        assert len(scene.glb_primitives) == 21
 
 
 class TestBuildSceneRecursionGuard:
@@ -1903,8 +1937,15 @@ class TestGlbExport:
         skp, glb_path = self._export(tmp_path)
         loaded = trimesh.load(glb_path, file_type="glb")
 
-        scene = skp.build_scene()
-        assert len(loaded.geometry) == len(scene.glb_primitives)
+        # NOTE: no longer asserting len(loaded.geometry) ==
+        # len(scene.build_scene().glb_primitives) here - that was only ever
+        # a coincidence of the two pipelines' prior implementation details,
+        # not a documented invariant (this class's own docstring already
+        # says export() uses a wholly separate trimesh engine). It stopped
+        # holding once build_scene() started correctly splitting faces with
+        # genuinely different front/back materials into two primitives
+        # each - the trimesh pipeline doesn't do that split, so the counts
+        # now legitimately diverge on this fixture (30 such faces).
 
         for name, geom in loaded.geometry.items():
             assert geom.visual.kind == "texture", f"{name} has no UV/material"
