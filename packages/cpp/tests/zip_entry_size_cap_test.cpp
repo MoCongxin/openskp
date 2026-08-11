@@ -30,10 +30,12 @@ namespace {
 
 ByteBuffer build_zip_with_entry(const std::string& name, const ByteBuffer& content, int level) {
   mz_zip_archive zip{};
-  if (!mz_zip_writer_init_heap(&zip, 0, 0)) throw std::runtime_error("mz_zip_writer_init_heap failed");
+  if (!mz_zip_writer_init_heap(&zip, 0, 0))
+    throw std::runtime_error("mz_zip_writer_init_heap failed");
 
   const void* data_ptr = content.empty() ? static_cast<const void*>("") : content.data();
-  if (!mz_zip_writer_add_mem(&zip, name.c_str(), data_ptr, content.size(), static_cast<mz_uint>(level))) {
+  if (!mz_zip_writer_add_mem(&zip, name.c_str(), data_ptr, content.size(),
+                             static_cast<mz_uint>(level))) {
     mz_zip_writer_end(&zip);
     throw std::runtime_error("mz_zip_writer_add_mem failed");
   }

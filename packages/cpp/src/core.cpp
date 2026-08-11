@@ -59,19 +59,20 @@ struct Zip {
 
     if (declared > kMaxUncompressedEntryBytes) {
       throw SkpParseError("ZIP entry '" + std::string(s.m_filename) + "' declares " +
-                               std::to_string(declared) + " bytes uncompressed, exceeding the " +
-                               std::to_string(kMaxUncompressedEntryBytes) + "-byte safety ceiling",
-                           ParseStage::zip_extract);
+                              std::to_string(declared) + " bytes uncompressed, exceeding the " +
+                              std::to_string(kMaxUncompressedEntryBytes) + "-byte safety ceiling",
+                          ParseStage::zip_extract);
     }
 
     if (declared >= kRatioCheckThresholdBytes) {
       auto compressed = s.m_comp_size;
       if (compressed == 0 || declared / compressed > kMaxCompressionRatio) {
         throw SkpParseError("ZIP entry '" + std::string(s.m_filename) +
-                                 "' declares an implausible compression ratio (" +
-                                 std::to_string(declared) + " bytes from " + std::to_string(compressed) +
-                                 " bytes compressed) - likely a decompression bomb",
-                             ParseStage::zip_extract);
+                                "' declares an implausible compression ratio (" +
+                                std::to_string(declared) + " bytes from " +
+                                std::to_string(compressed) +
+                                " bytes compressed) - likely a decompression bomb",
+                            ParseStage::zip_extract);
       }
     }
   }
