@@ -70,6 +70,41 @@ function findZipOffset(data: Uint8Array): number {
   return offset;
 }
 
+// A ZIP entry's declared uncompressed size (UnzipFileInfo.originalSize) is
+// untrusted central-directory metadata - it can be set independently of
+// what the compressed stream actually decompresses to, and even when
+// genuine, DEFLATE can expand highly compressible data by three orders of
+// magnitude. fflate's unzipSync decompresses (and so allocates) up to that
+// declared size with no ceiling of its own. Real production model.dat
+// entries are observed at ~10x compression, so both limits below leave
+// generous headroom for legitimate files while rejecting the kind of
+// declared-size lie or extreme ratio a genuine file would never need.
+const MAX_UNCOMPRESSED_ENTRY_BYTES = 16 * 1024 * 1024 * 1024; // 16 GB
+const MAX_COMPRESSION_RATIO = 1000;
+const RATIO_CHECK_THRESHOLD_BYTES = 1024 * 1024; // 1 MB
+
+/** Reject a ZIP entry whose declared uncompressed size is implausible,
+ * before unzipSync decompresses (and so allocates for) it. */
+function validateEntrySize(file: UnzipFileInfo): void {
+  const declared = file.originalSize;
+  if (declared <= 0) return;
+
+  if (declared > MAX_UNCOMPRESSED_ENTRY_BYTES) {
+    throw new Error(
+      `ZIP entry '${file.name}' declares ${declared} bytes uncompressed, exceeding the ${MAX_UNCOMPRESSED_ENTRY_BYTES}-byte safety ceiling`
+    );
+  }
+
+  if (declared >= RATIO_CHECK_THRESHOLD_BYTES) {
+    const compressed = file.size;
+    if (compressed <= 0 || declared / compressed > MAX_COMPRESSION_RATIO) {
+      throw new Error(
+        `ZIP entry '${file.name}' declares an implausible compression ratio (${declared} bytes from ${compressed} bytes compressed) - likely a decompression bomb`
+      );
+    }
+  }
+}
+
 export function extractSkpContents(data: Uint8Array): SkpContents {
   // Allow both VFF-wrapped and bare ZIP (some exporters omit the header)
   if (!validateHeader(data)) {
@@ -88,7 +123,7 @@ export function extractSkpContents(data: Uint8Array): SkpContents {
   // fully inflated into memory alongside model.dat for nothing.
   const wanted = (file: UnzipFileInfo): boolean => {
     const lower = file.name.toLowerCase();
-    return (
+    const isWanted = (
       lower === 'model.dat' ||
       lower.endsWith('/model.dat') ||
       lower.endsWith('.xml') ||
@@ -97,6 +132,8 @@ export function extractSkpContents(data: Uint8Array): SkpContents {
       lower.endsWith('.jpeg') ||
       lower.includes('material')
     );
+    if (isWanted) validateEntrySize(file);
+    return isWanted;
   };
 
   let unzipped: Record<string, Uint8Array>;
