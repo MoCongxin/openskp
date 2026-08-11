@@ -112,6 +112,21 @@ namespace OpenSkp.Tests
             Assert.Equal("[Construction Documentation Style]", model.Styles[0].Name);
             Assert.Equal((255, 255, 255), model.Styles[0].FrontColor);
             Assert.Equal((208, 209, 189), model.Styles[0].BackColor);
+
+            // BuildScene/MeshIndex - a separate, opt-in step from Parse(), so
+            // it never costs a plain Parse() call anything. TS/Dart/C++ all
+            // have this real-fixture coverage already; .NET's stopped at
+            // parsing.
+            var scene = SkpFile.BuildScene(FixturePath("Untitled.skp"));
+            Assert.NotNull(scene.SceneHierarchy);
+            Assert.Equal("ROOT", scene.SceneHierarchy.Name);
+            Assert.Equal("ROOT_MODEL", scene.SceneHierarchy.DefinitionName);
+            Assert.True(scene.SceneHierarchy.Children.Count > 0);
+
+            Assert.Equal(43, scene.MeshIndex.Count);
+            var firstMesh = scene.MeshIndex.Values.First();
+            Assert.NotNull(firstMesh.Name);
+            Assert.NotNull(firstMesh.Layer);
         }
 
         [Fact]
@@ -131,6 +146,14 @@ namespace OpenSkp.Tests
             // Definitions map (which excludes ROOT) is empty.
             Assert.Empty(model.Definitions);
             Assert.Equal("ROOT_MODEL", model.Root.Name);
+
+            var scene = SkpFile.BuildScene(FixturePath("SU_File.skp"));
+            Assert.NotNull(scene.SceneHierarchy);
+            Assert.Equal("ROOT", scene.SceneHierarchy.Name);
+            Assert.Equal("ROOT_MODEL", scene.SceneHierarchy.DefinitionName);
+
+            Assert.Single(scene.MeshIndex);
+            Assert.Equal("ROOT_MODEL", scene.MeshIndex.Values.First().DefinitionName);
         }
     }
 }
