@@ -281,6 +281,7 @@ Scene build_scene_raw(RawParsed&& p, const ParseOptions& o) {
           if (li != p.layer_id_to_name.end()) child_layer = li->second;
         } catch (...) {
           child_layer = i.layer;
+          emit_log(o, LogLevel::debug, "Failed to resolve layer id '" + i.layer + "' to a name");
         }
       }
       auto child_color = inherited;

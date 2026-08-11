@@ -506,7 +506,10 @@ def build_scene(parsed: Dict[str, Any]) -> Scene:
                 try:
                     properties = _core.extract_dynamic_properties(d007)
                 except Exception:
-                    pass
+                    logger.debug(
+                        "Failed to extract dynamic properties for instance %r (ref_idx=%r)",
+                        inst.get("name"), ref_idx, exc_info=True,
+                    )
 
             inst_name = inst["name"] or f"Component_{ref_idx}"
             full_path_name = f"{path_name} / {inst_name}"

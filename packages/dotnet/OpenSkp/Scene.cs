@@ -525,9 +525,11 @@ namespace OpenSkp
                         {
                             properties = Geometry.ExtractDynamicProperties(d007);
                         }
-                        catch
+                        catch (Exception e)
                         {
-                            // Ignore
+                            Observability.Log(
+                                options, SkpLogLevel.Debug,
+                                $"Failed to extract dynamic properties for instance {inst.Name} (refIdx={refIdx}): {e.Message}");
                         }
                     }
 

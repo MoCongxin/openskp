@@ -746,9 +746,12 @@ export function buildSceneFromParsed(parsed: ParsedRawData, options?: ParseOptio
       const d007 = inst.children.find((c) => c.tag === 'D007');
       if (d007) {
         try {
-          properties = extractDynamicProperties(d007);
-        } catch {
-          // Ignore
+          properties = extractDynamicProperties(d007, options);
+        } catch (e) {
+          emitLog(
+            options, 'debug',
+            `Failed to extract dynamic properties for instance ${inst.name ?? ''} (refIdx=${refIdx}): ${(e as Error).message}`
+          );
         }
       }
 

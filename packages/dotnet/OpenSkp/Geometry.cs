@@ -557,15 +557,16 @@ namespace OpenSkp
         /// <summary>Parse one materials/&lt;folder&gt;/material.xml entry.
         /// xmlName is the archive path (e.g. "materials/Wood/material.xml"),
         /// used to resolve sibling texture image files.</summary>
-        public static RawMaterial? ParseMaterialXml(ZipArchive zip, string xmlName, byte[] xmlData)
+        public static RawMaterial? ParseMaterialXml(ZipArchive zip, string xmlName, byte[] xmlData, SkpParseOptions? options = null)
         {
             XElement root;
             try
             {
                 root = XDocument.Parse(Encoding.UTF8.GetString(xmlData)).Root!;
             }
-            catch
+            catch (Exception e)
             {
+                Observability.Log(options, SkpLogLevel.Debug, $"Failed to parse material.xml {xmlName}: {e.Message}");
                 return null;
             }
 
@@ -693,15 +694,16 @@ namespace OpenSkp
             return ms.ToArray();
         }
 
-        public static RawStyle? ParseStyleXml(byte[] xmlData)
+        public static RawStyle? ParseStyleXml(byte[] xmlData, string xmlName = "", SkpParseOptions? options = null)
         {
             XElement root;
             try
             {
                 root = XDocument.Parse(Encoding.UTF8.GetString(xmlData)).Root!;
             }
-            catch
+            catch (Exception e)
             {
+                Observability.Log(options, SkpLogLevel.Debug, $"Failed to parse style.xml {xmlName}: {e.Message}");
                 return null;
             }
 

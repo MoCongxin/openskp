@@ -1,4 +1,5 @@
 import { unzipSync, UnzipFileInfo } from 'fflate';
+import { ParseOptions, emitLog } from './observability';
 
 export interface SkpContents {
   version: string;
@@ -38,7 +39,7 @@ export function validateHeader(data: Uint8Array): boolean {
   );
 }
 
-export function readVersion(data: Uint8Array): string {
+export function readVersion(data: Uint8Array, options?: ParseOptions): string {
   if (data.length < 16) return 'unknown';
 
   // Find second FF FE FF marker after the initial one at offset 0
@@ -56,8 +57,8 @@ export function readVersion(data: Uint8Array): string {
           return verText.slice(braceStart, braceEnd + 1);
         }
       }
-    } catch {
-      // Ignore decoder errors
+    } catch (e) {
+      emitLog(options, 'debug', `Failed to decode version string: ${(e as Error).message}`);
     }
   }
 
@@ -138,7 +139,7 @@ function validateEntrySize(file: UnzipFileInfo): void {
   }
 }
 
-export function extractSkpContents(data: Uint8Array): SkpContents {
+export function extractSkpContents(data: Uint8Array, options?: ParseOptions): SkpContents {
   // Allow both VFF-wrapped and bare ZIP (some exporters omit the header)
   if (!validateHeader(data)) {
     const zipInHeader = findSequence(data.subarray(0, Math.min(64, data.length)), ZIP_LOCAL_HEADER) >= 0;
@@ -147,7 +148,7 @@ export function extractSkpContents(data: Uint8Array): SkpContents {
     }
   }
 
-  const version = readVersion(data);
+  const version = readVersion(data, options);
   const zipOffset = findZipOffset(data);
   const zipBytes = data.subarray(zipOffset);
 

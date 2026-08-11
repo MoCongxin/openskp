@@ -277,6 +277,7 @@ RawParsed full_parse(const ByteBuffer& data, const ParseOptions& o) {
     if (auto meta = zip.get("meta/meta.dat")) p.units = read_meta_units(*meta);
   } catch (...) {
     p.units = std::nullopt;
+    emit_log(o, LogLevel::debug, "Failed to read units from meta/meta.dat");
   }
   if (!p.layer_id_to_name.count(1)) p.layer_id_to_name[1] = "Layer0";
   if (!p.layer_colors.count("Layer0")) p.layer_colors["Layer0"] = {136, 136, 136};

@@ -67,7 +67,7 @@ function parseToRaw(buffer: ArrayBuffer, options?: ParseOptions): ParsedRawData 
   // 1. Extract SKP contents from VFF/ZIP container
   let contents;
   try {
-    contents = extractSkpContents(data);
+    contents = extractSkpContents(data, options);
   } catch (e) {
     throw new SkpParseError(`Failed to extract SKP contents: ${(e as Error).message}`, {
       stage: 'zip_extract',
@@ -140,8 +140,8 @@ function parseToRaw(buffer: ArrayBuffer, options?: ParseOptions): ParsedRawData 
             layerHidden.set(parsedMat.name.slice(6), false);
           }
         }
-      } catch {
-        // Ignore XML errors
+      } catch (e) {
+        emitLog(options, 'debug', `Failed to parse material.xml ${name}: ${(e as Error).message}`);
       }
     }
   }
@@ -163,8 +163,8 @@ function parseToRaw(buffer: ArrayBuffer, options?: ParseOptions): ParsedRawData 
             backColor: parsedStyle.backColor,
           });
         }
-      } catch {
-        // Ignore XML errors
+      } catch (e) {
+        emitLog(options, 'debug', `Failed to parse style.xml ${name}: ${(e as Error).message}`);
       }
     }
   }
@@ -196,8 +196,8 @@ function parseToRaw(buffer: ArrayBuffer, options?: ParseOptions): ParsedRawData 
           try {
             const decoder = new TextDecoder('utf-8');
             mName = decoder.decode(nameNode.payload);
-          } catch {
-            // Ignore
+          } catch (e) {
+            emitLog(options, 'debug', `Failed to decode material name for id ${mId}: ${(e as Error).message}`);
           }
           materialIdToName.set(mId, mName);
         }
@@ -215,11 +215,11 @@ function parseToRaw(buffer: ArrayBuffer, options?: ParseOptions): ParsedRawData 
 
   for (const { index, total, node: el } of iterTopLevelLazy(modelData, 0, modelData.length)) {
     try {
-      collectLayers([el], layerIdToName);
+      collectLayers([el], layerIdToName, options);
       collectMaterialIds([el]);
-      collectDefs([el], defsDict);
+      collectDefs([el], defsDict, options);
       if (el.tag === 'F601') {
-        extractGeometryFromNodes(el.children, rootBuilder);
+        extractGeometryFromNodes(el.children, rootBuilder, options);
       }
     } catch (e) {
       throw new SkpParseError(`Failed while processing top-level record: ${(e as Error).message}`, {

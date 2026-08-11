@@ -60,7 +60,7 @@ static Definition definition(EntityId id, RawDefinition&& r) {
   return d;
 }
 
-SkpModel build_model(RawParsed&& p) {
+SkpModel build_model(RawParsed&& p, const ParseOptions& o) {
   SkpModel m;
   m.version = std::move(p.version);
   m.units = std::move(p.units);
@@ -70,6 +70,7 @@ SkpModel build_model(RawParsed&& p) {
           auto l = p.layer_id_to_name.find(std::stoll(i.layer));
           if (l != p.layer_id_to_name.end()) i.layer = l->second;
         } catch (...) {
+          emit_log(o, LogLevel::debug, "Failed to resolve layer id '" + i.layer + "' to a name");
         };
   };
   for (auto& d : p.definitions) {

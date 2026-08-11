@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'package:xml/xml.dart';
 
+import 'observability.dart';
 import 'tlv.dart';
 import 'vff.dart';
 
@@ -516,11 +517,12 @@ class Geometry {
   /// archive path (e.g. "materials/Wood/material.xml"), used to resolve
   /// sibling texture image files.
   static RawMaterial? parseMaterialXml(
-      Archive zip, String xmlName, Uint8List xmlData) {
+      Archive zip, String xmlName, Uint8List xmlData, [ParseOptions? options]) {
     XmlDocument doc;
     try {
       doc = XmlDocument.parse(utf8.decode(xmlData));
-    } catch (_) {
+    } catch (e) {
+      emitLog(options, SkpLogLevel.debug, 'Failed to parse material.xml $xmlName: $e');
       return null;
     }
 
@@ -631,11 +633,12 @@ class Geometry {
     return s.substring(i);
   }
 
-  static RawStyle? parseStyleXml(Uint8List xmlData) {
+  static RawStyle? parseStyleXml(Uint8List xmlData, [String xmlName = '', ParseOptions? options]) {
     XmlDocument doc;
     try {
       doc = XmlDocument.parse(utf8.decode(xmlData));
-    } catch (_) {
+    } catch (e) {
+      emitLog(options, SkpLogLevel.debug, 'Failed to parse style.xml $xmlName: $e');
       return null;
     }
 

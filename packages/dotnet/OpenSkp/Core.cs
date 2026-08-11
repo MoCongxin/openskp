@@ -86,11 +86,12 @@ namespace OpenSkp
                     Geometry.RawMaterial? mat;
                     try
                     {
-                        mat = Geometry.ParseMaterialXml(zip, name, xmlData);
+                        mat = Geometry.ParseMaterialXml(zip, name, xmlData, options);
                     }
-                    catch
+                    catch (Exception e)
                     {
                         mat = null;
+                        Observability.Log(options, SkpLogLevel.Debug, $"Failed to parse material.xml {name}: {e.Message}");
                     }
                     if (mat != null)
                     {
@@ -126,7 +127,7 @@ namespace OpenSkp
                     s.CopyTo(ms);
                     xmlData = ms.ToArray();
                 }
-                var style = Geometry.ParseStyleXml(xmlData);
+                var style = Geometry.ParseStyleXml(xmlData, name, options);
                 if (style != null)
                 {
                     styles.Add(style);
@@ -222,9 +223,10 @@ namespace OpenSkp
                     }
                     units = Vff.ReadMetaUnits(metaData);
                 }
-                catch
+                catch (Exception e)
                 {
                     units = null;
+                    Observability.Log(options, SkpLogLevel.Debug, $"Failed to read units from meta/meta.dat: {e.Message}");
                 }
             }
 

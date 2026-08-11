@@ -126,7 +126,7 @@ void collect_geometry(const std::vector<TlvNode>&, GeometryBuilder&);
 void collect_layers(const std::vector<TlvNode>&, std::map<EntityId, std::string>&);
 void collect_material_ids(const std::vector<TlvNode>&, std::map<EntityId, std::string>&);
 void collect_definitions(const std::vector<TlvNode>&, std::map<EntityId, RawDefinition>&);
-SkpModel build_model(RawParsed&&);
+SkpModel build_model(RawParsed&&, const ParseOptions& = {});
 Scene build_scene_raw(RawParsed&&, const ParseOptions&);
 std::array<double, 3> transform_point(const std::vector<double>&, const std::array<double, 3>&);
 std::array<double, 3> transform_normal(const std::vector<double>&, const std::array<double, 3>&);

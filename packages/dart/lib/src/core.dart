@@ -72,9 +72,10 @@ class Core {
         Vff.validateEntrySize(entry);
         RawMaterial? mat;
         try {
-          mat = Geometry.parseMaterialXml(zip, name, entry.content);
-        } catch (_) {
+          mat = Geometry.parseMaterialXml(zip, name, entry.content, options);
+        } catch (e) {
           mat = null;
+          emitLog(options, SkpLogLevel.debug, 'Failed to parse material.xml $name: $e');
         }
         if (mat != null) {
           final parts = name.split('/');
@@ -98,7 +99,7 @@ class Core {
         continue;
       }
       Vff.validateEntrySize(entry);
-      final style = Geometry.parseStyleXml(entry.content);
+      final style = Geometry.parseStyleXml(entry.content, name, options);
       if (style != null) {
         styles.add(style);
       }

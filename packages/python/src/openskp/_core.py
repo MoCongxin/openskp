@@ -830,7 +830,7 @@ def full_parse(skp_path: str) -> Dict[str, Any]:
                         layer_colors[mat_name[6:]] = (r, g, b)
                         layer_hidden[mat_name[6:]] = False
             except Exception:
-                pass
+                logger.debug("Failed to parse material.xml %r", name, exc_info=True)
 
     # Thumbnail
     thumbnail_data = None
@@ -847,6 +847,7 @@ def full_parse(skp_path: str) -> Dict[str, Any]:
             units = _read_meta_units(zf.read('meta/meta.dat'))
         except Exception:
             units = None
+            logger.debug("Failed to read units from meta/meta.dat", exc_info=True)
 
     # Styles: face colors live in styles/*/style.xml as signed-int32 ARGB
     # variants — item id 4000 is the front (default) face color, 4001 the

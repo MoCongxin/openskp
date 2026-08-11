@@ -12,6 +12,7 @@
 #include <vector>
 
 #include <openskp/export.hpp>
+#include <openskp/observability.hpp>
 
 namespace openskp {
 
@@ -150,6 +151,6 @@ class OPENSKP_EXPORT SkpModel {
  private:
   Definition root_{0, "ROOT", "ROOT_MODEL"};
   std::unordered_map<EntityId, std::size_t> material_indices_;
-  friend SkpModel build_model(struct RawParsed&&);
+  friend SkpModel build_model(struct RawParsed&&, const ParseOptions&);
 };
 }  // namespace openskp
