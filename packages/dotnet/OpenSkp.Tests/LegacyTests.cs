@@ -115,6 +115,33 @@ namespace OpenSkp.Tests
             {
                 Assert.All(defn.Faces.Values, f => Assert.False(f.Hidden));
             }
+
+            // Regression: CFace's attribute container (which carries any
+            // positioned/photo-fitted CFaceTextureCoords record) was read
+            // and then silently discarded, so UvTransform never got
+            // populated for legacy files at all - every legacy face fell
+            // back to the default face-plane projection even when the
+            // SketchUp author had explicitly positioned a texture. 32
+            // matches Python's/TS's/C++'s independently-verified count of
+            // faces with a real UvTransform on this exact fixture (0 have
+            // UvProjected - this file has no PROJECTED/terrain-drape
+            // textures).
+            int withUvTransform = 0, withUvProjected = 0;
+            foreach (var defn in model.Definitions.Values)
+            {
+                foreach (var f in defn.Faces.Values)
+                {
+                    if (f.UvTransform != null) withUvTransform++;
+                    if (f.UvProjected) withUvProjected++;
+                }
+            }
+            foreach (var f in model.Root.Faces.Values)
+            {
+                if (f.UvTransform != null) withUvTransform++;
+                if (f.UvProjected) withUvProjected++;
+            }
+            Assert.Equal(32, withUvTransform);
+            Assert.Equal(0, withUvProjected);
         }
 
         [Fact]
