@@ -957,13 +957,17 @@ def full_parse_legacy(skp_path: str) -> Dict[str, Any]:
 
     # layers
     layer_colors = {}
+    layer_hidden = {}
     layer_id_to_name = {}
     for s, v in layers:
         rgba = v.get('rgba', (136, 136, 136, 255))
         layer_colors[v['name']] = (rgba[0], rgba[1], rgba[2])
+        layer_hidden[v['name']] = bool(v.get('hidden', 0))
         layer_id_to_name[s] = v['name']
     if 'Layer0' not in layer_colors:
         layer_colors['Layer0'] = (136, 136, 136)
+    if 'Layer0' not in layer_hidden:
+        layer_hidden['Layer0'] = False
 
     # definitions
     defs_dict: Dict[Any, Any] = {}
@@ -1000,6 +1004,7 @@ def full_parse_legacy(skp_path: str) -> Dict[str, Any]:
     return {
         'version': version,
         'layer_colors': layer_colors,
+        'layer_hidden': layer_hidden,
         'layer_id_to_name': layer_id_to_name,
         'material_id_to_name': material_id_to_name,
         'materials': mats,

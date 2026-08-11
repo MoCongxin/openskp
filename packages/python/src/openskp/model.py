@@ -151,12 +151,18 @@ class Layer:
         color_r: Red channel (0–255).
         color_g: Green channel (0–255).
         color_b: Blue channel (0–255).
+        hidden: Whether the layer's visibility is switched off. Only
+            populated for legacy (pre-2021 MFC) files, where the byte is
+            read directly from the layer record — modern (VFF) files
+            derive layers from ``Layer_<name>``-prefixed materials, which
+            carry no visibility data, so this is always ``False`` there.
     """
 
     name: str
     color_r: int = 200
     color_g: int = 200
     color_b: int = 200
+    hidden: bool = False
 
 
 @dataclass
@@ -485,8 +491,11 @@ class SkpFile:
                 model.definitions[def_id] = defn
 
         # Convert layers
+        layer_hidden = parsed.get("layer_hidden", {})
         for name, (r, g, b) in parsed["layer_colors"].items():
-            model.layers.append(Layer(name=name, color_r=r, color_g=g, color_b=b))
+            model.layers.append(
+                Layer(name=name, color_r=r, color_g=g, color_b=b, hidden=layer_hidden.get(name, False))
+            )
 
         # Convert materials
         mat_for_data: Dict[int, Material] = {}   # id(raw dict) -> Material

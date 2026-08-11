@@ -393,6 +393,15 @@ class TestJsonExport:
         assert d["root"]["name"] == "ROOT_MODEL"
         assert "ROOT" not in d["definitions"]
 
+    def test_layer_hidden_is_included(self) -> None:
+        from openskp.model import Layer, SkpModel
+        from openskp.export.json_export import to_dict
+
+        model = SkpModel()
+        model.layers.append(Layer(name="Furniture", hidden=True))
+        d = to_dict(model)
+        assert d["layers"][0]["hidden"] is True
+
 
 # ── SkpFile tests ────────────────────────────────────────────────────────
 
@@ -570,6 +579,79 @@ class TestMaterialIdJoin:
         model = self._parse_with(monkeypatch, tmp_path, parsed)
 
         assert model.materials_by_id == {}
+
+
+class TestLayerHidden:
+    """``Layer.hidden`` - the on/off visibility bit. Already correctly
+    extracted from legacy MFC files (``legacy._read_layer``) but previously
+    discarded before reaching the public model; now wired through
+    ``layer_hidden`` alongside the existing ``layer_colors``/
+    ``layer_id_to_name`` dicts. VFF files carry no known visibility tag, so
+    they always default to ``False`` (documented on ``Layer.hidden``).
+
+    ``full_parse`` is stubbed out (matching ``TestMaterialIdJoin``'s
+    pattern above), since hand-crafting a real hidden-layer legacy file
+    isn't practical and the only real fixture available has just one,
+    non-hidden layer.
+    """
+
+    @staticmethod
+    def _parse_with(monkeypatch, tmp_path: pathlib.Path, parsed: dict):
+        import openskp._core as _core
+        from openskp.model import SkpFile
+
+        monkeypatch.setattr(_core, "full_parse", lambda path: parsed)
+        fake = tmp_path / "model.skp"
+        fake.write_bytes(b"")
+        return SkpFile.open(str(fake)).parse()
+
+    def test_hidden_layer_is_reported_hidden(self, monkeypatch, tmp_path: pathlib.Path) -> None:
+        parsed = {
+            "version": "test",
+            "defs_dict": {},
+            "layer_colors": {"Layer0": (136, 136, 136), "Furniture": (200, 50, 50)},
+            "layer_hidden": {"Layer0": False, "Furniture": True},
+            "materials": {},
+            "materials_by_folder": {},
+            "material_id_to_name": {},
+        }
+        model = self._parse_with(monkeypatch, tmp_path, parsed)
+
+        by_name = {layer.name: layer for layer in model.layers}
+        assert by_name["Layer0"].hidden is False
+        assert by_name["Furniture"].hidden is True
+
+    def test_missing_layer_hidden_dict_defaults_to_visible(
+        self, monkeypatch, tmp_path: pathlib.Path
+    ) -> None:
+        # No layer_hidden key at all (e.g. an older cached parse result) -
+        # must default to visible, not raise.
+        parsed = {
+            "version": "test",
+            "defs_dict": {},
+            "layer_colors": {"Layer0": (136, 136, 136)},
+            "materials": {},
+            "materials_by_folder": {},
+            "material_id_to_name": {},
+        }
+        model = self._parse_with(monkeypatch, tmp_path, parsed)
+
+        assert model.layers[0].hidden is False
+
+    def test_real_legacy_fixture_layer_is_not_hidden(self) -> None:
+        # Real-fixture sanity check: the only layer in this file is a
+        # plain, visible Layer0 - confirms the field is actually populated
+        # (not silently dropped) end-to-end through the real legacy parser,
+        # even though it can't exercise the True branch.
+        import pytest as _pytest
+        fixture = pathlib.Path(__file__).parent / "fixtures" / "capilla_quiroz_v17.skp"
+        if not fixture.exists():
+            _pytest.skip("legacy fixture not present")
+        from openskp.model import SkpFile
+
+        model = SkpFile.open(str(fixture)).parse()
+        assert len(model.layers) == 1
+        assert model.layers[0].hidden is False
 
 
 # ── Instance material tests ──────────────────────────────────────────────

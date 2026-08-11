@@ -121,6 +121,7 @@ def to_dict(model: SkpModel, scene: Optional[Scene] = None) -> Dict[str, Any]:
                 "color_r": layer.color_r,
                 "color_g": layer.color_g,
                 "color_b": layer.color_b,
+                "hidden": layer.hidden,
             }
             for layer in model.layers
         ],

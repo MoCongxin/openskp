@@ -704,6 +704,11 @@ def full_parse(skp_path: str) -> Dict[str, Any]:
 
     # Materials & layer colors
     layer_colors = {}
+    # Modern (VFF) files derive layers from Layer_<name>-prefixed materials,
+    # which carry no visibility flag of their own - unlike legacy MFC files,
+    # there is currently no known tag exposing a VFF layer's hidden state,
+    # so every VFF layer defaults to visible here.
+    layer_hidden = {}
     materials = {}
     materials_by_folder = {}
     MAT_NS = {'mat': 'http://sketchup.google.com/schemas/sketchup/1.0/material'}
@@ -752,6 +757,7 @@ def full_parse(skp_path: str) -> Dict[str, Any]:
                         materials_by_folder[folder_name] = mat_obj
                     if mat_name.startswith('Layer_'):
                         layer_colors[mat_name[6:]] = (r, g, b)
+                        layer_hidden[mat_name[6:]] = False
             except Exception:
                 pass
 
@@ -920,12 +926,15 @@ def full_parse(skp_path: str) -> Dict[str, Any]:
         layer_id_to_name[1] = 'Layer0'
     if 'Layer0' not in layer_colors:
         layer_colors['Layer0'] = (136, 136, 136)
+    if 'Layer0' not in layer_hidden:
+        layer_hidden['Layer0'] = False
 
     defs_dict['ROOT'] = {'guid': 'ROOT', 'name': 'ROOT_MODEL', 'builder': root_builder}
 
     return {
         'version': version,
         'layer_colors': layer_colors,
+        'layer_hidden': layer_hidden,
         'layer_id_to_name': layer_id_to_name,
         'material_id_to_name': material_id_to_name,
         'materials': materials,
