@@ -84,6 +84,7 @@ describe('Legacy MFC reader (classic pre-2021 .skp)', () => {
 
     // 4. Layers
     expect(model.layers.map((l) => l.name)).toEqual(['Layer0']);
+    expect(model.layers[0].hidden).toBe(false);
 
     // 5. Bounding box across the (ROOT-excluded) definitions, matching
     // Python's bbox computed the same way.

@@ -103,6 +103,12 @@ export interface Instance {
 export interface Layer {
   name: string;
   color: { r: number; g: number; b: number };
+  /** Whether the layer's visibility is switched off. Only populated for
+   * legacy (pre-2021 MFC) files, where the byte is read directly from the
+   * layer record - modern (VFF) files derive layers from
+   * `Layer_<name>`-prefixed materials, which carry no visibility data, so
+   * this is always `false` there. */
+  hidden: boolean;
 }
 
 /** A material's texture image, extracted from the SKP container. */
@@ -206,6 +212,7 @@ export interface SkpScene {
 export interface ParsedRawData {
   version: string;
   layerColors: Map<string, [number, number, number]>;
+  layerHidden: Map<string, boolean>;
   layerIdToName: Map<number, string>;
   materialIdToName: Map<number, string>;
   materialsMap: Map<string, Material>;
@@ -215,7 +222,8 @@ export interface ParsedRawData {
 }
 
 export function buildModelFromParsed(parsed: ParsedRawData): SkpModel {
-  const { version, layerColors, materialIdToName, materialsMap, materialsByFolder, styles, defsDict } = parsed;
+  const { version, layerColors, layerHidden, materialIdToName, materialsMap, materialsByFolder, styles, defsDict } =
+    parsed;
 
   // Join the TLV material IDs (what Face.materialId references) onto the
   // parsed materials, so callers can resolve face -> material.
@@ -234,6 +242,7 @@ export function buildModelFromParsed(parsed: ParsedRawData): SkpModel {
   const finalLayersList: Layer[] = Array.from(layerColors.entries()).map(([name, c]) => ({
     name,
     color: { r: c[0], g: c[1], b: c[2] },
+    hidden: layerHidden.get(name) ?? false,
   }));
 
   const finalMaterialsList: Material[] = Array.from(materialsMap.values());
