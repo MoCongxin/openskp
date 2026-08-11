@@ -958,6 +958,52 @@ class TestStyles:
         assert st.back_color == ((v2 >> 16) & 255, (v2 >> 8) & 255, v2 & 255)
 
 
+class TestXmlEntityExpansion:
+    """material.xml/style.xml come from inside the .skp's ZIP container -
+    fully attacker-controlled input. Stdlib xml.etree.ElementTree expands
+    internal general entities with no limit, making a "billion laughs" DoS
+    payload trivial to embed. _core.py and materials.py both switched to
+    defusedxml.ElementTree, which rejects any entity declaration outright
+    (not just recursive/exponential ones - confirmed directly: even a
+    single non-recursive `<!ENTITY x "hi">` is blocked, so this doesn't
+    require actually triggering an expansion to prove the fix works)."""
+
+    # A single, non-recursive entity declaration is enough to trigger
+    # defusedxml's EntitiesForbidden - safe to construct directly (no
+    # actual expansion ever happens, unlike a real billion-laughs payload).
+    _ENTITY_BOMB = b"""<?xml version="1.0"?>
+<!DOCTYPE r [ <!ENTITY x "hi"> ]>
+<r>&x;</r>
+"""
+
+    def test_parse_material_xml_rejects_entity_declarations(self) -> None:
+        from openskp.materials import _parse_material_xml
+
+        assert _parse_material_xml(self._ENTITY_BOMB) is None
+
+    def test_full_parse_skips_malicious_material_and_style_xml(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        import io
+        import zipfile
+        from openskp.model import SkpFile
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr("model.dat", b"")
+            zf.writestr("materials/Evil/material.xml", self._ENTITY_BOMB)
+            zf.writestr("styles/Evil/style.xml", self._ENTITY_BOMB)
+        path = tmp_path / "evil.skp"
+        path.write_bytes(b"\xFF\xFE\xFF\x0E" + b"\x00" * 28 + buf.getvalue())
+
+        # Must not hang, crash, or leak the exception - the malicious
+        # entries are silently skipped, exactly like a malformed
+        # (non-well-formed) material.xml/style.xml already was.
+        model = SkpFile.open(str(path)).parse()
+        assert model.materials == []
+        assert model.styles == []
+
+
 # ── Per-face UV transform tests ──────────────────────────────────────────
 
 
