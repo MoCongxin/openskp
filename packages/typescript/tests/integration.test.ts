@@ -28,6 +28,10 @@ describe('SketchUp Parser Integration Test', () => {
     expect(typeof firstLayer!.color.r).toBe('number');
     expect(typeof firstLayer!.color.g).toBe('number');
     expect(typeof firstLayer!.color.b).toBe('number');
+    // VFF files carry no known layer-visibility tag - always false here.
+    for (const layer of model.layers) {
+      expect(layer.hidden).toBe(false);
+    }
 
     // 3. Assert Materials
     expect(model.materials.length).toBe(15);

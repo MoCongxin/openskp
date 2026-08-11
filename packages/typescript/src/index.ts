@@ -69,6 +69,11 @@ function parseToRaw(buffer: ArrayBuffer, options?: ParseOptions): ParsedRawData 
 
   // 2. Parse XML materials to populate layer colors and materials
   const layerColors = new Map<string, [number, number, number]>();
+  // Modern (VFF) files derive layers from Layer_<name>-prefixed materials,
+  // which carry no visibility flag of their own - unlike legacy MFC files,
+  // there is currently no known tag exposing a VFF layer's hidden state,
+  // so every VFF layer defaults to visible here.
+  const layerHidden = new Map<string, boolean>();
   const materialsMap = new Map<string, Material>();
   const materialsByFolder = new Map<string, Material>();
 
@@ -115,6 +120,7 @@ function parseToRaw(buffer: ArrayBuffer, options?: ParseOptions): ParsedRawData 
           }
           if (parsedMat.name.startsWith('Layer_')) {
             layerColors.set(parsedMat.name.slice(6), [parsedMat.r, parsedMat.g, parsedMat.b]);
+            layerHidden.set(parsedMat.name.slice(6), false);
           }
         }
       } catch (e) {
@@ -227,6 +233,9 @@ function parseToRaw(buffer: ArrayBuffer, options?: ParseOptions): ParsedRawData 
   if (!layerColors.has('Layer0')) {
     layerColors.set('Layer0', [136, 136, 136]);
   }
+  if (!layerHidden.has('Layer0')) {
+    layerHidden.set('Layer0', false);
+  }
 
   defsDict.set('ROOT', {
     guid: 'ROOT',
@@ -239,6 +248,7 @@ function parseToRaw(buffer: ArrayBuffer, options?: ParseOptions): ParsedRawData 
   return {
     version,
     layerColors,
+    layerHidden,
     layerIdToName,
     materialIdToName,
     materialsMap,

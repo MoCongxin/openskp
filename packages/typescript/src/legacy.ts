@@ -1112,14 +1112,19 @@ export function parseLegacyToRaw(data: Uint8Array, options?: ParseOptions): Pars
 
   // layers
   const layerColors = new Map<string, [number, number, number]>();
+  const layerHidden = new Map<string, boolean>();
   const layerIdToName = new Map<number, string>();
   for (const [s, v] of layers) {
     const rgba: number[] = v.rgba || [136, 136, 136, 255];
     layerColors.set(v.name, [rgba[0], rgba[1], rgba[2]]);
+    layerHidden.set(v.name, Boolean(v.hidden));
     layerIdToName.set(s, v.name);
   }
   if (!layerColors.has('Layer0')) {
     layerColors.set('Layer0', [136, 136, 136]);
+  }
+  if (!layerHidden.has('Layer0')) {
+    layerHidden.set('Layer0', false);
   }
 
   // definitions
@@ -1174,6 +1179,7 @@ export function parseLegacyToRaw(data: Uint8Array, options?: ParseOptions): Pars
   return {
     version,
     layerColors,
+    layerHidden,
     layerIdToName,
     materialIdToName,
     materialsMap,
