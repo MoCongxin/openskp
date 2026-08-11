@@ -121,5 +121,29 @@ void main() {
         expect(face.hidden, isFalse);
       }
     }
+
+    // Regression: CFace's attribute container (which carries any
+    // positioned/photo-fitted CFaceTextureCoords record) was read and then
+    // silently discarded, so uvTransform never got populated for legacy
+    // files at all - every legacy face fell back to the default
+    // face-plane projection even when the SketchUp author had explicitly
+    // positioned a texture. 32 matches Python's/TS's/C++'s independently-
+    // verified count of faces with a real uvTransform on this exact
+    // fixture (0 have uvProjected - this file has no PROJECTED/
+    // terrain-drape textures).
+    var withUvTransform = 0;
+    var withUvProjected = 0;
+    for (final def in model.definitions.values) {
+      for (final face in def.faces.values) {
+        if (face.uvTransform != null) withUvTransform++;
+        if (face.uvProjected) withUvProjected++;
+      }
+    }
+    for (final face in model.root.faces.values) {
+      if (face.uvTransform != null) withUvTransform++;
+      if (face.uvProjected) withUvProjected++;
+    }
+    expect(withUvTransform, 32);
+    expect(withUvProjected, 0);
   });
 }
