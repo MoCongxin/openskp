@@ -41,11 +41,28 @@ describe('Observability: progress callbacks + structured error context', () => {
     expect(messages.some((m) => m.message.includes('Scene build complete'))).toBe(true);
   });
 
-  it('raises SkpParseError with stage="zip_extract" for a corrupt file', () => {
+  it('raises SkpParseError with stage="header" for a file with no valid SketchUp magic', () => {
     const bad = new Uint8Array(200).fill(0x41); // "AAAA..." - not a valid header
     const badBuffer = bad.buffer;
 
     expect(() => parseSkp(badBuffer)).toThrow(SkpParseError);
+    try {
+      parseSkp(badBuffer);
+      expect.fail('expected parseSkp to throw');
+    } catch (e) {
+      expect(e).toBeInstanceOf(SkpParseError);
+      expect((e as SkpParseError).stage).toBe('header');
+    }
+  });
+
+  it('raises SkpParseError with stage="zip_extract" for a file with a valid header but corrupt ZIP data', () => {
+    // Real SketchUp magic (shared by both legacy and modern containers),
+    // but garbage after it - passes the header check, fails at actual ZIP
+    // extraction, matching what stage: 'zip_extract' is meant to describe.
+    const bad = new Uint8Array(200).fill(0x41);
+    bad.set([0xff, 0xfe, 0xff, 0x0e], 0);
+    const badBuffer = bad.buffer;
+
     try {
       parseSkp(badBuffer);
       expect.fail('expected parseSkp to throw');

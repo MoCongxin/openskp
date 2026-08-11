@@ -50,6 +50,15 @@ function parseToRaw(buffer: ArrayBuffer, options?: ParseOptions): ParsedRawData 
   const data = new Uint8Array(buffer);
   emitLog(options, 'info', `Parsing buffer (${data.length} bytes)`);
 
+  // Both the legacy (pre-2021 MFC) and modern (VFF/ZIP) containers share
+  // this 4-byte magic - checked upfront, matching every other port, so a
+  // file that isn't a SketchUp file at all fails here with stage: 'header'
+  // instead of falling through to the ZIP extractor and getting mislabeled
+  // stage: 'zip_extract' for a problem that has nothing to do with ZIP.
+  if (!(data.length >= 4 && data[0] === 0xff && data[1] === 0xfe && data[2] === 0xff && data[3] === 0x0e)) {
+    throw new SkpParseError('Not a valid SketchUp file (bad header magic)', { stage: 'header' });
+  }
+
   if (isLegacy(data)) {
     emitLog(options, 'debug', 'Detected legacy MFC container; routing to legacy walker');
     return parseLegacyToRaw(data, options);
@@ -656,6 +665,14 @@ export class SkpFile {
   static open(filePath: string): SkpFile {
     if (typeof process !== 'undefined' && process.versions && process.versions.node) {
       const fs = require('fs');
+      const path = require('path');
+      if (!fs.existsSync(filePath)) {
+        throw new Error(`File not found: ${filePath}`);
+      }
+      const ext = path.extname(filePath);
+      if (ext.toLowerCase() !== '.skp') {
+        throw new Error(`Expected a .skp file, got: ${ext}`);
+      }
       const buffer = fs.readFileSync(filePath);
       const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
       return new SkpFile(arrayBuffer);
