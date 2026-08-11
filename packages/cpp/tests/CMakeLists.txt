@@ -10,6 +10,7 @@ add_executable(
   scene_test.cpp
   texture_test.cpp
   triangulator_test.cpp
+  zip_entry_size_cap_test.cpp
 )
 
 target_link_libraries(openskp_tests PRIVATE OpenSkp::OpenSkp GTest::gtest_main)

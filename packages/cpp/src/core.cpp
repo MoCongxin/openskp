@@ -28,12 +28,52 @@ struct Zip {
   std::optional<ByteBuffer> get(const std::string& name) {
     int i = mz_zip_reader_locate_file(&z, name.c_str(), nullptr, 0);
     if (i < 0) return {};
+    mz_zip_archive_file_stat s{};
+    if (!mz_zip_reader_file_stat(&z, i, &s)) return {};
+    validate_entry_size(s);
     size_t n = 0;
     void* p = mz_zip_reader_extract_to_heap(&z, i, &n, 0);
     if (!p) return {};
     ByteBuffer b(static_cast<std::uint8_t*>(p), static_cast<std::uint8_t*>(p) + n);
     mz_free(p);
     return b;
+  }
+
+ private:
+  // A ZIP entry's declared uncompressed size (m_uncomp_size) is untrusted
+  // central-directory metadata - it can be set independently of what the
+  // compressed stream actually decompresses to, and even when genuine,
+  // DEFLATE can expand highly compressible data by three orders of
+  // magnitude. mz_zip_reader_extract_to_heap allocates up to that declared
+  // size with no ceiling of its own. Real production model.dat entries are
+  // observed at ~10x compression, so both limits below leave generous
+  // headroom for legitimate files while rejecting the kind of declared-size
+  // lie or extreme ratio a genuine file would never need.
+  static constexpr std::uint64_t kMaxUncompressedEntryBytes = 16ull * 1024 * 1024 * 1024;  // 16 GB
+  static constexpr std::uint64_t kMaxCompressionRatio = 1000;
+  static constexpr std::uint64_t kRatioCheckThresholdBytes = 1024ull * 1024;  // 1 MB
+
+  static void validate_entry_size(const mz_zip_archive_file_stat& s) {
+    auto declared = s.m_uncomp_size;
+    if (declared == 0) return;
+
+    if (declared > kMaxUncompressedEntryBytes) {
+      throw SkpParseError("ZIP entry '" + std::string(s.m_filename) + "' declares " +
+                               std::to_string(declared) + " bytes uncompressed, exceeding the " +
+                               std::to_string(kMaxUncompressedEntryBytes) + "-byte safety ceiling",
+                           ParseStage::zip_extract);
+    }
+
+    if (declared >= kRatioCheckThresholdBytes) {
+      auto compressed = s.m_comp_size;
+      if (compressed == 0 || declared / compressed > kMaxCompressionRatio) {
+        throw SkpParseError("ZIP entry '" + std::string(s.m_filename) +
+                                 "' declares an implausible compression ratio (" +
+                                 std::to_string(declared) + " bytes from " + std::to_string(compressed) +
+                                 " bytes compressed) - likely a decompression bomb",
+                             ParseStage::zip_extract);
+      }
+    }
   }
 };
 
