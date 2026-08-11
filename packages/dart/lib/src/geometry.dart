@@ -5,6 +5,7 @@ import 'package:archive/archive.dart';
 import 'package:xml/xml.dart';
 
 import 'tlv.dart';
+import 'vff.dart';
 
 class GeometryBuilderFace {
   List<List<(int edgeId, int orientation)>> loops = [];
@@ -499,12 +500,17 @@ class Geometry {
 
     final candidate = filename.isNotEmpty ? '$folder/$filename' : null;
     if (candidate != null && entryNames.contains(candidate)) {
-      data = zip.findFile(candidate)?.content;
+      final candEntry = zip.findFile(candidate);
+      if (candEntry != null) {
+        Vff.validateEntrySize(candEntry);
+        data = candEntry.content;
+      }
     } else {
       for (final entry in zip.files) {
         if (entry.name.startsWith('$folder/') &&
             entry.name != xmlName &&
             !entry.name.toLowerCase().endsWith('.xml')) {
+          Vff.validateEntrySize(entry);
           data = entry.content;
           if (filename.isEmpty) {
             final s = entry.name.lastIndexOf('/');
@@ -523,7 +529,11 @@ class Geometry {
       imgPath = _lstripChars(imgPath, './');
       for (final cand in [imgPath, '$folder/$imgPath']) {
         if (cand.isNotEmpty && entryNames.contains(cand)) {
-          data = zip.findFile(cand)?.content;
+          final candEntry = zip.findFile(cand);
+          if (candEntry != null) {
+            Vff.validateEntrySize(candEntry);
+            data = candEntry.content;
+          }
           if (filename.isEmpty) {
             final s = cand.lastIndexOf('/');
             filename = s >= 0 ? cand.substring(s + 1) : cand;

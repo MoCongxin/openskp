@@ -59,6 +59,7 @@ class Core {
     for (final entry in zip.files) {
       final name = entry.name;
       if (name.endsWith('material.xml') && name.startsWith('materials/')) {
+        Vff.validateEntrySize(entry);
         RawMaterial? mat;
         try {
           mat = Geometry.parseMaterialXml(zip, name, entry.content);
@@ -85,6 +86,7 @@ class Core {
       if (!(name.startsWith('styles/') && name.endsWith('style.xml'))) {
         continue;
       }
+      Vff.validateEntrySize(entry);
       final style = Geometry.parseStyleXml(entry.content);
       if (style != null) {
         styles.add(style);
@@ -97,6 +99,7 @@ class Core {
     if (modelDatEntry == null) {
       throw SkpParseException('model.dat not found in ZIP container', stage: 'zip_extract');
     }
+    Vff.validateEntrySize(modelDatEntry);
     final modelDat = modelDatEntry.content;
     emitLog(options, SkpLogLevel.debug, 'Read model.dat: ${modelDat.length} bytes');
 

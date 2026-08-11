@@ -2,6 +2,8 @@ import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 
+import 'errors.dart';
+
 /// Container-level helpers for the modern (2021+) VFF/ZIP .skp format:
 /// header validation, version-string extraction, and locating the embedded
 /// ZIP payload. Ported from the steps in Python's _core.full_parse() that
@@ -76,5 +78,48 @@ class Vff {
   static Archive openZip(Uint8List data, int zipOffset) {
     final zipBytes = Uint8List.sublistView(data, zipOffset);
     return ZipDecoder().decodeBytes(zipBytes);
+  }
+
+  // A ZIP entry's declared uncompressed size (ArchiveFile.size) is
+  // untrusted central-directory metadata - it can be set independently of
+  // what the compressed stream actually decompresses to, and even when
+  // genuine, DEFLATE can expand highly compressible data by three orders
+  // of magnitude. ArchiveFile.content decompresses (and so allocates) up
+  // to that declared size with no ceiling of its own - decodeBytes() only
+  // reads the central directory, so this check runs before any real
+  // decompression happens. Real production model.dat entries are observed
+  // at ~10x compression, so both limits below leave generous headroom for
+  // legitimate files.
+  static const int _maxUncompressedEntryBytes = 16 * 1024 * 1024 * 1024; // 16 GB
+  static const int _maxCompressionRatio = 1000;
+  static const int _ratioCheckThresholdBytes = 1024 * 1024; // 1 MB
+
+  /// Reject a ZIP entry whose declared uncompressed size is implausible,
+  /// before any code reads (and so decompresses/allocates for) its
+  /// content.
+  static void validateEntrySize(ArchiveFile entry) {
+    final declared = entry.size;
+    if (declared <= 0) return;
+
+    if (declared > _maxUncompressedEntryBytes) {
+      throw SkpParseException(
+        "ZIP entry '${entry.name}' declares $declared bytes uncompressed, "
+        'exceeding the $_maxUncompressedEntryBytes-byte safety ceiling',
+        stage: 'zip_extract',
+      );
+    }
+
+    if (declared >= _ratioCheckThresholdBytes) {
+      final raw = entry.rawContent;
+      final compressed = raw is ZipFile ? raw.compressedSize : 0;
+      if (compressed <= 0 || declared / compressed > _maxCompressionRatio) {
+        throw SkpParseException(
+          "ZIP entry '${entry.name}' declares an implausible compression "
+          "ratio ($declared bytes from $compressed bytes compressed) - "
+          'likely a decompression bomb',
+          stage: 'zip_extract',
+        );
+      }
+    }
   }
 }
