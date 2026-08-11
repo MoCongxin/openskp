@@ -7,7 +7,14 @@ TLV stream.  This module handles both sources.
 
 from __future__ import annotations
 
-import xml.etree.ElementTree as ET
+# Material XML comes from inside the .skp's ZIP container, which is fully
+# attacker-controlled input - stdlib ElementTree expands internal general
+# entities with no limit, making a "billion laughs" DoS payload trivial to
+# embed. defusedxml.ElementTree is a drop-in replacement (same ParseError
+# class, same fromstring() signature) that rejects that class of payload
+# outright instead.
+import defusedxml.ElementTree as ET
+from defusedxml.common import DefusedXmlException
 from typing import Dict, List, Optional, Tuple
 
 from .model import Layer, Material, TlvNode
@@ -72,7 +79,7 @@ def _parse_material_xml(xml_bytes: bytes) -> Optional[Material]:
     """
     try:
         root = ET.fromstring(xml_bytes)
-    except ET.ParseError:
+    except (ET.ParseError, DefusedXmlException):
         return None
 
     name: str = root.get("name", root.get("Name", "Unnamed"))

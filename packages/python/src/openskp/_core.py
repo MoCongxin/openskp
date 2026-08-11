@@ -18,7 +18,14 @@ import struct
 import time
 import zipfile
 from typing import Any, Dict
-import xml.etree.ElementTree as ET
+# material.xml/style.xml come from inside the .skp's ZIP container, which is
+# fully attacker-controlled input - stdlib ElementTree expands internal
+# general entities with no limit, making a "billion laughs" DoS payload
+# trivial to embed. defusedxml.ElementTree is a drop-in replacement (same
+# ParseError class, same fromstring() signature) that rejects that class of
+# payload outright instead.
+import defusedxml.ElementTree as ET
+from defusedxml.common import DefusedXmlException
 
 import numpy as np
 import trimesh
@@ -837,7 +844,7 @@ def full_parse(skp_path: str) -> Dict[str, Any]:
         try:
             _validate_zip_entry_size(zf, name)
             sroot = ET.fromstring(zf.read(name))
-        except ET.ParseError:
+        except (ET.ParseError, DefusedXmlException):
             continue
         STY = '{http://sketchup.google.com/schemas/sketchup/1.0/style}'
         TYP = '{http://sketchup.google.com/schemas/1.0/types}'
