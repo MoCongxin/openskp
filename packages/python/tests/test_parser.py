@@ -370,6 +370,7 @@ class TestJsonExport:
         model = SkpModel()
         d = to_dict(model)
         assert d["version"] == "unknown"
+        assert d["units"] is None
         assert d["root"] == {
             "id": 0, "guid": "", "name": "", "vertex_count": 0,
             "edge_count": 0, "face_count": 0, "vertices": [], "instances": [],
@@ -752,6 +753,122 @@ class TestFaceInstanceHidden:
                 assert face.hidden is False
         for inst in model.root.instances:
             assert inst.hidden is False
+
+
+class TestMetaUnits:
+    """``SkpModel.units`` - the model's unit-system string, read from
+    ``meta/meta.dat`` in VFF files. Never opened by any parser before this
+    (zero references to the filename anywhere in the codebase). Confirmed
+    plaintext payload in a real fixture (Untitled.skp): ``meta.dat`` uses
+    the same low-level TLV framing as ``model.dat`` (2-byte tag + 4-byte
+    little-endian length + payload), one flat record list wrapped in a
+    single outer record (tag 0x6400); tag 0x6D00 carries the units string
+    as plain text, alongside sibling tags for the SketchUp version, save
+    path, and thumbnail references that no parser surfaces either.
+    """
+
+    @staticmethod
+    def _tlv(tag: bytes, payload: bytes) -> bytes:
+        return tag + struct.pack('<I', len(payload)) + payload
+
+    def test_extracts_units_from_real_fixture_bytes(self) -> None:
+        # The exact 388-byte meta/meta.dat payload from a real VFF fixture
+        # (Untitled.skp, SketchUp 25.0.575) - byte-for-byte, not
+        # hand-crafted. Confirms _read_meta_units against genuine data,
+        # not just a minimal synthetic record.
+        from openskp._core import _read_meta_units
+
+        real_meta_dat = (
+            b'd\x00~\x01\x00\x00u\x00\x08\x00\x00\x0025.0.575v\x00\x02\x00\x00\x00\x18\x00'
+            b'w\x00\x02\x00\x00\x00\x02\x00s\x00\x02\x00\x00\x00\x01\x00t\x00\x02\x00\x00'
+            b'\x00\x11\x00f\x00\x10\x00\x00\x00\xdc\xd4u*8=rG\x83\x02/\xa2\x9c\xda2$'
+            b'g\x00.\x00\x00\x00(#(\x00\x00\x00)#\x04\x00\x00\x00\x04\x00\x00\x00'
+            b'*#\x18\x00\x00\x00meta/model_thumbnail.png'
+            b'h\x000\x00\x00\x00(#*\x00\x00\x00)#\x04\x00\x00\x00\x04\x00\x00\x00'
+            b'*#\x1a\x00\x00\x00meta/preview_thumbnail.png'
+            b'i\x00\x01\x00\x00\x00\x01j\x00\x00\x00\x00\x00k\x00\x00\x00\x00\x00'
+            b'l\x00\x00\x00\x00\x00n\x00\x00\x00\x00\x00q\x00\x01\x00\x00\x00\x00'
+            b'y\x00\x01\x00\x00\x00\x00r\x00\x01\x00\x00\x00\x00'
+            b'm\x00\n\x00\x00\x00Millimeter'
+            b'p\x00\x01\x00\x00\x00\x01'
+            b"o\x00'\x00\x00\x00E:/Devs/TEst/Skp Test/ref2/Untitled.skp"
+            b'x\x00R\x00\x00\x00\xc8\x00L\x00\x00\x00\xc9\x00F\x00\x00\x00\xca\x00'
+            b'@\x00\x00\x00\xcb\x00"\x00\x00\x00SketchUp Client (Windows) 25.0.575'
+            b'\xcc\x00\x04\x00\x00\x00#\xc52j'
+            b'\xcd\x00\x08\x00\x00\x00\xecD=\xc9\xb4\xdb\x98w'
+        )
+        assert _read_meta_units(real_meta_dat) == 'Millimeter'
+
+    def test_extracts_units_from_minimal_synthetic_record(self) -> None:
+        from openskp._core import _read_meta_units
+
+        inner = self._tlv(b'\x6D\x00', b'Inches')
+        outer = self._tlv(b'\x64\x00', inner)
+        assert _read_meta_units(outer) == 'Inches'
+
+    def test_returns_none_when_units_tag_absent(self) -> None:
+        from openskp._core import _read_meta_units
+
+        inner = self._tlv(b'\x75\x00', b'25.0.575')  # version tag, not units
+        outer = self._tlv(b'\x64\x00', inner)
+        assert _read_meta_units(outer) is None
+
+    def test_returns_none_for_empty_or_truncated_bytes(self) -> None:
+        from openskp._core import _read_meta_units
+
+        assert _read_meta_units(b'') is None
+        assert _read_meta_units(b'\x01\x02\x03') is None
+
+    def test_model_units_wired_from_parsed_dict(self, monkeypatch, tmp_path: pathlib.Path) -> None:
+        import openskp._core as _core
+        from openskp.model import SkpFile
+
+        parsed = {
+            "version": "test",
+            "defs_dict": {},
+            "layer_colors": {},
+            "materials": {},
+            "materials_by_folder": {},
+            "material_id_to_name": {},
+            "units": "Millimeter",
+        }
+        monkeypatch.setattr(_core, "full_parse", lambda path: parsed)
+        fake = tmp_path / "model.skp"
+        fake.write_bytes(b"")
+        model = SkpFile.open(str(fake)).parse()
+
+        assert model.units == "Millimeter"
+
+    def test_model_units_defaults_to_none_when_absent(self, monkeypatch, tmp_path: pathlib.Path) -> None:
+        import openskp._core as _core
+        from openskp.model import SkpFile
+
+        parsed = {
+            "version": "test",
+            "defs_dict": {},
+            "layer_colors": {},
+            "materials": {},
+            "materials_by_folder": {},
+            "material_id_to_name": {},
+        }
+        monkeypatch.setattr(_core, "full_parse", lambda path: parsed)
+        fake = tmp_path / "model.skp"
+        fake.write_bytes(b"")
+        model = SkpFile.open(str(fake)).parse()
+
+        assert model.units is None
+
+    def test_real_legacy_fixture_has_no_units(self) -> None:
+        # Legacy (pre-2021 MFC) files carry no meta/meta.dat container -
+        # confirms this returns None cleanly rather than raising.
+        import pytest as _pytest
+        fixture = pathlib.Path(__file__).parent / "fixtures" / "capilla_quiroz_v17.skp"
+        if not fixture.exists():
+            _pytest.skip("legacy fixture not present")
+        from openskp.model import SkpFile
+
+        model = SkpFile.open(str(fixture)).parse()
+        assert model.units is None
 
 
 # ── Instance material tests ──────────────────────────────────────────────

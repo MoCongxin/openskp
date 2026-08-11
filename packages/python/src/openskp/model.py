@@ -358,6 +358,10 @@ class SkpModel:
             the join table for :attr:`Face.material_id`.  Several IDs may
             alias the same :class:`Material` object.
         styles: List of :class:`Style` objects found in the file.
+        units: The model's unit-system string (e.g. ``"Millimeter"``),
+            read from ``meta/meta.dat`` in modern (VFF) files.  ``None``
+            for legacy (pre-2021 MFC) files, which carry no equivalent
+            container, or when the tag isn't found.
 
     Note:
         The resolved, world-space scene graph (with baked instance
@@ -374,6 +378,7 @@ class SkpModel:
     materials: List[Material] = field(default_factory=list)
     materials_by_id: Dict[int, Material] = field(default_factory=dict)
     styles: List[Style] = field(default_factory=list)
+    units: Optional[str] = None
 
 
 # ── SkpFile entry-point ──────────────────────────────────────────────────
@@ -448,6 +453,7 @@ class SkpFile:
 
         model = SkpModel()
         model.version = parsed.get("version", "unknown")
+        model.units = parsed.get("units")
 
         # Convert defs_dict to Definition dataclasses
         for def_id, d in parsed["defs_dict"].items():
