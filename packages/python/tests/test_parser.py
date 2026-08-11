@@ -266,6 +266,73 @@ class TestVff:
         assert validate_header(b"\xFF\xFE") is False
 
 
+class TestZipEntrySizeCap:
+    """A ZIP entry's declared uncompressed size (ZipInfo.file_size) is
+    untrusted central-directory metadata - it can be set independently of
+    what the compressed stream actually decompresses to, or (even when
+    genuine) DEFLATE can still expand highly compressible data by three
+    orders of magnitude. ``zipfile.ZipFile.read()`` decompresses up to
+    that declared size with no ceiling of its own, so
+    ``_core._validate_zip_entry_size`` is called before every ``zf.read()``
+    in the real full_parse() pipeline (not :mod:`openskp.vff`, whose own
+    ``extract_skp_contents`` turned out to be dead code - nothing in the
+    real parsing path imports it - so the fix lives where ZIP entries are
+    actually read).
+    """
+
+    @staticmethod
+    def _make_zip(name: str, content: bytes, compress: bool = True):
+        import io
+        import zipfile
+
+        buf = io.BytesIO()
+        method = zipfile.ZIP_DEFLATED if compress else zipfile.ZIP_STORED
+        with zipfile.ZipFile(buf, "w", method) as zf:
+            zf.writestr(name, content)
+        buf.seek(0)
+        return zipfile.ZipFile(buf, "r")
+
+    def test_rejects_an_implausible_compression_ratio(self) -> None:
+        from openskp._core import _validate_zip_entry_size
+        from openskp.errors import SkpParseError
+
+        # 8 MB of zeros deflates to a few hundred bytes - a ratio well past
+        # what real (binary geometry) model.dat entries show (~10x), the
+        # shape of a declared-size decompression bomb: tiny real payload,
+        # huge claimed size.
+        zf = self._make_zip("payload.dat", b"\x00" * (8 * 1024 * 1024))
+        info = zf.getinfo("payload.dat")
+        assert info.compress_size > 0
+        assert info.file_size / info.compress_size > 1000
+
+        with pytest.raises(SkpParseError, match="compression ratio"):
+            _validate_zip_entry_size(zf, "payload.dat")
+
+    def test_allows_a_realistic_compression_ratio(self) -> None:
+        import os
+
+        from openskp._core import _validate_zip_entry_size
+
+        # Pseudo-random content compresses poorly (ratio close to 1x),
+        # comfortably under the safety threshold.
+        zf = self._make_zip("payload.dat", os.urandom(64 * 1024))
+        _validate_zip_entry_size(zf, "payload.dat")  # must not raise
+
+    def test_allows_a_tiny_entry_regardless_of_ratio(self) -> None:
+        from openskp._core import _validate_zip_entry_size
+
+        # Below the 1 MB ratio-check threshold, even a high ratio is
+        # allowed through - the absolute cost is bounded regardless.
+        zf = self._make_zip("payload.dat", b"\x00" * 1024)
+        _validate_zip_entry_size(zf, "payload.dat")  # must not raise
+
+    def test_allows_an_empty_entry(self) -> None:
+        from openskp._core import _validate_zip_entry_size
+
+        zf = self._make_zip("payload.dat", b"", compress=False)
+        _validate_zip_entry_size(zf, "payload.dat")  # must not raise
+
+
 # ── Materials tests ──────────────────────────────────────────────────────
 
 
