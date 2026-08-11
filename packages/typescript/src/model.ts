@@ -78,6 +78,9 @@ export interface Face {
   uvProjected: boolean;
   /** Same for the face's back side. */
   uvProjectedBack: boolean;
+  /** Whether the face is hidden (SketchUp's "Hide" on this specific face,
+   * not a layer/tag visibility toggle). */
+  hidden: boolean;
 }
 
 export interface CoEdge {
@@ -98,6 +101,10 @@ export interface Instance {
    * that inheritance themselves, like the official SDK does on export.
    */
   materialId: number | null;
+  /** Whether the instance itself is hidden (SketchUp's "Hide" on this
+   * specific component/group placement, not a layer/tag visibility
+   * toggle). */
+  hidden: boolean;
 }
 
 export interface Layer {
@@ -302,6 +309,7 @@ function buildDefinition(id: number, d: ParsedDefinition): Definition {
     uvTransformBack: fData.uvTransformBack ?? null,
     uvProjected: fData.uvProjected ?? false,
     uvProjectedBack: fData.uvProjectedBack ?? false,
+    hidden: fData.hidden ?? false,
   }));
   const instances: Instance[] = d.builder.instances.map((inst) => ({
     name: inst.name,
@@ -309,6 +317,7 @@ function buildDefinition(id: number, d: ParsedDefinition): Definition {
     guid: inst.refGuid,
     matrix: inst.matrix,
     materialId: inst.materialId,
+    hidden: inst.hidden ?? false,
   }));
 
   return {

@@ -10,6 +10,7 @@ export interface GeometryBuilderInstance {
   /** Layer ID this instance belongs to (D007 -> D207), or null. Internal -
    * used for scene-graph layer inheritance, not part of the public API. */
   layerId?: number | null;
+  hidden?: boolean;
   children: TlvNode[];
 }
 
@@ -22,6 +23,7 @@ export interface GeometryBuilderFace {
   uvTransformBack?: number[] | null;
   uvProjected?: boolean;
   uvProjectedBack?: boolean;
+  hidden?: boolean;
 }
 
 export class GeometryBuilder {
@@ -238,6 +240,7 @@ export function extractGeometryFromNodes(
         let faceMatId: number | null = null;
         let uvFront: number[] | null = null;
         let uvBack: number[] | null = null;
+        let faceHidden = false;
         const d007 = el.children.find((c) => c.tag === 'D007');
         if (d007) {
           const d107 = d007.children.find((c) => c.tag === 'D107');
@@ -247,6 +250,13 @@ export function extractGeometryFromNodes(
           const dc05 = d007.children.find((c) => c.tag === 'DC05');
           if (dc05) {
             [uvFront, uvBack] = extractUvTransforms(dc05.payload);
+          }
+          // D307 = display flags, same record edges already read (base
+          // 0x06, +0x01 hidden) - faces carry the identical tag under
+          // their own D007 container.
+          const d307 = d007.children.find((c) => c.tag === 'D307');
+          if (d307 && d307.payload.length > 0) {
+            faceHidden = (d307.payload[0] & 0x01) !== 0;
           }
         }
         // Back-side material: the AF0D child of the face node (a face
@@ -265,6 +275,7 @@ export function extractGeometryFromNodes(
           backMaterialId: backMatId,
           uvTransform: uvFront,
           uvTransformBack: uvBack,
+          hidden: faceHidden,
         });
       }
     } else if (tag === '6419') {
@@ -312,6 +323,7 @@ export function extractGeometryFromNodes(
       // so consumers need the raw value to do the same.
       let instMatId: number | null = null;
       let instLayerId: number | null = null;
+      let instHidden = false;
       const d007 = el.children.find((c) => c.tag === 'D007');
       if (d007) {
         const d107 = d007.children.find((c) => c.tag === 'D107');
@@ -323,6 +335,12 @@ export function extractGeometryFromNodes(
           const p = d207.payload;
           instLayerId = p.length === 1 ? p[0] : parseVarInt(p, 0, p.length);
         }
+        // D307 = display flags, same record edges/faces already read
+        // (base 0x06, +0x01 hidden).
+        const d307 = d007.children.find((c) => c.tag === 'D307');
+        if (d307 && d307.payload.length > 0) {
+          instHidden = (d307.payload[0] & 0x01) !== 0;
+        }
       }
 
       builder.instances.push({
@@ -333,6 +351,7 @@ export function extractGeometryFromNodes(
         matrix: matrix,
         materialId: instMatId,
         layerId: instLayerId,
+        hidden: instHidden,
         children: el.children,
       });
     } else if (el.children && el.children.length > 0) {

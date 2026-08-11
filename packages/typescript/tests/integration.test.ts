@@ -103,6 +103,11 @@ describe('SketchUp Parser Integration Test', () => {
     expect(firstFace.backMaterialId).toBeNull();
     expect(firstFace.uvTransform).toBeNull();
     expect(firstFace.uvTransformBack).toBeNull();
+    // Real data: every face/instance in this fixture is visible - D307's
+    // flag byte reads the plain baseline (0x06) throughout.
+    for (const face of def66!.faces) {
+      expect(face.hidden).toBe(false);
+    }
 
     expect(firstEdge.soft).toBe(false);
     expect(firstEdge.smooth).toBe(false);
