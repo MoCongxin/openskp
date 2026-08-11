@@ -11,6 +11,9 @@ describe('SketchUp Parser Integration Test', () => {
     // 1. Assert Version
     expect(model.version).toBe('{25.0.575}');
 
+    // 1b. Assert Units (from meta/meta.dat)
+    expect(model.units).toBe('Millimeter');
+
     // 2. Assert Layers
     expect(model.layers.length).toBe(14);
     const expectedLayers = [

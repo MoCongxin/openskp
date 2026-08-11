@@ -31,6 +31,10 @@ describe('Legacy MFC reader (classic pre-2021 .skp)', () => {
     // 1. Version
     expect(model.version).toBe('{17.0.18899}');
 
+    // 1b. Units - legacy (pre-2021 MFC) files carry no meta/meta.dat
+    // container, so there is no known source for this.
+    expect(model.units).toBeNull();
+
     // 2. Definitions - ROOT is excluded from model.definitions by design
     // (same as the VFF path), so only the two named component definitions
     // show up here.
