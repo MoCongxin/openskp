@@ -1904,10 +1904,13 @@ class TestBuildSceneRecursionGuard:
 
 
 class TestGlbExport:
-    """``export.glb.export()`` writes a real ``.glb`` file via a separate,
-    trimesh-based pipeline (not ``scene.py``'s ``build_scene()``) - so its
-    UV/material/JSON-metadata handling needs its own coverage rather than
-    inheriting ``TestBuildScene``'s.
+    """``export.glb.export()`` bakes via ``scene.build_scene()`` (the same
+    step ``SkpFile.build_scene()`` exposes directly) and hands the
+    resulting primitives to trimesh purely for GLB binary serialization -
+    so its counts now track ``TestBuildScene``'s exactly (scaled to
+    millimetres instead of metres), and its UV/material/JSON-metadata
+    handling still needs its own coverage since the trimesh serialization
+    step is a separate concern from the baking step.
 
     Before this was tested, ``export()`` crashed on any file with a
     textured material (the metadata JSON writer tried to serialize the raw
@@ -1961,7 +1964,11 @@ class TestGlbExport:
         with open(meta_path, encoding="utf-8") as f:
             metadata = json.load(f)
 
-        assert metadata["total_meshes"] == 13
+        # 21, not 13: matches TestBuildScene's ground truth now that
+        # export() bakes via scene.build_scene() - faces with genuinely
+        # different front/back materials split into two meshes each (30
+        # such faces on this fixture).
+        assert metadata["total_meshes"] == 21
         # Regression: materials carry texture data as raw bytes internally,
         # which isn't JSON-serializable - export() must strip it before
         # writing, not embed it (or crash).
@@ -1971,8 +1978,8 @@ class TestGlbExport:
                 assert "data" not in tex
 
         first_child = metadata["scene_hierarchy"]["children"][0]
-        assert "definition_id" in first_child
-        assert "matrix_3x4" in first_child
+        assert "definition_name" in first_child
+        assert "position_mm" in first_child
 
     def test_export_rejects_unsupported_coordinate_system(self, tmp_path) -> None:
         # The underlying conversion is hardcoded to y-up/mm - passing
@@ -2000,6 +2007,57 @@ class TestGlbExport:
         skp.parse()
         with pytest.raises(NotImplementedError, match="units"):
             glb_export.export(skp, str(tmp_path / "out.glb"), units="inches")
+
+    def test_export_rejects_self_referencing_definition(self, tmp_path) -> None:
+        # export() now bakes via scene.build_scene() instead of its own
+        # separate trimesh pass, so the recursion guard covered by
+        # TestBuildSceneRecursionGuard must reach this path too - it
+        # didn't before this was wired together.
+        from openskp._core import _GeometryBuilder
+        from openskp.errors import SkpParseError
+        from openskp.export import glb as glb_export
+
+        instance = {
+            "offset": 0, "ref_guid": "", "ref_idx": 1, "name": "child",
+            "matrix": [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1.0],
+            "material_id": None, "children": [],
+        }
+        builder = _GeometryBuilder()
+        builder.instances.append(instance)
+        root_builder = _GeometryBuilder()
+        root_builder.instances.append(instance)
+        defs_dict = {
+            1: {"guid": "g1", "name": "self_ref", "builder": builder},
+            "ROOT": {"guid": "ROOT", "name": "ROOT_MODEL", "builder": root_builder},
+        }
+
+        class _FakeSkpFile:
+            _parsed = {
+                "defs_dict": defs_dict, "layer_colors": {}, "layer_id_to_name": {},
+                "material_id_to_name": {}, "materials": {}, "materials_by_folder": {},
+                "version": "test", "thumbnail_data": None,
+            }
+
+        with pytest.raises(SkpParseError, match="Recursive component definition"):
+            glb_export.export(_FakeSkpFile(), str(tmp_path / "out.glb"))
+
+    def test_export_marks_back_face_materials_double_sided(self, tmp_path) -> None:
+        # The metadata JSON's material list should carry the same
+        # doubleSided/back-face fix TestBuildScene covers - end to end
+        # through the real trimesh-serialized .glb, not just the
+        # intermediate Scene object.
+        import json
+        import struct
+
+        skp, glb_path = self._export(tmp_path)
+        with open(glb_path, "rb") as f:
+            data = f.read()
+        chunk_len = struct.unpack("<I", data[12:16])[0]
+        materials = json.loads(data[20:20 + chunk_len])["materials"]
+
+        assert len(materials) == 13
+        double_sided = [m for m in materials if m.get("doubleSided")]
+        assert len(double_sided) == 4
 
 
 # ── Observability: progress logging + structured error context ──────────
