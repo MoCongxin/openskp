@@ -1358,6 +1358,33 @@ class TestGlbExport:
         assert "definition_id" in first_child
         assert "matrix_3x4" in first_child
 
+    def test_export_rejects_unsupported_coordinate_system(self, tmp_path) -> None:
+        # The underlying conversion is hardcoded to y-up/mm - passing
+        # anything else must raise, not silently produce y-up/mm output
+        # while claiming to have honored the request.
+        import pytest as _pytest
+        if not self.FIXTURE.exists():
+            _pytest.skip("legacy fixture not present")
+        from openskp.export import glb as glb_export
+        from openskp.model import SkpFile
+
+        skp = SkpFile.open(str(self.FIXTURE))
+        skp.parse()
+        with pytest.raises(NotImplementedError, match="coordinate_system"):
+            glb_export.export(skp, str(tmp_path / "out.glb"), coordinate_system="z-up")
+
+    def test_export_rejects_unsupported_units(self, tmp_path) -> None:
+        import pytest as _pytest
+        if not self.FIXTURE.exists():
+            _pytest.skip("legacy fixture not present")
+        from openskp.export import glb as glb_export
+        from openskp.model import SkpFile
+
+        skp = SkpFile.open(str(self.FIXTURE))
+        skp.parse()
+        with pytest.raises(NotImplementedError, match="units"):
+            glb_export.export(skp, str(tmp_path / "out.glb"), units="inches")
+
 
 # ── Observability: progress logging + structured error context ──────────
 

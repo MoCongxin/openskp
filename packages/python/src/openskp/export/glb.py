@@ -45,12 +45,29 @@ def export(
 
     Raises:
         RuntimeError: If *skp_file* has not been parsed yet.
+        NotImplementedError: If *coordinate_system* or *units* request
+            anything other than the only values currently implemented
+            (``"y-up"`` / ``"mm"``). The underlying conversion (glTF
+            y-up, millimetres) is hardcoded in the scene builder, so a
+            caller requesting e.g. ``units="inches"`` would otherwise
+            silently get millimetre output with no indication anything
+            was ignored.
     """
     from .._core import build_scene
 
     if not hasattr(skp_file, '_parsed') or skp_file._parsed is None:
         raise RuntimeError(
             "SkpFile must be parsed before exporting. Call skp_file.parse() first."
+        )
+
+    if coordinate_system != "y-up":
+        raise NotImplementedError(
+            f"coordinate_system={coordinate_system!r} is not implemented; "
+            "only 'y-up' (glTF standard) is currently supported."
+        )
+    if units != "mm":
+        raise NotImplementedError(
+            f"units={units!r} is not implemented; only 'mm' is currently supported."
         )
 
     output_dir = os.path.dirname(os.path.abspath(output_path))
