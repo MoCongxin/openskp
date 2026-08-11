@@ -51,6 +51,11 @@ TEST(Parser, ModernUntitled) {
   EXPECT_FALSE(face.back_material_id.has_value());
   EXPECT_FALSE(face.uv_transform.has_value());
   EXPECT_FALSE(face.uv_transform_back.has_value());
+  // Real data: every face in this fixture is visible - D307's flag byte
+  // reads the plain baseline (0x06) throughout.
+  for (const auto& [face_id, f] : definition.faces) {
+    EXPECT_FALSE(f.hidden);
+  }
 
   auto* joined_material = model.material_by_id(26180);
   ASSERT_NE(joined_material, nullptr);
@@ -165,6 +170,15 @@ TEST(Parser, LegacyMatchesReference) {
   EXPECT_NEAR(maximum[1], 51.969, 0.01);
   EXPECT_NEAR(maximum[2], 133.071, 0.01);
   EXPECT_EQ(model.root().instances.size(), 3);
+  for (const auto& inst : model.root().instances) {
+    EXPECT_FALSE(inst.hidden);
+  }
+  for (const auto& [face_id, f] : puerta.faces) {
+    EXPECT_FALSE(f.hidden);
+  }
+  for (const auto& [face_id, f] : grada.faces) {
+    EXPECT_FALSE(f.hidden);
+  }
 
   // Regression: CFace's attribute container (which carries any positioned/
   // photo-fitted CFaceTextureCoords record) was read and then silently

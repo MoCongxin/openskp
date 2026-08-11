@@ -55,6 +55,9 @@ struct Face {
   bool uv_projected{};
   // Same for the face's back side.
   bool uv_projected_back{};
+  // Whether the face is hidden (SketchUp's "Hide" on this specific face,
+  // not a layer/tag visibility toggle).
+  bool hidden{};
 };
 
 struct Layer {
@@ -101,6 +104,10 @@ struct Instance {
   std::map<std::string, std::string> properties;
   std::vector<Instance> children;
   std::optional<EntityId> material_id;
+  // Whether the instance itself is hidden (SketchUp's "Hide" on this
+  // specific component/group placement, not a layer/tag visibility
+  // toggle).
+  bool hidden{};
 };
 
 struct Definition {
