@@ -124,6 +124,20 @@ void main() {
     expect(model.styles[0].name, '[Construction Documentation Style]');
     expect(model.styles[0].frontColor, (255, 255, 255));
     expect(model.styles[0].backColor, (208, 209, 189));
+
+    // buildScene()/meshIndex - a separate, opt-in step from parse(), so it
+    // never costs a plain parse() call anything. TS/.NET/C++ all have this
+    // real-fixture coverage already; Dart's buildScene() tests only ever
+    // exercised the legacy fixture (scene_test.dart), never this one.
+    final scene = SkpFile.open(fixture('Untitled.skp')).buildScene();
+    expect(scene.sceneHierarchy.name, 'ROOT');
+    expect(scene.sceneHierarchy.definitionName, 'ROOT_MODEL');
+    expect(scene.sceneHierarchy.children.length, greaterThan(0));
+
+    expect(scene.meshIndex.length, 43);
+    final firstMesh = scene.meshIndex.values.first;
+    expect(firstMesh.name, isNotNull);
+    expect(firstMesh.layer, isNotNull);
   });
 
   test('parses SU_File.skp correctly', () {
@@ -141,5 +155,12 @@ void main() {
     // map (which excludes ROOT) is empty.
     expect(model.definitions, isEmpty);
     expect(model.root.name, 'ROOT_MODEL');
+
+    final scene = SkpFile.open(fixture('SU_File.skp')).buildScene();
+    expect(scene.sceneHierarchy.name, 'ROOT');
+    expect(scene.sceneHierarchy.definitionName, 'ROOT_MODEL');
+
+    expect(scene.meshIndex.length, 1);
+    expect(scene.meshIndex.values.first.definitionName, 'ROOT_MODEL');
   });
 }
