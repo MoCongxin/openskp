@@ -30,6 +30,12 @@ namespace OpenSkp
         public long? MaterialId;
         public bool Hidden;
         public List<TlvNode> Children = new List<TlvNode>();
+        /// <summary>Dynamic Component properties precomputed for legacy
+        /// (pre-2021 MFC) instances (see Legacy.ExtractLegacyDynamicProperties)
+        /// - VFF instances don't set this, since their properties come from a
+        /// lazy D007/DC05 TLV walk over <see cref="Children"/> instead (see
+        /// Scene.cs).</summary>
+        public Dictionary<string, string>? Properties;
     }
 
     /// <summary>Accumulates the raw geometry extracted for one component
@@ -137,6 +143,47 @@ namespace OpenSkp
             var mat = new double[9];
             for (int i = 0; i < 9; i++) mat[i] = Tlv.ReadF64(t1527, i * 8);
             return mat;
+        }
+
+        /// <summary>Dynamic Component key/value pairs from an instance's D007
+        /// attribute container. Mirrors Python's _core.extract_dynamic_properties
+        /// and TypeScript's extractDynamicProperties: DC05's payload isn't part
+        /// of the main model.dat TLV tree (DC05 isn't a top-level container
+        /// tag), so it's re-parsed here with its own, more specific
+        /// container-tag set - within that tree, a B636 tag carries a property
+        /// key and the AD38 tag immediately after it carries that property's
+        /// value.</summary>
+        private static readonly HashSet<string> PropContainerTags = new HashSet<string>
+        {
+            "DD05", "B536", "B136", "B236", "B336", "B036", "A438",
+        };
+
+        public static Dictionary<string, string> ExtractDynamicProperties(TlvNode d007)
+        {
+            var dc05 = d007.Children.FirstOrDefault(c => c.Tag == "DC05");
+            if (dc05 == null) return new Dictionary<string, string>();
+            var buffer = ChunkedBuffer.FromArray(dc05.Payload);
+            var propElements = Tlv.ParseRecursive(buffer, 0, buffer.Length, PropContainerTags);
+            var properties = new Dictionary<string, string>();
+            string? currentKey = null;
+            void ExtractProps(List<TlvNode> nodes)
+            {
+                foreach (var n in nodes)
+                {
+                    if (n.Tag == "B636")
+                    {
+                        currentKey = Encoding.UTF8.GetString(n.Payload);
+                    }
+                    else if (n.Tag == "AD38" && currentKey != null)
+                    {
+                        properties[currentKey] = Encoding.UTF8.GetString(n.Payload);
+                        currentKey = null;
+                    }
+                    ExtractProps(n.Children);
+                }
+            }
+            ExtractProps(propElements);
+            return properties;
         }
 
         public static void ExtractGeometryFromNodes(List<TlvNode> elements, GeometryBuilder builder)

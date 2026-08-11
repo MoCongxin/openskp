@@ -47,7 +47,7 @@ OpenSKP is the **first and only** open-source, cross-platform parser for SketchU
 | **Layers / Tags** | ⚠️ | Layer definitions with colors — on/off visibility state is read from the file internally but not yet exposed on the public model in any language |
 | **Materials & Textures** | ✅ | Material properties, colors, transparency, colorized materials, and embedded texture images |
 | **Styles** | ✅ | Front/back face colors for unpainted faces |
-| **Dynamic Components** | ⚠️ | Extracts dynamic component attribute key-value pairs for both modern (2021+) and legacy (2013–2020) files in Python, TypeScript, Dart, and C++ — not yet supported in .NET |
+| **Dynamic Components** | ✅ | Extracts dynamic component attribute key-value pairs for both modern (2021+) and legacy (2013–2020) files, in all five languages |
 | **Observability** | ✅ | Opt-in progress reporting + structured, location-carrying parse errors — see [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md) |
 | **Export to GLB / OBJ / JSON** | ⚠️ | GLB export is available in all five languages; OBJ and JSON metadata export are currently Python-only (JSON also in TypeScript) — see [Export capabilities](docs/DEVELOPER_GUIDE.md#export-capabilities) |
 | **Streaming / low-memory parsing** | ✅ | Peak memory bounded by the largest single definition, not the whole file — see [Memory architecture](docs/ARCHITECTURE.md#memory-architecture) |

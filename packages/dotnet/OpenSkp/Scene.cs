@@ -453,9 +453,16 @@ namespace OpenSkp
 
                     string lName = parentLayer;
                     (int R, int G, int B)? instColor = inheritedColor;
-                    var properties = new Dictionary<string, string>();
+                    // Legacy (pre-2021 MFC) instances carry a precomputed
+                    // Properties dict (see Legacy.ExtractLegacyDynamicProperties)
+                    // - VFF instances don't set this, so this stays {} for
+                    // them and gets overwritten below via the D007/DC05 TLV
+                    // walk instead.
+                    var properties = inst.Properties != null
+                        ? new Dictionary<string, string>(inst.Properties)
+                        : new Dictionary<string, string>();
 
-                    // Layer/material/dynamic-properties resolution mirrors
+                    // Layer/material resolution mirrors
                     // Geometry.ExtractGeometryFromNodes's D007 handling;
                     // re-derived here (from inst.Children) to match the
                     // Python/TS reference exactly rather than needing a
@@ -481,8 +488,14 @@ namespace OpenSkp
                                 if (mat != null) instColor = (mat.R, mat.G, mat.B);
                             }
                         }
-                        // Dynamic properties (attribute dictionaries under
-                        // D007) are not yet ported for .NET; left empty.
+                        try
+                        {
+                            properties = Geometry.ExtractDynamicProperties(d007);
+                        }
+                        catch
+                        {
+                            // Ignore
+                        }
                     }
 
                     string instName = !string.IsNullOrEmpty(inst.Name) ? inst.Name! : $"Component_{refIdx}";
