@@ -90,6 +90,9 @@ struct RawStyle {
 
 struct RawParsed {
   std::string version{"unknown"};
+  // The model's unit-system string (e.g. "Millimeter"), read from
+  // meta/meta.dat. Unset for legacy files or when the tag isn't found.
+  std::optional<std::string> units;
   std::map<std::string, Color3> layer_colors;
   // Modern (VFF) files derive layers from Layer_<name>-prefixed materials,
   // which carry no visibility flag of their own - unlike legacy MFC files,
@@ -112,6 +115,7 @@ double read_f64(const ByteBuffer&, std::size_t);
 std::uint64_t parse_varint(const ByteBuffer&, std::size_t, std::size_t);
 std::vector<TlvNode> parse_tlv_recursive(const ByteBuffer&, std::size_t, std::size_t);
 std::vector<std::pair<std::string, ByteBuffer>> parse_flat(const ByteBuffer&);
+std::optional<std::string> read_meta_units(const ByteBuffer&);
 std::string extract_version(const ByteBuffer&);
 bool valid_header(const ByteBuffer&);
 bool is_legacy(const ByteBuffer&);

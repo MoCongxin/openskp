@@ -271,6 +271,13 @@ RawParsed full_parse(const ByteBuffer& data, const ParseOptions& o) {
     if (i % progress_interval == 0 || i + 1 == total)
       emit_progress(o, ParseStage::tlv_walk, i + 1, total);
   }
+  // Units (meta/meta.dat) - VFF-only; legacy files carry no equivalent
+  // container.
+  try {
+    if (auto meta = zip.get("meta/meta.dat")) p.units = read_meta_units(*meta);
+  } catch (...) {
+    p.units = std::nullopt;
+  }
   if (!p.layer_id_to_name.count(1)) p.layer_id_to_name[1] = "Layer0";
   if (!p.layer_colors.count("Layer0")) p.layer_colors["Layer0"] = {136, 136, 136};
   if (!p.layer_hidden.count("Layer0")) p.layer_hidden["Layer0"] = false;

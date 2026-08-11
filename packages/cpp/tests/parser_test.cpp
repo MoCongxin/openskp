@@ -14,6 +14,8 @@ namespace {
 TEST(Parser, ModernUntitled) {
   auto model = SkpFile::open(test::fixture("Untitled.skp")).parse();
   EXPECT_EQ(model.version, "{25.0.575}");
+  ASSERT_TRUE(model.units.has_value());
+  EXPECT_EQ(*model.units, "Millimeter");
   EXPECT_EQ(model.layers.size(), 14);
   EXPECT_EQ(model.materials.size(), 15);
   EXPECT_EQ(model.definitions.size(), 46);
@@ -105,6 +107,9 @@ TEST(Parser, LegacyMatchesReference) {
   auto file = SkpFile::open(test::fixture("capilla_quiroz_v17.skp"));
   auto model = file.parse();
   EXPECT_EQ(model.version, "{17.0.18899}");
+  // Legacy (pre-2021 MFC) files carry no meta/meta.dat container, so there
+  // is no known source for the model's unit-system string.
+  EXPECT_FALSE(model.units.has_value());
   ASSERT_EQ(model.definitions.size(), 2);
 
   const auto& puerta = model.definitions.at(40);
