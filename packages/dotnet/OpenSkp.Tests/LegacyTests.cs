@@ -106,6 +106,11 @@ namespace OpenSkp.Tests
                 .OrderBy(n => n, StringComparer.Ordinal)
                 .ToList();
             Assert.Equal(new[] { "grada", "grada", "puerta" }, byRefIdx);
+            Assert.All(model.Root.Instances, i => Assert.False(i.Hidden));
+            foreach (var defn in model.Definitions.Values)
+            {
+                Assert.All(defn.Faces.Values, f => Assert.False(f.Hidden));
+            }
         }
 
         [Fact]

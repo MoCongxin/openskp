@@ -83,6 +83,9 @@ namespace OpenSkp.Tests
             Assert.Null(firstFace.UvTransform);
             Assert.Null(firstFace.UvTransformBack);
             Assert.NotNull(firstFace.Normal);
+            // Real data: every face in this fixture is visible - D307's
+            // flag byte reads the plain baseline (0x06) throughout.
+            Assert.All(def66.Faces.Values, f => Assert.False(f.Hidden));
 
             var firstEdge = def66.Edges.Values.First();
             Assert.False(firstEdge.Soft);

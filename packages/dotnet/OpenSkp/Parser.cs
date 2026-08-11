@@ -125,6 +125,7 @@ namespace OpenSkp
                     UvTransformBack = f.UvTransformBack,
                     UvProjected = f.UvProjected,
                     UvProjectedBack = f.UvProjectedBack,
+                    Hidden = f.Hidden,
                 };
             }
 
@@ -137,6 +138,7 @@ namespace OpenSkp
                     Guid = inst.RefGuid ?? "",
                     Matrix = inst.Matrix,
                     MaterialId = inst.MaterialId,
+                    Hidden = inst.Hidden,
                 });
             }
 

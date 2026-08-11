@@ -47,6 +47,10 @@ namespace OpenSkp
 
         /// <summary>Same for the face's back side.</summary>
         public bool UvProjectedBack { get; set; }
+
+        /// <summary>Whether the face is hidden (SketchUp's "Hide" on this
+        /// specific face, not a layer/tag visibility toggle).</summary>
+        public bool Hidden { get; set; }
     }
 
     public sealed class Layer
@@ -119,6 +123,11 @@ namespace OpenSkp
         public Dictionary<string, string> Properties { get; set; } = new Dictionary<string, string>();
         public List<Instance> Children { get; set; } = new List<Instance>();
         public long? MaterialId { get; set; }
+
+        /// <summary>Whether the instance itself is hidden (SketchUp's "Hide"
+        /// on this specific component/group placement, not a layer/tag
+        /// visibility toggle).</summary>
+        public bool Hidden { get; set; }
     }
 
     public sealed class Definition

@@ -1212,6 +1212,7 @@ namespace OpenSkp
                         BackMaterialId = faceRec.BackMat != 0 ? faceRec.BackMat : (long?)null,
                         UvTransform = null,
                         UvTransformBack = null,
+                        Hidden = faceRec.Db.Hidden != 0,
                     };
                     var attrs = faceRec.Attrs;
                     if (attrs != null)
@@ -1239,6 +1240,7 @@ namespace OpenSkp
                         RefGuid = "",
                         Matrix = instRec.Xf.ToList(),
                         MaterialId = instRec.Db.Mat != 0 ? instRec.Db.Mat : (long?)null,
+                        Hidden = instRec.Db.Hidden != 0,
                         Children = new List<TlvNode>(),
                     });
                 }

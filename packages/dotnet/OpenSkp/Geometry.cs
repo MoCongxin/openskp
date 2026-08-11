@@ -17,6 +17,7 @@ namespace OpenSkp
         public double[]? UvTransformBack;
         public bool UvProjected;
         public bool UvProjectedBack;
+        public bool Hidden;
     }
 
     internal sealed class GeometryBuilderInstance
@@ -27,6 +28,7 @@ namespace OpenSkp
         public string? Name;
         public List<double> Matrix = new List<double>();
         public long? MaterialId;
+        public bool Hidden;
         public List<TlvNode> Children = new List<TlvNode>();
     }
 
@@ -231,6 +233,7 @@ namespace OpenSkp
                         long? faceMatId = null;
                         double[]? uvFront = null;
                         double[]? uvBack = null;
+                        bool faceHidden = false;
                         var d007 = el.Children.FirstOrDefault(c => c.Tag == "D007");
                         if (d007 != null)
                         {
@@ -243,6 +246,14 @@ namespace OpenSkp
                             if (dc05 != null)
                             {
                                 (uvFront, uvBack) = ExtractUvTransforms(dc05.Payload);
+                            }
+                            // D307 = display flags, same record edges already
+                            // read (base 0x06, +0x01 hidden) - faces carry the
+                            // identical tag under their own D007 container.
+                            var d307 = d007.Children.FirstOrDefault(c => c.Tag == "D307");
+                            if (d307 != null && d307.Payload.Length > 0)
+                            {
+                                faceHidden = (d307.Payload[0] & 0x01) != 0;
                             }
                         }
 
@@ -261,6 +272,7 @@ namespace OpenSkp
                             BackMaterialId = backMatId,
                             UvTransform = uvFront,
                             UvTransformBack = uvBack,
+                            Hidden = faceHidden,
                         };
                     }
                 }
@@ -297,6 +309,7 @@ namespace OpenSkp
                     }
 
                     long? instMatId = null;
+                    bool instHidden = false;
                     var instD007 = el.Children.FirstOrDefault(c => c.Tag == "D007");
                     if (instD007 != null)
                     {
@@ -304,6 +317,13 @@ namespace OpenSkp
                         if (d107 != null)
                         {
                             instMatId = Tlv.ParseVarInt(d107.Payload, 0, d107.Payload.Length);
+                        }
+                        // D307 = display flags, same record edges/faces already
+                        // read (base 0x06, +0x01 hidden).
+                        var instD307 = instD007.Children.FirstOrDefault(c => c.Tag == "D307");
+                        if (instD307 != null && instD307.Payload.Length > 0)
+                        {
+                            instHidden = (instD307.Payload[0] & 0x01) != 0;
                         }
                     }
 
@@ -315,6 +335,7 @@ namespace OpenSkp
                         Name = name,
                         Matrix = matrix,
                         MaterialId = instMatId,
+                        Hidden = instHidden,
                         Children = el.Children,
                     });
                 }
