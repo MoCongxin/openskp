@@ -90,6 +90,7 @@ namespace OpenSkp
         private sealed class FaceGroup
         {
             public (int R, int G, int B) Color;
+            public bool DoubleSided;
             public List<(double X, double Y, double Z)> LocalVerts = new List<(double, double, double)>();
             public List<(double U, double V)> LocalUvs = new List<(double, double)>();
             public List<double[]> NormalsAccum = new List<double[]>();
@@ -184,7 +185,7 @@ namespace OpenSkp
             var meshIndex = new Dictionary<string, MeshMetadata>();
             var glbPrimitives = new List<GlbPrimitive>();
 
-            var colorToMaterialIndex = new Dictionary<(int, int, int), int>();
+            var colorToMaterialIndex = new Dictionary<((int, int, int) Color, bool DoubleSided), int>();
             var gltfMaterials = new List<object>();
 
             // Definitions currently being instantiated on the active
@@ -200,21 +201,35 @@ namespace OpenSkp
                 return layerColors.TryGetValue(name, out var c) ? c : (136, 136, 136);
             }
 
-            int GetMaterialIndex((int R, int G, int B) color)
+            int GetMaterialIndex((int R, int G, int B) color, bool doubleSided)
             {
-                if (colorToMaterialIndex.TryGetValue(color, out var existing)) return existing;
+                var key = (color, doubleSided);
+                if (colorToMaterialIndex.TryGetValue(key, out var existing)) return existing;
                 int idx = gltfMaterials.Count;
-                gltfMaterials.Add(new
+                var material = new Dictionary<string, object>
                 {
-                    pbrMetallicRoughness = new
+                    ["pbrMetallicRoughness"] = new
                     {
                         baseColorFactor = new[] { color.R / 255.0, color.G / 255.0, color.B / 255.0, 1.0 },
                         metallicFactor = 0.0,
                         roughnessFactor = 0.8,
                     },
-                });
-                colorToMaterialIndex[color] = idx;
+                };
+                if (doubleSided) material["doubleSided"] = true;
+                gltfMaterials.Add(material);
+                colorToMaterialIndex[key] = idx;
                 return idx;
+            }
+
+            (Geometry.RawMaterial? Mat, (int R, int G, int B)? Color) ResolveMaterial(long? matId)
+            {
+                if (matId is long id && materialIdToName.TryGetValue(id, out var matName))
+                {
+                    var m = materials.TryGetValue(matName, out var m1) ? m1
+                        : materialsByFolder.TryGetValue(matName, out var m2) ? m2 : null;
+                    if (m != null) return (m, (m.R, m.G, m.B));
+                }
+                return (null, null);
             }
 
             List<InstanceNode> Instantiate(
@@ -252,30 +267,81 @@ namespace OpenSkp
             {
                 if (builder.Faces.Count > 0)
                 {
-                    var faceGroups = new Dictionary<(int, int, int), FaceGroup>();
+                    var faceGroups = new Dictionary<((int R, int G, int B) Color, bool DoubleSided), FaceGroup>();
+
+                    void AddSide(
+                        List<long[]> triangles, (double X, double Y, double Z) fn,
+                        (int R, int G, int B) color, bool doubleSided, bool reverse,
+                        Geometry.RawMaterial? mat, double[]? uvTransform,
+                        (double X, double Y, double Z) xr, (double X, double Y, double Z) yr)
+                    {
+                        var key = (color, doubleSided);
+                        if (!faceGroups.TryGetValue(key, out var group))
+                        {
+                            group = new FaceGroup { Color = color, DoubleSided = doubleSided };
+                            faceGroups[key] = group;
+                        }
+
+                        double? texW = mat?.Texture?.XScale;
+                        double? texH = mat?.Texture?.YScale;
+                        double tileW = (texW.HasValue && texW.Value > 1e-9) ? texW.Value : 1.0;
+                        double tileH = (texH.HasValue && texH.Value > 1e-9) ? texH.Value : 1.0;
+                        (double X, double Y, double Z) sideNormal = reverse ? (-fn.X, -fn.Y, -fn.Z) : fn;
+
+                        // Vertices are deduped per (vId, uv) rather than
+                        // just vId: UVs are inherently per-face, so a
+                        // vertex position shared by two faces that
+                        // disagree on texture mapping must become two
+                        // distinct output vertices (glTF requires
+                        // position/normal/uv aligned per index).
+                        var faceLocalMap = new Dictionary<long, int>();
+                        foreach (var tri in triangles)
+                        {
+                            var triIds = reverse ? new long[] { tri[0], tri[2], tri[1] } : tri;
+                            var faceIndices = new List<int>();
+                            foreach (var vId in triIds)
+                            {
+                                if (!builder.Vertices.ContainsKey(vId)) continue;
+                                if (!faceLocalMap.TryGetValue(vId, out int idx))
+                                {
+                                    var p = builder.Vertices[vId];
+                                    var (u, v) = ComputeFaceUv(p, xr, yr, uvTransform, tileW, tileH);
+                                    var vkey = (vId, u, v);
+                                    if (!group.LocalVMap.TryGetValue(vkey, out idx))
+                                    {
+                                        group.LocalVerts.Add(p);
+                                        group.LocalUvs.Add((u, v));
+                                        group.NormalsAccum.Add(new double[] { sideNormal.X, sideNormal.Y, sideNormal.Z });
+                                        idx = group.LocalVerts.Count - 1;
+                                        group.LocalVMap[vkey] = idx;
+                                    }
+                                    else
+                                    {
+                                        var accum = group.NormalsAccum[idx];
+                                        accum[0] += sideNormal.X; accum[1] += sideNormal.Y; accum[2] += sideNormal.Z;
+                                    }
+                                    faceLocalMap[vId] = idx;
+                                }
+                                faceIndices.Add(idx);
+                            }
+                            if (faceIndices.Count == 3)
+                            {
+                                group.LocalFaces.Add(new long[] { faceIndices[0], faceIndices[1], faceIndices[2] });
+                            }
+                        }
+                    }
+
+                    var fallbackColor = inheritedColor ?? GetLayerColor(parentLayer);
 
                     foreach (var faceKv in builder.Faces)
                     {
                         long fId = faceKv.Key;
                         var fData = faceKv.Value;
-                        (int R, int G, int B)? faceColor = inheritedColor;
-                        Geometry.RawMaterial? mat = null;
-                        if (fData.MaterialId is long faceMatId)
-                        {
-                            if (materialIdToName.TryGetValue(faceMatId, out var matName))
-                            {
-                                mat = materials.TryGetValue(matName, out var m1) ? m1
-                                    : materialsByFolder.TryGetValue(matName, out var m2) ? m2 : null;
-                                if (mat != null) faceColor = (mat.R, mat.G, mat.B);
-                            }
-                        }
-                        var resolvedColor = faceColor ?? GetLayerColor(parentLayer);
 
-                        if (!faceGroups.TryGetValue(resolvedColor, out var group))
-                        {
-                            group = new FaceGroup { Color = resolvedColor };
-                            faceGroups[resolvedColor] = group;
-                        }
+                        var (frontMat, frontMatColor) = ResolveMaterial(fData.MaterialId);
+                        var (backMat, backMatColor) = ResolveMaterial(fData.BackMaterialId);
+                        var frontColor = frontMatColor ?? fallbackColor;
+                        var backColor = backMatColor ?? fallbackColor;
 
                         var loops = new List<List<long>>();
                         foreach (var loop in fData.Loops)
@@ -297,52 +363,19 @@ namespace OpenSkp
                                 stage: "build_scene", definitionId: defId, innerException: e);
                         }
                         var fn = fData.Normal;
-                        double? texW = mat?.Texture?.XScale;
-                        double? texH = mat?.Texture?.YScale;
-                        double tileW = (texW.HasValue && texW.Value > 1e-9) ? texW.Value : 1.0;
-                        double tileH = (texH.HasValue && texH.Value > 1e-9) ? texH.Value : 1.0;
                         var (xr, yr) = FaceUvBasis(fn);
                         var uvTransform = fData.UvTransform;
+                        var uvTransformBack = fData.UvTransformBack;
 
-                        // Vertices are deduped per (vId, uv) rather than
-                        // just vId: UVs are inherently per-face, so a
-                        // vertex position shared by two faces that
-                        // disagree on texture mapping must become two
-                        // distinct output vertices (glTF requires
-                        // position/normal/uv aligned per index).
-                        var faceLocalMap = new Dictionary<long, int>();
-                        foreach (var tri in triangles)
+                        bool sameColor = frontColor.R == backColor.R && frontColor.G == backColor.G && frontColor.B == backColor.B;
+                        if (sameColor)
                         {
-                            var faceIndices = new List<int>();
-                            foreach (var vId in tri)
-                            {
-                                if (!builder.Vertices.ContainsKey(vId)) continue;
-                                if (!faceLocalMap.TryGetValue(vId, out int idx))
-                                {
-                                    var p = builder.Vertices[vId];
-                                    var (u, v) = ComputeFaceUv(p, xr, yr, uvTransform, tileW, tileH);
-                                    var key = (vId, u, v);
-                                    if (!group.LocalVMap.TryGetValue(key, out idx))
-                                    {
-                                        group.LocalVerts.Add(p);
-                                        group.LocalUvs.Add((u, v));
-                                        group.NormalsAccum.Add(new double[] { fn.X, fn.Y, fn.Z });
-                                        idx = group.LocalVerts.Count - 1;
-                                        group.LocalVMap[key] = idx;
-                                    }
-                                    else
-                                    {
-                                        var accum = group.NormalsAccum[idx];
-                                        accum[0] += fn.X; accum[1] += fn.Y; accum[2] += fn.Z;
-                                    }
-                                    faceLocalMap[vId] = idx;
-                                }
-                                faceIndices.Add(idx);
-                            }
-                            if (faceIndices.Count == 3)
-                            {
-                                group.LocalFaces.Add(new long[] { faceIndices[0], faceIndices[1], faceIndices[2] });
-                            }
+                            AddSide(triangles, fn, frontColor, true, false, frontMat, uvTransform, xr, yr);
+                        }
+                        else
+                        {
+                            AddSide(triangles, fn, frontColor, false, false, frontMat, uvTransform, xr, yr);
+                            AddSide(triangles, fn, backColor, false, true, backMat, uvTransformBack, xr, yr);
                         }
                     }
 
@@ -351,7 +384,7 @@ namespace OpenSkp
 
                     foreach (var groupKv in faceGroups)
                     {
-                        var color = groupKv.Key;
+                        var color = groupKv.Key.Color;
                         var group = groupKv.Value;
                         if (group.LocalFaces.Count == 0) continue;
 
@@ -361,7 +394,7 @@ namespace OpenSkp
 
                         string safePath = pathName.Replace(" / ", "__").Replace(" ", "_");
                         if (safePath.Length > 80) safePath = safePath.Substring(0, 80);
-                        string colorSuffix = multiGroup ? $"_{color.Item1}_{color.Item2}_{color.Item3}" : "";
+                        string colorSuffix = multiGroup ? $"_{color.Item1}_{color.Item2}_{color.Item3}_{(group.DoubleSided ? "ds" : "ss")}" : "";
                         string geomName = $"mesh_{meshCounter}_{safePath}_{parentLayer}{colorSuffix}";
                         meshCounter++;
 
@@ -432,7 +465,7 @@ namespace OpenSkp
                             indices[i * 3 + 2] = (uint)group.LocalFaces[i][2];
                         }
 
-                        int materialIndex = GetMaterialIndex(color);
+                        int materialIndex = GetMaterialIndex(color, group.DoubleSided);
                         glbPrimitives.Add(new GlbPrimitive
                         {
                             Positions = positions,
