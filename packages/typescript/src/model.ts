@@ -166,9 +166,10 @@ export interface MeshMetadata {
   path: string;
 }
 
-/** One triangulated, world-space mesh: all faces sharing a single resolved
- * color from one flattened scene-graph position. Ready to hand straight to
- * a GLB/glTF exporter or any other renderer. */
+/** One triangulated, world-space mesh: all faces (or, for a face whose
+ * front/back colors genuinely differ, all *one side* of those faces)
+ * sharing a single resolved color from one flattened scene-graph position.
+ * Ready to hand straight to a GLB/glTF exporter or any other renderer. */
 export interface GlbPrimitive {
   /** Flat [x, y, z, x, y, z, ...] vertex positions, in metres, Y-up. */
   positions: Float32Array;
@@ -447,19 +448,21 @@ export function buildSceneFromParsed(parsed: ParsedRawData, options?: ParseOptio
   // the stack overflows.
   const activeDefinitions = new Set<number | string>();
 
-  function getMaterialIndex(color: { r: number; g: number; b: number }) {
-    const key = `${color.r},${color.g},${color.b}`;
+  function getMaterialIndex(color: { r: number; g: number; b: number }, doubleSided: boolean) {
+    const key = `${color.r},${color.g},${color.b},${doubleSided}`;
     if (colorToMaterialIndex.has(key)) {
       return colorToMaterialIndex.get(key)!;
     }
     const idx = gltfMaterials.length;
-    gltfMaterials.push({
+    const material: any = {
       pbrMetallicRoughness: {
         baseColorFactor: [color.r / 255, color.g / 255, color.b / 255, 1.0],
         metallicFactor: 0.0,
         roughnessFactor: 0.8,
       },
-    });
+    };
+    if (doubleSided) material.doubleSided = true;
+    gltfMaterials.push(material);
     colorToMaterialIndex.set(key, idx);
     return idx;
   }
@@ -477,37 +480,52 @@ export function buildSceneFromParsed(parsed: ParsedRawData, options?: ParseOptio
     const builder = d.builder;
 
     if (builder.faces.size > 0) {
-      const faceGroups = new Map<string, {
+      // Group faces sharing a resolved (color, doubleSided) pair into one
+      // mesh each - same grouping the C++ reference uses (the only port
+      // that already had this before this port): a face whose front/back
+      // resolve to the SAME color is emitted once, with its glTF material
+      // marked doubleSided so it's visible from either side without
+      // needing duplicate geometry; a face whose front/back genuinely
+      // differ is emitted as TWO single-sided triangle sets - one
+      // normal-wound using the front material, one reverse-wound using
+      // the back material - so each side renders its own correct color
+      // instead of the front material leaking onto (or the back
+      // vanishing from) the far side.
+      type FaceGroup = {
         color: { r: number; g: number; b: number };
+        doubleSided: boolean;
         localVerts: [number, number, number][];
         localUvs: [number, number][];
         normalsAccum: number[][];
         localFaces: number[][];
         localVMap: Map<string, number>;
-      }>();
+      };
+      const faceGroups = new Map<string, FaceGroup>();
 
-      for (const [fId, fData] of builder.faces.entries()) {
-        let faceColor = inheritedMaterialColor;
-        const faceMatId = (fData as any).materialId;
-        let mat: Material | undefined;
-        if (faceMatId !== undefined && faceMatId !== null) {
-          const matName = materialIdToName.get(faceMatId);
-          if (matName) {
-            mat = materialsMap.get(matName) || materialsByFolder.get(matName);
-            if (mat) {
-              faceColor = mat.color;
-            }
-          }
-        }
-        if (!faceColor) {
-          faceColor = getLayerColor(parentLayer);
-        }
+      const resolveMaterial = (matId: number | null | undefined): Material | undefined => {
+        if (matId === undefined || matId === null) return undefined;
+        const matName = materialIdToName.get(matId);
+        if (!matName) return undefined;
+        return materialsMap.get(matName) || materialsByFolder.get(matName);
+      };
 
-        const colorKey = `${faceColor.r},${faceColor.g},${faceColor.b}`;
+      const addSide = (
+        triangles: number[][],
+        fn: [number, number, number],
+        color: { r: number; g: number; b: number },
+        doubleSided: boolean,
+        reverse: boolean,
+        mat: Material | undefined,
+        uvTransform: number[] | null | undefined,
+        xr: [number, number, number],
+        yr: [number, number, number]
+      ) => {
+        const colorKey = `${color.r},${color.g},${color.b},${doubleSided}`;
         let group = faceGroups.get(colorKey);
         if (!group) {
           group = {
-            color: faceColor,
+            color,
+            doubleSided,
             localVerts: [],
             localUvs: [],
             normalsAccum: [],
@@ -516,6 +534,60 @@ export function buildSceneFromParsed(parsed: ParsedRawData, options?: ParseOptio
           };
           faceGroups.set(colorKey, group);
         }
+
+        const tex = mat?.texture;
+        const tileW = tex && tex.width > 1e-9 ? tex.width : 1;
+        const tileH = tex && tex.height > 1e-9 ? tex.height : 1;
+        const sideNormal: [number, number, number] = reverse
+          ? [-fn[0], -fn[1], -fn[2]]
+          : fn;
+
+        // Vertices are deduped per (vId, uv) rather than just vId: UVs are
+        // inherently per-face, so a vertex position shared by two faces
+        // that disagree on texture mapping must become two distinct
+        // output vertices (glTF requires position/normal/uv aligned per
+        // index).
+        const faceLocalMap = new Map<number, number>();
+        for (const tri of triangles) {
+          const triIds = reverse ? [tri[0], tri[2], tri[1]] : tri;
+          const faceIndices: number[] = [];
+          for (const vId of triIds) {
+            if (!builder.vertices.has(vId)) continue;
+            let idx = faceLocalMap.get(vId);
+            if (idx === undefined) {
+              const p = builder.vertices.get(vId)!;
+              const [u, v] = computeFaceUv(p, xr, yr, uvTransform, tileW, tileH);
+              const key = `${vId},${u},${v}`;
+              idx = group.localVMap.get(key);
+              if (idx === undefined) {
+                group.localVerts.push(p);
+                group.localUvs.push([u, v]);
+                group.normalsAccum.push([sideNormal[0], sideNormal[1], sideNormal[2]]);
+                idx = group.localVerts.length - 1;
+                group.localVMap.set(key, idx);
+              } else {
+                const accum = group.normalsAccum[idx];
+                accum[0] += sideNormal[0];
+                accum[1] += sideNormal[1];
+                accum[2] += sideNormal[2];
+              }
+              faceLocalMap.set(vId, idx);
+            }
+            faceIndices.push(idx);
+          }
+          if (faceIndices.length === 3) {
+            group.localFaces.push(faceIndices);
+          }
+        }
+      };
+
+      for (const [fId, fData] of builder.faces.entries()) {
+        const fallbackColor = inheritedMaterialColor ?? getLayerColor(parentLayer);
+
+        const frontMat = resolveMaterial((fData as any).materialId);
+        const backMat = resolveMaterial((fData as any).backMaterialId);
+        const frontColor = frontMat?.color ?? fallbackColor;
+        const backColor = backMat?.color ?? fallbackColor;
 
         const loops: number[][] = [];
         for (const loop of fData.loops) {
@@ -538,51 +610,21 @@ export function buildSceneFromParsed(parsed: ParsedRawData, options?: ParseOptio
         }
 
         const fn = fData.normal as [number, number, number];
-        const tex = mat?.texture;
-        const tileW = tex && tex.width > 1e-9 ? tex.width : 1;
-        const tileH = tex && tex.height > 1e-9 ? tex.height : 1;
         const { xr, yr } = faceUvBasis(fn);
         const uvTransform = (fData as any).uvTransform as number[] | null | undefined;
+        const uvTransformBack = (fData as any).uvTransformBack as number[] | null | undefined;
 
-        // Vertices are deduped per (vId, uv) rather than just vId: UVs are
-        // inherently per-face, so a vertex position shared by two faces
-        // that disagree on texture mapping must become two distinct
-        // output vertices (glTF requires position/normal/uv aligned per
-        // index).
-        const faceLocalMap = new Map<number, number>();
-        for (const tri of triangles) {
-          const faceIndices: number[] = [];
-          for (const vId of tri) {
-            if (!builder.vertices.has(vId)) continue;
-            let idx = faceLocalMap.get(vId);
-            if (idx === undefined) {
-              const p = builder.vertices.get(vId)!;
-              const [u, v] = computeFaceUv(p, xr, yr, uvTransform, tileW, tileH);
-              const key = `${vId},${u},${v}`;
-              idx = group.localVMap.get(key);
-              if (idx === undefined) {
-                group.localVerts.push(p);
-                group.localUvs.push([u, v]);
-                group.normalsAccum.push([fn[0], fn[1], fn[2]]);
-                idx = group.localVerts.length - 1;
-                group.localVMap.set(key, idx);
-              } else {
-                const accum = group.normalsAccum[idx];
-                accum[0] += fn[0];
-                accum[1] += fn[1];
-                accum[2] += fn[2];
-              }
-              faceLocalMap.set(vId, idx);
-            }
-            faceIndices.push(idx);
-          }
-          if (faceIndices.length === 3) {
-            group.localFaces.push(faceIndices);
-          }
+        const sameColor =
+          frontColor.r === backColor.r && frontColor.g === backColor.g && frontColor.b === backColor.b;
+        if (sameColor) {
+          addSide(triangles, fn, frontColor, true, false, frontMat, uvTransform, xr, yr);
+        } else {
+          addSide(triangles, fn, frontColor, false, false, frontMat, uvTransform, xr, yr);
+          addSide(triangles, fn, backColor, false, true, backMat, uvTransformBack, xr, yr);
         }
       }
 
-      for (const [colorKey, group] of faceGroups.entries()) {
+      for (const group of faceGroups.values()) {
         if (group.localFaces.length === 0) continue;
 
         const isRoot = pathName === 'ROOT';
@@ -593,7 +635,10 @@ export function buildSceneFromParsed(parsed: ParsedRawData, options?: ParseOptio
         let safePath = pathName.replace(/ \/ /g, '__').replace(/ /g, '_');
         if (safePath.length > 80) safePath = safePath.slice(0, 80);
 
-        const colorSuffix = faceGroups.size > 1 ? `_${colorKey.replace(/,/g, '_')}` : '';
+        const colorSuffix =
+          faceGroups.size > 1
+            ? `_${group.color.r}_${group.color.g}_${group.color.b}_${group.doubleSided ? 'ds' : 'ss'}`
+            : '';
         const geomName = `mesh_${meshCounter.count}_${safePath}_${parentLayer}${colorSuffix}`;
         meshCounter.count++;
 
@@ -649,7 +694,7 @@ export function buildSceneFromParsed(parsed: ParsedRawData, options?: ParseOptio
           indices[i * 3 + 2] = group.localFaces[i][2];
         }
 
-        const materialIndex = getMaterialIndex(group.color);
+        const materialIndex = getMaterialIndex(group.color, group.doubleSided);
 
         glbPrimitives.push({
           positions,
