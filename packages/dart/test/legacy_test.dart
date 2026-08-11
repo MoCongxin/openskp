@@ -27,6 +27,10 @@ void main() {
 
     expect(model.version, '{17.0.18899}');
 
+    // Units - legacy (pre-2021 MFC) files carry no meta/meta.dat
+    // container, so there is no known source for this.
+    expect(model.units, isNull);
+
     // Definitions - ROOT is exposed separately via model.root, so only the
     // two named component definitions show up here.
     expect(model.definitions.length, 2);

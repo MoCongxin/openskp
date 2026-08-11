@@ -12,6 +12,10 @@ import 'vff.dart';
 /// shape. Parser.dart converts this into the public SkpModel.
 class RawParsed {
   String version = 'unknown';
+
+  /// The model's unit-system string (e.g. "Millimeter"), read from
+  /// meta/meta.dat. Null for legacy files or when the tag isn't found.
+  String? units;
   final Map<String, (int, int, int)> layerColors = {};
   // Modern (VFF) files derive layers from Layer_<name>-prefixed materials,
   // which carry no visibility flag of their own - unlike legacy MFC files,
@@ -151,6 +155,19 @@ class Core {
       'Parse complete: ${defsDictRaw.length} defs (${(sw.elapsedMilliseconds / 1000).toStringAsFixed(2)}s)',
     );
 
+    // Units (meta/meta.dat) - VFF-only; legacy files carry no equivalent
+    // container.
+    String? units;
+    final metaDatEntry = zip.findFile('meta/meta.dat');
+    if (metaDatEntry != null) {
+      try {
+        Vff.validateEntrySize(metaDatEntry);
+        units = Vff.readMetaUnits(metaDatEntry.content);
+      } catch (_) {
+        units = null;
+      }
+    }
+
     if (!layerIdToName.containsKey(1)) {
       layerIdToName[1] = 'Layer0';
     }
@@ -163,6 +180,7 @@ class Core {
 
     return RawParsed()
       ..version = version
+      ..units = units
       ..layerColors.addAll(layerColors)
       ..layerHidden.addAll(layerHidden)
       ..layerIdToName.addAll(layerIdToName)
