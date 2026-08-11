@@ -116,6 +116,35 @@ namespace OpenSkp
         private const long MaxCompressionRatio = 1000;
         private const long RatioCheckThresholdBytes = 1024 * 1024; // 1 MB
 
+        // meta/meta.dat uses the exact same low-level TLV framing as
+        // model.dat (2-byte tag + 4-byte little-endian length + payload),
+        // but as one flat, non-recursive record list wrapped in a single
+        // outer record (tag 0x6400/"6400"). Tag 0x6D00/"6D00" carries the
+        // model's unit-system string ("Millimeter" etc.) as plain text.
+        // Confirmed byte-for-byte against a real fixture - never opened by
+        // any parser in this codebase before.
+        private const string MetaWrapperTag = "6400";
+        private const string MetaUnitsTag = "6D00";
+
+        /// <summary>Extract the model's unit-system string from a VFF
+        /// file's meta/meta.dat contents, or null if the expected tags
+        /// aren't found.</summary>
+        public static string? ReadMetaUnits(byte[] metaBytes)
+        {
+            var records = Tlv.ParseFlat(metaBytes);
+            var wrapper = Tlv.FindFlat(records, MetaWrapperTag);
+            if (wrapper != null)
+            {
+                return ReadMetaUnits(wrapper);
+            }
+            var units = Tlv.FindFlat(records, MetaUnitsTag);
+            if (units != null)
+            {
+                return Encoding.UTF8.GetString(units);
+            }
+            return null;
+        }
+
         /// <summary>Reject a ZIP entry whose declared uncompressed size is
         /// implausible, before any code allocates memory sized off it.</summary>
         public static void ValidateEntrySize(ZipArchiveEntry entry)

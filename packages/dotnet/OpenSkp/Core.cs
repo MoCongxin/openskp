@@ -14,6 +14,10 @@ namespace OpenSkp
         internal sealed class RawParsed
         {
             public string Version = "unknown";
+            /// <summary>The model's unit-system string (e.g. "Millimeter"),
+            /// read from meta/meta.dat. Null for legacy files or when the
+            /// tag isn't found.</summary>
+            public string? Units = null;
             public Dictionary<string, (int R, int G, int B)> LayerColors = new Dictionary<string, (int, int, int)>();
             // Modern (VFF) files derive layers from Layer_<name>-prefixed
             // materials, which carry no visibility flag of their own -
@@ -200,6 +204,30 @@ namespace OpenSkp
                 options, SkpLogLevel.Information,
                 $"Parse complete: {defsDictRaw.Count} defs ({sw.Elapsed.TotalSeconds:F2}s)");
 
+            // Units (meta/meta.dat) - VFF-only; legacy files carry no
+            // equivalent container.
+            string? units = null;
+            var metaDatEntry = zip.GetEntry("meta/meta.dat");
+            if (metaDatEntry != null)
+            {
+                try
+                {
+                    Vff.ValidateEntrySize(metaDatEntry);
+                    byte[] metaData;
+                    using (var s = metaDatEntry.Open())
+                    using (var ms = new System.IO.MemoryStream())
+                    {
+                        s.CopyTo(ms);
+                        metaData = ms.ToArray();
+                    }
+                    units = Vff.ReadMetaUnits(metaData);
+                }
+                catch
+                {
+                    units = null;
+                }
+            }
+
             if (!layerIdToName.ContainsKey(1))
             {
                 layerIdToName[1] = "Layer0";
@@ -216,6 +244,7 @@ namespace OpenSkp
             return new RawParsed
             {
                 Version = version,
+                Units = units,
                 LayerColors = layerColors,
                 LayerHidden = layerHidden,
                 LayerIdToName = layerIdToName,

@@ -27,6 +27,10 @@ namespace OpenSkp.Tests
 
             Assert.Equal("{17.0.18899}", model.Version);
 
+            // Units - legacy (pre-2021 MFC) files carry no meta/meta.dat
+            // container, so there is no known source for this.
+            Assert.Null(model.Units);
+
             // Definitions - ROOT is exposed separately via model.Root, so
             // only the two named component definitions show up here.
             Assert.Equal(2, model.Definitions.Count);
