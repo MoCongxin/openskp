@@ -28,6 +28,11 @@ class GeometryBuilderInstance {
   int? materialId;
   bool hidden = false;
   List<TlvNode> children = const [];
+  /// Dynamic Component properties precomputed for legacy (pre-2021 MFC)
+  /// instances (see legacy.dart's extractLegacyDynamicProperties) - VFF
+  /// instances don't set this, since their properties come from a lazy
+  /// D007/DC05 TLV walk over [children] instead (see scene.dart).
+  Map<String, String>? properties;
 }
 
 /// Accumulates the raw geometry extracted for one component definition (or
@@ -173,6 +178,40 @@ class Geometry {
     final t1527 = Tlv.findFlat(Tlv.parseFlat(t1327), '1527');
     if (t1527 == null || t1527.length != 72) return null;
     return [for (int i = 0; i < 9; i++) Tlv.readF64(t1527, i * 8)];
+  }
+
+  /// Dynamic Component key/value pairs from an instance's D007 attribute
+  /// container. Mirrors Python's _core.extract_dynamic_properties and
+  /// TypeScript's extractDynamicProperties: DC05's payload isn't part of
+  /// the main model.dat TLV tree (DC05 isn't a top-level container tag),
+  /// so it's re-parsed here with its own, more specific container-tag set
+  /// - within that tree, a B636 tag carries a property key and the AD38
+  /// tag immediately after it carries that property's value.
+  static const Set<String> _propContainerTags = {
+    'DD05', 'B536', 'B136', 'B236', 'B336', 'B036', 'A438',
+  };
+
+  static Map<String, String> extractDynamicProperties(TlvNode d007) {
+    final dc05 = d007.children.where((c) => c.tag == 'DC05').firstOrNull;
+    if (dc05 == null) return {};
+    final propElements =
+        Tlv.parseRecursive(dc05.payload, 0, dc05.payload.length, _propContainerTags);
+    final properties = <String, String>{};
+    String? currentKey;
+    void extractProps(List<TlvNode> nodes) {
+      for (final n in nodes) {
+        if (n.tag == 'B636') {
+          currentKey = utf8.decode(n.payload, allowMalformed: true);
+        } else if (n.tag == 'AD38' && currentKey != null) {
+          properties[currentKey!] = utf8.decode(n.payload, allowMalformed: true);
+          currentKey = null;
+        }
+        extractProps(n.children);
+      }
+    }
+
+    extractProps(propElements);
+    return properties;
   }
 
   static void extractGeometryFromNodes(

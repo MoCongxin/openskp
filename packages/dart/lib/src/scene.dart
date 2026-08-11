@@ -436,7 +436,11 @@ class SceneBuilder {
 
         var lName = parentLayer;
         (int, int, int)? instColor = inheritedColor;
-        final properties = <String, String>{};
+        // Legacy (pre-2021 MFC) instances carry a precomputed `properties`
+        // map (see legacy.dart's extractLegacyDynamicProperties) - VFF
+        // instances don't set this, so this stays {} for them and gets
+        // overwritten below via the D007/DC05 TLV walk instead.
+        var properties = Map<String, String>.from(inst.properties ?? {});
 
         final d007 = inst.children.where((c) => c.tag == 'D007').firstOrNull;
         if (d007 != null) {
@@ -455,8 +459,11 @@ class SceneBuilder {
               if (mat != null) instColor = (mat.r, mat.g, mat.b);
             }
           }
-          // Dynamic properties (attribute dictionaries under D007) are not
-          // yet ported for Dart; left empty.
+          try {
+            properties = Geometry.extractDynamicProperties(d007);
+          } catch (_) {
+            // Ignore
+          }
         }
 
         final instName = (inst.name != null && inst.name!.isNotEmpty) ? inst.name! : 'Component_$refIdx';

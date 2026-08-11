@@ -450,12 +450,14 @@ class InstanceRec {
   List<double> xf;
   String name;
   String guid;
+  AttrsRec? attrs;
   InstanceRec(
       {required this.db,
       this.def,
       required this.xf,
       required this.name,
-      required this.guid});
+      required this.guid,
+      this.attrs});
 }
 
 class LegacyReaders {
@@ -612,6 +614,42 @@ class LegacyReaders {
     }
     r.u32();
     return DictRec(dictname, entries);
+  }
+
+  // SketchUp's Dynamic Components extension stores its data in an
+  // attribute dictionary literally named "dynamic_attributes" - a stable,
+  // publicly documented part of the SketchUp Ruby API
+  // (Entity#attribute_dictionary("dynamic_attributes")). readAttrContainer/
+  // readAttrNamed above already fully decode an entity's
+  // CAttributeContainer into typed (dict-name, {key: value}) pairs for
+  // other purposes (CFaceTextureCoords lookup on faces) - this just looks
+  // up that one dictionary by name, mirroring what the VFF path's
+  // Geometry.extractDynamicProperties does for D007/DC05 TLV data.
+  static const String _dynamicAttributesDictName = 'dynamic_attributes';
+
+  /// Render an already-typed legacy attribute value (num, string, list, or
+  /// null) as a string, matching the string-valued Map<String, String>
+  /// contract the VFF path's Geometry.extractDynamicProperties produces.
+  static String stringifyAttrValue(Object? value) {
+    if (value == null) return '';
+    if (value is List) return value.map(stringifyAttrValue).join(',');
+    return value.toString();
+  }
+
+  /// Extract Dynamic Component attribute key/value pairs from a legacy
+  /// entity's already-parsed CAttributeContainer, or {} when the entity
+  /// carries no attribute container or no dynamic_attributes dictionary.
+  static Map<String, String> extractLegacyDynamicProperties(AttrsRec? attrs) {
+    if (attrs == null) return {};
+    for (final (name, value) in attrs.children) {
+      if (name == _dynamicAttributesDictName && value is DictRec) {
+        return {
+          for (final entry in value.entries.entries)
+            entry.key: stringifyAttrValue(entry.value)
+        };
+      }
+    }
+    return {};
   }
 
   static Object readLayer(Archive ar, LR r) {
@@ -909,7 +947,7 @@ class LegacyReaders {
 
   static Object readInstance(Archive ar, LR r) {
     final cls = ar.currentClass;
-    preamble(ar, r);
+    final pre = preamble(ar, r);
     final db = drawbase(ar, r);
     final (ds, dn, _) = ar.readObject(r, 'CComponentDefinition');
     if (dn != 'CComponentDefinition') {
@@ -927,7 +965,12 @@ class LegacyReaders {
         (schema == null || schema >= minSchema) ? r.raw(16) : Uint8List(0);
 
     return InstanceRec(
-        db: db, def: ds, xf: xf, name: name, guid: Tlv.toHexUpper(guid));
+        db: db,
+        def: ds,
+        xf: xf,
+        name: name,
+        guid: Tlv.toHexUpper(guid),
+        attrs: pre.attrs as AttrsRec?);
   }
 
   static final Map<String, LegacyReader> readers = {
@@ -1168,7 +1211,8 @@ class Legacy {
           ..matrix = List<double>.from(v.xf)
           ..materialId = v.db.mat != 0 ? v.db.mat : null
           ..hidden = v.db.hidden != 0
-          ..children = const []);
+          ..children = const []
+          ..properties = LegacyReaders.extractLegacyDynamicProperties(v.attrs));
       }
     }
   }

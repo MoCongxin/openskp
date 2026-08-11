@@ -26,7 +26,7 @@ Enable mobile (iOS/Android), desktop, and web developers to parse and build 3D S
 - **TLV Binary Decoding**: Decodes SketchUp's internal Tag-Length-Value records.
 - **VFF ZIP Extractors**: Decompresses and validates VFF file containers to extract `model.dat` and material XML assets.
 - **Geometry & Hierarchy**: Recovers vertices, edges, face loops, component definitions, and nested instance transformations.
-- **Steelframer properties**: Reads custom dynamic component attribute values.
+- **Dynamic Component properties**: Reads custom dynamic component attribute values.
 
 ---
 
