@@ -15,6 +15,12 @@ namespace OpenSkp
         {
             public string Version = "unknown";
             public Dictionary<string, (int R, int G, int B)> LayerColors = new Dictionary<string, (int, int, int)>();
+            // Modern (VFF) files derive layers from Layer_<name>-prefixed
+            // materials, which carry no visibility flag of their own -
+            // unlike legacy MFC files, there is currently no known tag
+            // exposing a VFF layer's hidden state, so every VFF layer
+            // defaults to visible.
+            public Dictionary<string, bool> LayerHidden = new Dictionary<string, bool>();
             public Dictionary<long, string> LayerIdToName = new Dictionary<long, string>();
             public Dictionary<long, string> MaterialIdToName = new Dictionary<long, string>();
             public Dictionary<string, Geometry.RawMaterial> Materials = new Dictionary<string, Geometry.RawMaterial>();
@@ -56,6 +62,7 @@ namespace OpenSkp
             using var zip = Vff.OpenZip(data, pkPos);
 
             var layerColors = new Dictionary<string, (int, int, int)>();
+            var layerHidden = new Dictionary<string, bool>();
             var materials = new Dictionary<string, Geometry.RawMaterial>();
             var materialsByFolder = new Dictionary<string, Geometry.RawMaterial>();
 
@@ -93,6 +100,7 @@ namespace OpenSkp
                         if (mat.Name.StartsWith("Layer_", StringComparison.Ordinal))
                         {
                             layerColors[mat.Name.Substring(6)] = (mat.R, mat.G, mat.B);
+                            layerHidden[mat.Name.Substring(6)] = false;
                         }
                     }
                 }
@@ -200,11 +208,16 @@ namespace OpenSkp
             {
                 layerColors["Layer0"] = (136, 136, 136);
             }
+            if (!layerHidden.ContainsKey("Layer0"))
+            {
+                layerHidden["Layer0"] = false;
+            }
 
             return new RawParsed
             {
                 Version = version,
                 LayerColors = layerColors,
+                LayerHidden = layerHidden,
                 LayerIdToName = layerIdToName,
                 MaterialIdToName = materialIdToName,
                 Materials = materials,
