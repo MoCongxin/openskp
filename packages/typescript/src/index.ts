@@ -1,4 +1,4 @@
-import { extractSkpContents } from './vff';
+import { extractSkpContents, readMetaUnits } from './vff';
 import { iterTopLevelLazy, readU32, parseVarInt } from './parser';
 import { SkpParseError } from './errors';
 import { ParseOptions, PROGRESS_INTERVAL, emitLog, emitProgress } from './observability';
@@ -66,6 +66,11 @@ function parseToRaw(buffer: ArrayBuffer, options?: ParseOptions): ParsedRawData 
   const modelData = contents.modelData;
   const materialFiles = contents.materialFiles;
   emitLog(options, 'debug', `Detected version ${version} (VFF/ZIP container)`);
+
+  // meta/meta.dat carries the model's unit-system string (e.g.
+  // "Millimeter") - legacy (pre-2021 MFC) files carry no equivalent
+  // container, so units stays null there.
+  const units = contents.metaData ? readMetaUnits(contents.metaData) : null;
 
   // 2. Parse XML materials to populate layer colors and materials
   const layerColors = new Map<string, [number, number, number]>();
@@ -247,6 +252,7 @@ function parseToRaw(buffer: ArrayBuffer, options?: ParseOptions): ParsedRawData 
 
   return {
     version,
+    units,
     layerColors,
     layerHidden,
     layerIdToName,

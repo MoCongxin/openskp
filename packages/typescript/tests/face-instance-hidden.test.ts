@@ -14,6 +14,7 @@ import { GeometryBuilder } from '../src/geometry';
 function parsed(defsDict: Map<number | string, any>): ParsedRawData {
   return {
     version: 'test',
+    units: null,
     layerColors: new Map(),
     layerHidden: new Map(),
     layerIdToName: new Map(),

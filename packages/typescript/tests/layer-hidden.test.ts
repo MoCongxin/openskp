@@ -12,6 +12,7 @@ import { buildModelFromParsed, ParsedRawData } from '../src/model';
 function parsed(layerColors: Map<string, [number, number, number]>, layerHidden: Map<string, boolean>): ParsedRawData {
   return {
     version: 'test',
+    units: null,
     layerColors,
     layerHidden,
     layerIdToName: new Map(),

@@ -16,6 +16,11 @@ export interface SkpModel {
   materials: Material[];
   materialsById: Map<number, Material>;
   styles: Style[];
+  /** The model's unit-system string (e.g. "Millimeter"), read from
+   * meta/meta.dat in modern (VFF) files. null for legacy (pre-2021 MFC)
+   * files, which carry no equivalent container, or when the tag isn't
+   * found. */
+  units: string | null;
 }
 
 export interface Definition {
@@ -218,6 +223,9 @@ export interface SkpScene {
  * primitive building, which both formats share. */
 export interface ParsedRawData {
   version: string;
+  /** The model's unit-system string (e.g. "Millimeter"), read from
+   * meta/meta.dat. null for legacy files or when the tag isn't found. */
+  units: string | null;
   layerColors: Map<string, [number, number, number]>;
   layerHidden: Map<string, boolean>;
   layerIdToName: Map<number, string>;
@@ -229,8 +237,17 @@ export interface ParsedRawData {
 }
 
 export function buildModelFromParsed(parsed: ParsedRawData): SkpModel {
-  const { version, layerColors, layerHidden, materialIdToName, materialsMap, materialsByFolder, styles, defsDict } =
-    parsed;
+  const {
+    version,
+    units,
+    layerColors,
+    layerHidden,
+    materialIdToName,
+    materialsMap,
+    materialsByFolder,
+    styles,
+    defsDict,
+  } = parsed;
 
   // Join the TLV material IDs (what Face.materialId references) onto the
   // parsed materials, so callers can resolve face -> material.
@@ -278,6 +295,7 @@ export function buildModelFromParsed(parsed: ParsedRawData): SkpModel {
     materials: finalMaterialsList,
     materialsById,
     styles,
+    units,
   };
 }
 

@@ -4,6 +4,8 @@ export interface SkpContents {
   version: string;
   modelData: Uint8Array;
   materialFiles: Record<string, Uint8Array>;
+  /** Raw bytes of meta/meta.dat, or null when the entry is absent. */
+  metaData: Uint8Array | null;
 }
 
 const VFF_MAGIC = [0xFF, 0xFE, 0xFF, 0x0E];
@@ -70,6 +72,37 @@ function findZipOffset(data: Uint8Array): number {
   return offset;
 }
 
+// meta/meta.dat uses the same low-level TLV framing as model.dat (2-byte
+// tag + 4-byte little-endian length + payload), but as one flat
+// (non-recursive) record list wrapped in a single outer record. Confirmed
+// against a real fixture: the outer wrapper is tag 0x6400; among its
+// direct children, tag 0x6D00 carries the model's unit-system string as
+// plain text ("Millimeter" in the fixture) - siblings carry the SketchUp
+// version, save path, and thumbnail references, none of which any parser
+// surfaces either.
+const META_WRAPPER_TAG = [0x64, 0x00];
+const META_UNITS_TAG = [0x6d, 0x00];
+
+/** Extract the model's unit-system string from meta/meta.dat's raw bytes,
+ * or null if the expected tags aren't found. */
+export function readMetaUnits(metaBytes: Uint8Array): string | null {
+  const view = new DataView(metaBytes.buffer, metaBytes.byteOffset, metaBytes.byteLength);
+  let pos = 0;
+  while (pos + 6 <= metaBytes.length) {
+    const tag = [metaBytes[pos], metaBytes[pos + 1]];
+    const size = view.getUint32(pos + 2, true);
+    if (pos + 6 + size > metaBytes.length) break;
+    if (tag[0] === META_WRAPPER_TAG[0] && tag[1] === META_WRAPPER_TAG[1]) {
+      return readMetaUnits(metaBytes.subarray(pos + 6, pos + 6 + size));
+    }
+    if (tag[0] === META_UNITS_TAG[0] && tag[1] === META_UNITS_TAG[1]) {
+      return new TextDecoder('utf-8').decode(metaBytes.subarray(pos + 6, pos + 6 + size));
+    }
+    pos += 6 + size;
+  }
+  return null;
+}
+
 // A ZIP entry's declared uncompressed size (UnzipFileInfo.originalSize) is
 // untrusted central-directory metadata - it can be set independently of
 // what the compressed stream actually decompresses to, and even when
@@ -126,6 +159,7 @@ export function extractSkpContents(data: Uint8Array): SkpContents {
     const isWanted = (
       lower === 'model.dat' ||
       lower.endsWith('/model.dat') ||
+      lower === 'meta/meta.dat' ||
       lower.endsWith('.xml') ||
       lower.endsWith('.png') ||
       lower.endsWith('.jpg') ||
@@ -144,12 +178,15 @@ export function extractSkpContents(data: Uint8Array): SkpContents {
   }
 
   let modelData: Uint8Array | null = null;
+  let metaData: Uint8Array | null = null;
   const materialFiles: Record<string, Uint8Array> = {};
 
   for (const entry of Object.keys(unzipped)) {
     const lower = entry.toLowerCase();
     if (lower === 'model.dat' || lower.endsWith('/model.dat')) {
       modelData = unzipped[entry];
+    } else if (lower === 'meta/meta.dat') {
+      metaData = unzipped[entry];
     } else if (
       lower.endsWith('.xml') ||
       lower.endsWith('.png') ||
@@ -169,5 +206,6 @@ export function extractSkpContents(data: Uint8Array): SkpContents {
     version,
     modelData,
     materialFiles,
+    metaData,
   };
 }
