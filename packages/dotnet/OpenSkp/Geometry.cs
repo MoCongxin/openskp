@@ -603,6 +603,7 @@ namespace OpenSkp
         private static byte[] ReadEntry(ZipArchive zip, string name)
         {
             var entry = zip.GetEntry(name)!;
+            Vff.ValidateEntrySize(entry);
             using var stream = entry.Open();
             using var ms = new System.IO.MemoryStream();
             stream.CopyTo(ms);
