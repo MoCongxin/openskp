@@ -24,7 +24,11 @@ TEST(Parser, ModernUntitled) {
       "HeaderPlate2", "SillPlate1",   "VerticalHeaderStud", "generic_frame",
       "dimension",    "Hat Sections",
   };
-  for (const auto& layer : model.layers) EXPECT_TRUE(expected_layers.count(layer.name));
+  for (const auto& layer : model.layers) {
+    EXPECT_TRUE(expected_layers.count(layer.name));
+    // VFF files carry no known layer-visibility tag - always false here.
+    EXPECT_FALSE(layer.hidden);
+  }
 
   const auto& definition = model.definitions.at(66);
   EXPECT_EQ(definition.name, "Group200#2");
@@ -135,6 +139,10 @@ TEST(Parser, LegacyMatchesReference) {
   for (const auto& material : model.materials) {
     EXPECT_TRUE(expected_materials.count(material.name));
   }
+
+  ASSERT_EQ(model.layers.size(), 1);
+  EXPECT_EQ(model.layers[0].name, "Layer0");
+  EXPECT_FALSE(model.layers[0].hidden);
 
   Vec3 minimum{std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(),
                std::numeric_limits<double>::infinity()};

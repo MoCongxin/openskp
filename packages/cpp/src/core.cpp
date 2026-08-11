@@ -235,9 +235,11 @@ RawParsed full_parse(const ByteBuffer& data, const ParseOptions& o) {
           auto folder = n.substr(10, slash == std::string::npos ? std::string::npos : slash - 10);
           p.materials[m->name] = m;
           p.materials_by_folder[folder] = m;
-          if (m->name.rfind("Layer_", 0) == 0)
+          if (m->name.rfind("Layer_", 0) == 0) {
             p.layer_colors[m->name.substr(6)] = {std::uint8_t(m->r), std::uint8_t(m->g),
                                                  std::uint8_t(m->b)};
+            p.layer_hidden[m->name.substr(6)] = false;
+          }
         }
     }
   for (auto& n : zip.names)
@@ -271,6 +273,7 @@ RawParsed full_parse(const ByteBuffer& data, const ParseOptions& o) {
   }
   if (!p.layer_id_to_name.count(1)) p.layer_id_to_name[1] = "Layer0";
   if (!p.layer_colors.count("Layer0")) p.layer_colors["Layer0"] = {136, 136, 136};
+  if (!p.layer_hidden.count("Layer0")) p.layer_hidden["Layer0"] = false;
   emit_log(o, LogLevel::information,
            "Parse complete: " + std::to_string(p.definitions.size()) + " defs");
   return p;

@@ -82,7 +82,11 @@ SkpModel build_model(RawParsed&& p) {
   }
   resolve_layers(p.root);
   m.root_ = definition(0, std::move(p.root));
-  for (auto& l : p.layer_colors) m.layers.push_back({l.first, l.second});
+  for (auto& l : p.layer_colors) {
+    auto hidden_it = p.layer_hidden.find(l.first);
+    bool hidden = hidden_it != p.layer_hidden.end() && hidden_it->second;
+    m.layers.push_back({l.first, l.second, hidden});
+  }
   std::map<const RawMaterial*, std::size_t> raw_index;
   for (auto& v : p.materials) {
     auto& r = *v.second;

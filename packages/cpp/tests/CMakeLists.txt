@@ -4,6 +4,7 @@ add_executable(
   openskp_tests
   geometry_test.cpp
   glb_test.cpp
+  layer_hidden_test.cpp
   lowlevel_test.cpp
   observability_test.cpp
   parser_test.cpp
