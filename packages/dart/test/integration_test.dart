@@ -104,6 +104,20 @@ void main() {
     expect(firstEdge.smooth, isFalse);
     expect(firstEdge.hidden, isFalse);
 
+    // Instance layer/properties (item 17): previously always "" / {} -
+    // declared but never assigned. Now genuinely populated from each
+    // instance's own D207 (layer override)/DC05 (dynamic properties)
+    // TLV children, matching C++'s existing behavior. Cross-checked
+    // directly against Python's independent parse of this same fixture.
+    final battens =
+        model.root.instances.where((i) => i.name == 'BattenHatSection_1');
+    expect(battens, isNotEmpty);
+    expect(battens.first.layer, 'Hat Sections');
+    final w1 = model.root.instances.where((i) => i.name == 'W1');
+    expect(w1, isNotEmpty);
+    expect(w1.first.properties['generator'], 'SteelFramer::Engine::PanelGenerator');
+    expect(w1.first.properties['profile'], '362S200-43');
+
     expect(def66.isImage, isFalse);
     expect(def66.alwaysFacesCamera, isFalse);
 

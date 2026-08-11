@@ -154,6 +154,21 @@ class TestDataModel:
         assert inst.matrix[0] == 1.0
         assert inst.matrix[5] == 1.0
 
+    def test_instance_has_no_children_field(self) -> None:
+        # Item 17: Instance.children was declared but never assigned
+        # during parsing anywhere (confirmed the same in Dart/.NET/C++ -
+        # a definition's placed instances are always a flat list at
+        # parse time; nesting only exists in the resolved scene graph),
+        # so it was removed outright rather than left as a permanently-
+        # empty field.
+        from openskp.model import Instance
+        import dataclasses
+
+        field_names = {f.name for f in dataclasses.fields(Instance)}
+        assert "children" not in field_names
+        assert "layer" in field_names
+        assert "properties" in field_names
+
     def test_skp_model_defaults(self) -> None:
         from openskp.model import SkpModel
 
@@ -1660,6 +1675,18 @@ class TestModernRealFile:
         assert joined.name == "*"
         assert joined in model.materials
         assert joined.id == 26180
+
+        # 3b. Instance layer/properties (item 17): previously always ""
+        # / {} - declared but never assigned. Now genuinely populated
+        # from each instance's own D207 (layer override)/DC05 (dynamic
+        # properties) TLV children, matching C++'s existing behavior.
+        battens = [i for i in model.root.instances if i.name == "BattenHatSection_1"]
+        assert battens
+        assert battens[0].layer == "Hat Sections"
+        w1 = [i for i in model.root.instances if i.name == "W1"]
+        assert w1
+        assert w1[0].properties["generator"] == "SteelFramer::Engine::PanelGenerator"
+        assert w1[0].properties["profile"] == "362S200-43"
 
         # 4. Definitions
         assert len(model.definitions) == 46

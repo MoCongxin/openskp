@@ -23,9 +23,9 @@ namespace OpenSkp
 
             foreach (var kv in parsed.DefsDict)
             {
-                model.Definitions[kv.Key] = BuildDefinition(kv.Key, kv.Value);
+                model.Definitions[kv.Key] = BuildDefinition(kv.Key, kv.Value, parsed.LayerIdToName);
             }
-            model.Root = BuildDefinition(0, parsed.Root);
+            model.Root = BuildDefinition(0, parsed.Root, parsed.LayerIdToName);
 
             foreach (var kv in parsed.LayerColors)
             {
@@ -79,7 +79,7 @@ namespace OpenSkp
             return model;
         }
 
-        private static Definition BuildDefinition(long defId, Geometry.RawDefinition d)
+        private static Definition BuildDefinition(long defId, Geometry.RawDefinition d, Dictionary<long, string> layerIdToName)
         {
             var defn = new Definition
             {
@@ -131,6 +131,12 @@ namespace OpenSkp
 
             foreach (var inst in d.Builder.Instances)
             {
+                string layer = "";
+                if (inst.LayerId is long layerId)
+                {
+                    layerIdToName.TryGetValue(layerId, out var layerName);
+                    layer = layerName ?? "";
+                }
                 defn.Instances.Add(new Instance
                 {
                     Name = inst.Name ?? "",
@@ -139,6 +145,8 @@ namespace OpenSkp
                     Matrix = inst.Matrix,
                     MaterialId = inst.MaterialId,
                     Hidden = inst.Hidden,
+                    Layer = layer,
+                    Properties = inst.Properties ?? new Dictionary<string, string>(),
                 });
             }
 

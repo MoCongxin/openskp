@@ -55,15 +55,8 @@ static Definition definition(EntityId id, RawDefinition&& r) {
     d.faces.emplace(f.first, std::move(x));
   }
   for (auto& i : r.builder.instances)
-    d.instances.push_back({std::move(i.name),
-                           i.ref_idx,
-                           std::move(i.ref_guid),
-                           std::move(i.matrix),
-                           std::move(i.layer),
-                           std::move(i.properties),
-                           {},
-                           i.material_id,
-                           i.hidden});
+    d.instances.push_back({std::move(i.name), i.ref_idx, std::move(i.ref_guid), std::move(i.matrix),
+                           std::move(i.layer), std::move(i.properties), i.material_id, i.hidden});
   return d;
 }
 

@@ -30,11 +30,16 @@ namespace OpenSkp
         public long? MaterialId;
         public bool Hidden;
         public List<TlvNode> Children = new List<TlvNode>();
-        /// <summary>Dynamic Component properties precomputed for legacy
-        /// (pre-2021 MFC) instances (see Legacy.ExtractLegacyDynamicProperties)
-        /// - VFF instances don't set this, since their properties come from a
-        /// lazy D007/DC05 TLV walk over <see cref="Children"/> instead (see
-        /// Scene.cs).</summary>
+        /// <summary>This instance's own explicit layer override (unresolved
+        /// numeric TLV ID), or null when it has none - an instance without
+        /// one inherits its *placement's* layer, only resolvable once the
+        /// scene graph is flattened (see Scene.cs's InstanceNode.Layer).</summary>
+        public long? LayerId;
+        /// <summary>Dynamic Component key/value properties attached directly
+        /// to this instance - populated eagerly for both legacy (pre-2021
+        /// MFC, via Legacy.ExtractLegacyDynamicProperties) and VFF instances
+        /// (via ExtractDynamicProperties on this instance's own D007/DC05
+        /// children).</summary>
         public Dictionary<string, string>? Properties;
     }
 
@@ -357,6 +362,8 @@ namespace OpenSkp
 
                     long? instMatId = null;
                     bool instHidden = false;
+                    long? instLayerId = null;
+                    Dictionary<string, string>? instProperties = null;
                     var instD007 = el.Children.FirstOrDefault(c => c.Tag == "D007");
                     if (instD007 != null)
                     {
@@ -365,6 +372,12 @@ namespace OpenSkp
                         {
                             instMatId = Tlv.ParseVarInt(d107.Payload, 0, d107.Payload.Length);
                         }
+                        var d207 = instD007.Children.FirstOrDefault(c => c.Tag == "D207");
+                        if (d207 != null && d207.Payload.Length > 0)
+                        {
+                            instLayerId = Tlv.ParseVarInt(d207.Payload, 0, d207.Payload.Length);
+                        }
+                        instProperties = ExtractDynamicProperties(instD007);
                         // D307 = display flags, same record edges/faces already
                         // read (base 0x06, +0x01 hidden).
                         var instD307 = instD007.Children.FirstOrDefault(c => c.Tag == "D307");
@@ -383,6 +396,8 @@ namespace OpenSkp
                         Matrix = matrix,
                         MaterialId = instMatId,
                         Hidden = instHidden,
+                        LayerId = instLayerId,
+                        Properties = instProperties,
                         Children = el.Children,
                     });
                 }

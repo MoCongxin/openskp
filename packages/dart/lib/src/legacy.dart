@@ -1211,6 +1211,7 @@ class Legacy {
           ..matrix = List<double>.from(v.xf)
           ..materialId = v.db.mat != 0 ? v.db.mat : null
           ..hidden = v.db.hidden != 0
+          ..layerId = v.db.layer != 0 ? v.db.layer : null
           ..children = const []
           ..properties = LegacyReaders.extractLegacyDynamicProperties(v.attrs));
       }

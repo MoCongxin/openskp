@@ -456,6 +456,16 @@ def _extract_geometry_from_nodes(elements, builder):
             # exporting, so consumers need the raw value to do the same.
             inst_mat_id = None
             inst_hidden = False
+            # Unresolved layer ID (as a string) - the raw model has no
+            # layer_id_to_name mapping in scope here, so resolution to a
+            # name happens later in model.py, where that mapping is
+            # already available. Only the instance's own explicit layer
+            # override is captured this way - an instance that doesn't
+            # specify one inherits its *placement's* layer, which is only
+            # knowable once the scene graph is actually flattened (see
+            # SkpFile.build_scene()'s InstanceNode.layer for that).
+            inst_layer_id = None
+            inst_properties = {}
             d007 = next((c for c in el['children'] if c['tag'] == 'D007'),
                         None)
             if d007:
@@ -464,6 +474,12 @@ def _extract_geometry_from_nodes(elements, builder):
                 if d107:
                     inst_mat_id = parse_var_int(
                         d107['payload'], 0, len(d107['payload']))
+                d207 = next((c for c in d007['children']
+                             if c['tag'] == 'D207'), None)
+                if d207 and d207['payload']:
+                    inst_layer_id = parse_var_int(
+                        d207['payload'], 0, len(d207['payload']))
+                inst_properties = extract_dynamic_properties(d007)
                 # D307 = display flags, same record edges/faces already
                 # read (base 0x06, +0x01 hidden).
                 d307 = next((c for c in d007['children']
@@ -479,6 +495,8 @@ def _extract_geometry_from_nodes(elements, builder):
                 'matrix': matrix,
                 'material_id': inst_mat_id,
                 'hidden': inst_hidden,
+                'layer_id': inst_layer_id,
+                'properties': inst_properties,
                 'children': el['children']
             })
 

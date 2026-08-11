@@ -100,9 +100,15 @@ struct Instance {
   std::optional<EntityId> ref_idx;
   std::string guid;
   std::vector<double> matrix;
+  // This instance's own explicit layer override, or "" when it has
+  // none. An instance without an explicit override inherits its
+  // *placement's* layer, which can only be resolved once the scene
+  // graph is flattened - see build_scene()'s InstanceNode::layer for
+  // that resolved value.
   std::string layer;
+  // Arbitrary key/value dynamic attributes attached directly to this
+  // instance (SketchUp's Dynamic Components).
   std::map<std::string, std::string> properties;
-  std::vector<Instance> children;
   std::optional<EntityId> material_id;
   // Whether the instance itself is hidden (SketchUp's "Hide" on this
   // specific component/group placement, not a layer/tag visibility

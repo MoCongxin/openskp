@@ -119,9 +119,17 @@ namespace OpenSkp
         /// column-major order (empty when the entity carried none).</summary>
         public List<double> Matrix { get; set; } = new List<double>();
 
+        /// <summary>This instance's own explicit layer override, or ""
+        /// when it has none. An instance without an explicit override
+        /// inherits its *placement's* layer, which can only be resolved
+        /// once the scene graph is flattened - see
+        /// SkpFile.BuildScene()'s InstanceNode.Layer for that resolved
+        /// value.</summary>
         public string Layer { get; set; } = "";
+
+        /// <summary>Arbitrary key/value dynamic attributes attached
+        /// directly to this instance (SketchUp's Dynamic Components).</summary>
         public Dictionary<string, string> Properties { get; set; } = new Dictionary<string, string>();
-        public List<Instance> Children { get; set; } = new List<Instance>();
         public long? MaterialId { get; set; }
 
         /// <summary>Whether the instance itself is hidden (SketchUp's "Hide"
