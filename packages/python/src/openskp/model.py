@@ -126,6 +126,8 @@ class Face:
             terrain drape): its UVs run in the projection plane's frame,
             not the face frame.
         uv_projected_back: Same for the face's back side.
+        hidden: Whether the face is hidden (SketchUp's "Hide" on this
+            specific face, not a layer/tag visibility toggle).
     """
 
     id: int
@@ -137,6 +139,7 @@ class Face:
     uv_transform_back: Optional[Tuple[float, ...]] = None
     uv_projected: bool = False
     uv_projected_back: bool = False
+    hidden: bool = False
 
 
 # ── Layers & Materials ────────────────────────────────────────────────────
@@ -277,6 +280,9 @@ class Instance:
             the placed definition whose own :attr:`Face.material_id` is
             ``None`` inherit this material — consumers must resolve that
             inheritance themselves, like the official SDK does on export.
+        hidden: Whether the instance itself is hidden (SketchUp's "Hide"
+            on this specific component/group placement, not a layer/tag
+            visibility toggle).
     """
 
     name: str = ""
@@ -292,6 +298,7 @@ class Instance:
     properties: Dict[str, str] = field(default_factory=dict)
     children: List["Instance"] = field(default_factory=list)
     material_id: Optional[int] = None
+    hidden: bool = False
 
 
 @dataclass
@@ -475,6 +482,7 @@ class SkpFile:
                     uv_transform_back=f_data.get("uv_transform_back"),
                     uv_projected=f_data.get("uv_projected", False),
                     uv_projected_back=f_data.get("uv_projected_back", False),
+                    hidden=f_data.get("hidden", False),
                 )
             # Populate instances
             for inst in builder.instances:
@@ -484,6 +492,7 @@ class SkpFile:
                     guid=inst.get("ref_guid", ""),
                     matrix=inst.get("matrix", []),
                     material_id=inst.get("material_id"),
+                    hidden=inst.get("hidden", False),
                 ))
             if def_id == "ROOT":
                 model.root = defn

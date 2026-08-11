@@ -863,7 +863,8 @@ def _fill_builder(builder, ents, slots):
                 loops.append(loop)
             face = {'loops': loops, 'normal': tuple(v['plane'][:3]),
                     'material_id': v['db']['mat'] or None,
-                    'back_material_id': v['back_mat'] or None}
+                    'back_material_id': v['back_mat'] or None,
+                    'hidden': bool(v['db']['hidden'])}
             attrs = v.get('attrs')
             if isinstance(attrs, dict):
                 for cn, cv in attrs.get('children', []):
@@ -879,6 +880,7 @@ def _fill_builder(builder, ents, slots):
                 'ref_guid': '', 'matrix': list(v['xf']),
                 'material_id': v['db']['mat'] or None,
                 'layer_id': v['db']['layer'] or None,
+                'hidden': bool(v['db']['hidden']),
                 'children': []})
 
 
