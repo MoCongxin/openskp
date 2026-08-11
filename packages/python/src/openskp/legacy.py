@@ -1015,4 +1015,8 @@ def full_parse_legacy(skp_path: str) -> Dict[str, Any]:
         'elements': [],
         'thumbnail_data': None,
         'styles': [],
+        # Legacy (pre-2021 MFC) files carry no meta/meta.dat container -
+        # that's a VFF/ZIP-only construct - so there is no known source
+        # for the model's unit-system string here.
+        'units': None,
     }

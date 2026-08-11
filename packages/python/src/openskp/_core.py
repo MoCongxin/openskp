@@ -588,6 +588,38 @@ def _validate_zip_entry_size(zf: "zipfile.ZipFile", name: str) -> None:
             )
 
 
+# ── Model metadata (meta/meta.dat) ───────────────────────────────────────
+
+# meta/meta.dat uses the same low-level TLV framing as model.dat (2-byte
+# tag + 4-byte little-endian length + payload), but as one flat
+# (non-recursive) record list wrapped in a single outer record. Confirmed
+# against a real fixture: the outer wrapper is tag 0x6400; among its
+# direct children, tag 0x6D00 carries the model's unit-system string as
+# plain text ("Millimeter" in the fixture) - siblings carry the SketchUp
+# version, save path, and thumbnail references, none of which any parser
+# currently surfaces either.
+_META_WRAPPER_TAG = b'\x64\x00'
+_META_UNITS_TAG = b'\x6D\x00'
+
+
+def _read_meta_units(meta_bytes: bytes):
+    """Extract the model's unit-system string from a VFF file's
+    meta/meta.dat contents, or ``None`` if the expected tags aren't
+    found."""
+    pos = 0
+    while pos + 6 <= len(meta_bytes):
+        tag = meta_bytes[pos:pos + 2]
+        size = struct.unpack_from('<I', meta_bytes, pos + 2)[0]
+        if pos + 6 + size > len(meta_bytes):
+            break
+        if tag == _META_WRAPPER_TAG:
+            return _read_meta_units(meta_bytes[pos + 6:pos + 6 + size])
+        if tag == _META_UNITS_TAG:
+            return meta_bytes[pos + 6:pos + 6 + size].decode('utf-8', errors='replace')
+        pos += 6 + size
+    return None
+
+
 # ── Texture extraction ───────────────────────────────────────────────────
 
 def _extract_texture(zf, xml_name, mat_elem, ns):
@@ -783,6 +815,16 @@ def full_parse(skp_path: str) -> Dict[str, Any]:
         _validate_zip_entry_size(zf, 'meta/model_thumbnail.png')
         thumbnail_data = zf.read('meta/model_thumbnail.png')
 
+    # Units (meta/meta.dat) - VFF-only; legacy files carry no equivalent
+    # container.
+    units = None
+    if 'meta/meta.dat' in zf.namelist():
+        try:
+            _validate_zip_entry_size(zf, 'meta/meta.dat')
+            units = _read_meta_units(zf.read('meta/meta.dat'))
+        except Exception:
+            units = None
+
     # Styles: face colors live in styles/*/style.xml as signed-int32 ARGB
     # variants — item id 4000 is the front (default) face color, 4001 the
     # back face color. Viewers need them to shade unpainted faces the way
@@ -958,6 +1000,7 @@ def full_parse(skp_path: str) -> Dict[str, Any]:
         'defs_dict': defs_dict,
         'thumbnail_data': thumbnail_data,
         'styles': styles,
+        'units': units,
     }
 
 

@@ -110,6 +110,7 @@ def to_dict(model: SkpModel, scene: Optional[Scene] = None) -> Dict[str, Any]:
     """
     return {
         "version": model.version,
+        "units": model.units,
         "root": _definition_to_dict(model.root),
         "definitions": {
             str(k): _definition_to_dict(v)
