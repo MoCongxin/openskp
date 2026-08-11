@@ -369,15 +369,21 @@ class TestJsonExport:
 
         model = SkpModel()
         d = to_dict(model)
-        assert d["version"] == "unknown"
+        assert d["format_version"] == "1.0"
+        assert d["sketchup_version"] == "unknown"
         assert d["units"] is None
+        assert d["total_definitions"] == 0
+        assert d["total_layers"] == 0
+        assert d["total_meshes"] == 0
         assert d["root"] == {
             "id": 0, "guid": "", "name": "", "vertex_count": 0,
-            "edge_count": 0, "face_count": 0, "vertices": [], "instances": [],
+            "edge_count": 0, "face_count": 0, "vertices": [], "edges": [],
+            "faces": [], "instances": [],
         }
         assert d["definitions"] == {}
         assert d["layers"] == []
         assert d["materials"] == []
+        assert d["mesh_index"] == {}
         assert d["scene_hierarchy"] is None
 
     def test_root_is_included_alongside_definitions(self) -> None:
@@ -402,6 +408,99 @@ class TestJsonExport:
         model.layers.append(Layer(name="Furniture", hidden=True))
         d = to_dict(model)
         assert d["layers"][0]["hidden"] is True
+
+    def test_layer_and_material_color_are_nested_objects(self) -> None:
+        # Matches TypeScript's convention (this schema's canonical shape)
+        # rather than Python's old flat color_r/color_g/color_b keys for
+        # layers or a positional [r, g, b, a] list for materials.
+        from openskp.model import Layer, Material, SkpModel
+        from openskp.export.json_export import to_dict
+
+        model = SkpModel()
+        model.layers.append(Layer(name="Furniture", color_r=10, color_g=20, color_b=30))
+        model.materials.append(Material(name="Brick", color=(1, 2, 3, 4)))
+        d = to_dict(model)
+        assert d["layers"][0]["color"] == {"r": 10, "g": 20, "b": 30}
+        assert d["materials"][0]["color"] == {"r": 1, "g": 2, "b": 3, "a": 4}
+
+    def test_definition_includes_full_edges_and_faces(self) -> None:
+        # Regression: this used to only include vertex/edge/face *counts*
+        # and a flat vertices array - TypeScript's toJSON always included
+        # full edges/faces arrays too, so switching ports meant a
+        # genuinely different (not just differently-named) shape.
+        from openskp.model import Definition, Edge, Face, SkpModel, Vertex
+
+        from openskp.export.json_export import to_dict
+
+        model = SkpModel()
+        model.root = Definition(id=0, guid="ROOT", name="ROOT_MODEL")
+        model.root.vertices[1] = Vertex(id=1, x=1.0, y=2.0, z=3.0)
+        model.root.vertices[2] = Vertex(id=2, x=4.0, y=5.0, z=6.0)
+        model.root.edges[10] = Edge(id=10, v1_id=1, v2_id=2)
+        model.root.faces[100] = Face(
+            id=100, loops=[[(10, 1)]], normal=(0.0, 0.0, 1.0), material_id=5,
+        )
+        d = to_dict(model)
+        assert d["root"]["edges"] == [{"id": 10, "v1_id": 1, "v2_id": 2}]
+        assert d["root"]["faces"] == [
+            {"id": 100, "loops": [[{"edge_id": 10, "orientation": 1}]], "normal": [0.0, 0.0, 1.0]}
+        ]
+
+    def test_instance_does_not_include_dead_layer_properties_children_fields(self) -> None:
+        # Instance.layer/Instance.properties/Instance.children are all
+        # declared but never assigned during parsing (always "" / {} / []
+        # defaults) - see item 17. Encoding them here would present
+        # known-dead data as if it were meaningful. The resolved,
+        # genuinely nested tree with correct layer/properties is
+        # available via scene_hierarchy instead.
+        from openskp.model import Definition, Instance, SkpModel
+        from openskp.export.json_export import to_dict
+
+        model = SkpModel()
+        model.root = Definition(id=0, guid="ROOT", name="ROOT_MODEL")
+        model.root.instances.append(Instance(name="child", ref_idx=1))
+        d = to_dict(model)
+        inst = d["root"]["instances"][0]
+        assert "layer" not in inst
+        assert "properties" not in inst
+        assert "children" not in inst
+        assert inst["name"] == "child"
+        assert inst["ref_idx"] == 1
+
+    def test_real_file_matches_ground_truth(self) -> None:
+        # Cross-checked directly against the TypeScript port's toJSON()
+        # on this same fixture - the schema is meant to match exactly.
+        import pathlib as _pathlib
+
+        import pytest as _pytest
+        from openskp.model import SkpFile
+        from openskp.export.json_export import to_dict
+
+        fixture = _pathlib.Path(__file__).parent / "fixtures" / "capilla_quiroz_v17.skp"
+        if not fixture.exists():
+            _pytest.skip("legacy fixture not present")
+
+        skp = SkpFile.open(str(fixture))
+        model = skp.parse()
+        d = to_dict(model)
+
+        assert d["total_definitions"] == 2
+        assert d["total_layers"] == 1
+        assert d["root"]["vertex_count"] == 251
+        assert d["root"]["edge_count"] == 390
+        assert d["root"]["face_count"] == 146
+        assert len(d["root"]["instances"]) == 3
+
+        puerta = next(v for v in d["definitions"].values() if v["name"] == "puerta")
+        assert puerta["id"] == 40
+        assert puerta["vertex_count"] == 64
+        assert puerta["edge_count"] == 95
+        assert puerta["face_count"] == 24
+        assert len(puerta["edges"]) == 95
+        assert len(puerta["faces"]) == 24
+        assert set(d["root"]["instances"][0].keys()) == {
+            "name", "ref_idx", "guid", "matrix",
+        }
 
 
 # ── SkpFile tests ────────────────────────────────────────────────────────

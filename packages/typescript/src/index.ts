@@ -19,7 +19,10 @@ import {
   Style,
   Material,
   Texture,
+  Instance,
+  Definition,
   InstanceNode,
+  MeshMetadata,
   ParsedRawData,
   buildModelFromParsed,
   buildSceneFromParsed,
@@ -519,6 +522,28 @@ export function toGLB(scene: SkpScene): Uint8Array {
 }
 
 /**
+ * openskp's canonical JSON export schema, shared with the Python port's
+ * `to_dict` (and, from there, Dart/.NET/C++). It used to diverge from
+ * Python's in two real ways: this function never included `root` or any
+ * per-definition `instances` tree at all, while Python kept only
+ * vertex/edge/face *counts*, dropping the full `edges`/`faces` arrays
+ * this function always included - so a consumer switching between the
+ * two ports got a genuinely different shape, not just missing/extra
+ * fields. Both now match this one schema (snake_case keys throughout,
+ * including `scene_hierarchy`/`mesh_index` entries, which this function
+ * used to emit in TS's own camelCase instead).
+ *
+ * Note `Instance.layer`/`Instance.properties`/`Instance.children` on the
+ * *raw* (pre-bake) `instances` list are deliberately not part of this
+ * schema at all - TypeScript's `Instance` type doesn't declare any of
+ * them (a definition's placed instances are always a flat list at parse
+ * time here), and they're always empty defaults in Python's/Dart's/
+ * .NET's parsed model too (never assigned during parsing; only C++
+ * actually populates layer/properties - see item 17). The *resolved*,
+ * genuinely nested per-instance tree (with correct layer/properties) is
+ * available via `scene_hierarchy` (pass the result of {@link buildScene}
+ * as `scene`).
+ *
  * Export a parsed SkpModel to a metadata JSON object. Pass the result of
  * {@link buildScene} as `scene` to also include mesh/scene-hierarchy data;
  * omit it for a lighter summary covering just the raw model.
@@ -528,30 +553,41 @@ export function toGLB(scene: SkpScene): Uint8Array {
  * @returns Metadata object
  */
 export function toJSON(model: SkpModel, scene?: SkpScene): Record<string, unknown> {
+  const serializeInstance = (inst: Instance): any => ({
+    name: inst.name,
+    ref_idx: inst.refIdx,
+    guid: inst.guid,
+    matrix: inst.matrix,
+  });
+
+  const serializeDefinition = (defn: Definition): any => ({
+    id: defn.id,
+    guid: defn.guid,
+    name: defn.name,
+    vertex_count: defn.vertices.length,
+    edge_count: defn.edges.length,
+    face_count: defn.faces.length,
+    vertices: defn.vertices.map((v) => ({ id: v.id, x: v.x, y: v.y, z: v.z })),
+    edges: defn.edges.map((e) => ({ id: e.id, v1_id: e.v1Id, v2_id: e.v2Id })),
+    faces: defn.faces.map((f) => ({
+      id: f.id,
+      loops: f.loops.map((loop) =>
+        loop.map((ce) => ({ edge_id: ce.edgeId, orientation: ce.orientation }))
+      ),
+      normal: f.normal,
+    })),
+    instances: defn.instances.map(serializeInstance),
+  });
+
   const definitionsObj: Record<string, any> = {};
   for (const [id, defn] of model.definitions.entries()) {
-    definitionsObj[id] = {
-      id: defn.id,
-      guid: defn.guid,
-      name: defn.name,
-      vertex_count: defn.vertices.length,
-      edge_count: defn.edges.length,
-      face_count: defn.faces.length,
-      vertices: defn.vertices.map((v) => ({ id: v.id, x: v.x, y: v.y, z: v.z })),
-      edges: defn.edges.map((e) => ({ id: e.id, v1_id: e.v1Id, v2_id: e.v2Id })),
-      faces: defn.faces.map((f) => ({
-        id: f.id,
-        loops: f.loops.map((loop) =>
-          loop.map((ce) => ({ edge_id: ce.edgeId, orientation: ce.orientation }))
-        ),
-        normal: f.normal,
-      })),
-    };
+    definitionsObj[id] = serializeDefinition(defn);
   }
 
   const layersList = model.layers.map((l) => ({
     name: l.name,
     color: l.color,
+    hidden: l.hidden,
   }));
 
   const materialsList = model.materials.map((m) => ({
@@ -563,25 +599,43 @@ export function toJSON(model: SkpModel, scene?: SkpScene): Record<string, unknow
   const serializeInstanceNode = (node: InstanceNode): any => {
     return {
       name: node.name,
-      definitionName: node.definitionName,
+      definition_name: node.definitionName,
       layer: node.layer,
-      positionMm: node.positionMm,
+      position_mm: node.positionMm,
       properties: node.properties,
       children: node.children.map(serializeInstanceNode),
     };
   };
 
+  const serializeMeshMetadata = (m: MeshMetadata): any => ({
+    name: m.name,
+    definition_name: m.definitionName,
+    layer: m.layer,
+    position_mm: m.positionMm,
+    properties: m.properties,
+    path: m.path,
+  });
+
+  const meshIndexObj: Record<string, any> = {};
+  if (scene) {
+    for (const [name, m] of Object.entries(scene.meshIndex)) {
+      meshIndexObj[name] = serializeMeshMetadata(m);
+    }
+  }
+
   return {
     format_version: '1.0',
     sketchup_version: model.version,
+    units: model.units,
     total_definitions: model.definitions.size,
-    total_meshes: scene ? Object.keys(scene.meshIndex).length : 0,
     total_layers: model.layers.length,
+    total_meshes: scene ? Object.keys(scene.meshIndex).length : 0,
+    root: serializeDefinition(model.root),
+    definitions: definitionsObj,
     layers: layersList,
     materials: materialsList,
-    mesh_index: scene ? scene.meshIndex : {},
+    mesh_index: meshIndexObj,
     scene_hierarchy: scene ? serializeInstanceNode(scene.sceneHierarchy) : null,
-    definitions: definitionsObj,
   };
 }
 
