@@ -131,7 +131,7 @@ function parseToRaw(buffer: ArrayBuffer, options?: ParseOptions): ParsedRawData 
             layerHidden.set(parsedMat.name.slice(6), false);
           }
         }
-      } catch (e) {
+      } catch {
         // Ignore XML errors
       }
     }
@@ -154,7 +154,7 @@ function parseToRaw(buffer: ArrayBuffer, options?: ParseOptions): ParsedRawData 
             backColor: parsedStyle.backColor,
           });
         }
-      } catch (e) {
+      } catch {
         // Ignore XML errors
       }
     }
@@ -187,7 +187,7 @@ function parseToRaw(buffer: ArrayBuffer, options?: ParseOptions): ParsedRawData 
           try {
             const decoder = new TextDecoder('utf-8');
             mName = decoder.decode(nameNode.payload);
-          } catch (e) {
+          } catch {
             // Ignore
           }
           materialIdToName.set(mId, mName);

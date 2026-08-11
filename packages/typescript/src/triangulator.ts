@@ -147,7 +147,7 @@ export function triangulateFace3D(
   let triIndices: number[];
   try {
     triIndices = earcut(flatCoords, holeIndices, 2);
-  } catch (e) {
+  } catch {
     // Fallback: simple fan triangulation of the outer loop if earcut fails
     const outerLoop = loops[0];
     const fallback: number[][] = [];

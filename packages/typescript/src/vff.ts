@@ -56,7 +56,7 @@ export function readVersion(data: Uint8Array): string {
           return verText.slice(braceStart, braceEnd + 1);
         }
       }
-    } catch (e) {
+    } catch {
       // Ignore decoder errors
     }
   }

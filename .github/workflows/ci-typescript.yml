@@ -42,3 +42,23 @@ jobs:
         run: |
           cd packages/typescript
           npm test
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: |
+          cd packages/typescript
+          npm ci
+
+      - name: Lint
+        run: |
+          cd packages/typescript
+          npm run lint
