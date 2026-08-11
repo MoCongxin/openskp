@@ -431,6 +431,7 @@ namespace OpenSkp
         public double[] Xf = new double[13];
         public string Name = "";
         public string Guid = "";
+        public AttrsRec? Attrs;
     }
 
     internal static class LegacyReaders
@@ -944,7 +945,7 @@ namespace OpenSkp
         public static object ReadInstance(Archive ar, LR r)
         {
             string? cls = ar.CurrentClass;
-            Preamble(ar, r);
+            var pre = Preamble(ar, r);
             var db = Drawbase(ar, r);
             var (ds, dn, _) = ar.ReadObject(r, "CComponentDefinition");
             if (dn != "CComponentDefinition")
@@ -961,7 +962,54 @@ namespace OpenSkp
             int? schema = (cls != null && ar.ClassSchema.TryGetValue(cls, out int s)) ? s : (int?)null;
             byte[] guid = (schema == null || schema >= minSchema) ? r.Raw(16) : Array.Empty<byte>();
 
-            return new InstanceRec { Db = db, Def = ds, Xf = xf, Name = name, Guid = LegacyBytes.ToHex(guid) };
+            return new InstanceRec { Db = db, Def = ds, Xf = xf, Name = name, Guid = LegacyBytes.ToHex(guid), Attrs = pre.Attrs as AttrsRec };
+        }
+
+        // SketchUp's Dynamic Components extension stores its data in an
+        // attribute dictionary literally named "dynamic_attributes" - a
+        // stable, publicly documented part of the SketchUp Ruby API
+        // (Entity#attribute_dictionary("dynamic_attributes")).
+        // ReadAttrContainer/ReadAttrNamed above already fully decode an
+        // entity's CAttributeContainer into typed (dict-name, {key: value})
+        // pairs for other purposes (CFaceTextureCoords lookup on faces) -
+        // this just looks up that one dictionary by name, mirroring what the
+        // VFF path's Geometry.ExtractDynamicProperties does for D007/DC05 TLV
+        // data.
+        private const string DynamicAttributesDictName = "dynamic_attributes";
+
+        /// <summary>Render an already-typed legacy attribute value (number,
+        /// string, list, or null) as a string, matching the string-valued
+        /// Dictionary&lt;string, string&gt; contract the VFF path's
+        /// Geometry.ExtractDynamicProperties produces.</summary>
+        public static string StringifyAttrValue(object? value)
+        {
+            if (value == null) return "";
+            if (value is System.Collections.IEnumerable list && !(value is string))
+            {
+                var parts = new List<string>();
+                foreach (var v in list) parts.Add(StringifyAttrValue(v));
+                return string.Join(",", parts);
+            }
+            return Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) ?? "";
+        }
+
+        /// <summary>Extract Dynamic Component attribute key/value pairs from a
+        /// legacy entity's already-parsed CAttributeContainer, or {} when the
+        /// entity carries no attribute container or no dynamic_attributes
+        /// dictionary.</summary>
+        public static Dictionary<string, string> ExtractLegacyDynamicProperties(AttrsRec? attrs)
+        {
+            if (attrs == null) return new Dictionary<string, string>();
+            foreach (var (name, value) in attrs.Children)
+            {
+                if (name == DynamicAttributesDictName && value is DictRec dict)
+                {
+                    var result = new Dictionary<string, string>();
+                    foreach (var kv in dict.Entries) result[kv.Key] = StringifyAttrValue(kv.Value);
+                    return result;
+                }
+            }
+            return new Dictionary<string, string>();
         }
 
         public static readonly Dictionary<string, LegacyReader> Readers = new Dictionary<string, LegacyReader>
@@ -1242,6 +1290,7 @@ namespace OpenSkp
                         MaterialId = instRec.Db.Mat != 0 ? instRec.Db.Mat : (long?)null,
                         Hidden = instRec.Db.Hidden != 0,
                         Children = new List<TlvNode>(),
+                        Properties = LegacyReaders.ExtractLegacyDynamicProperties(instRec.Attrs),
                     });
                 }
             }
