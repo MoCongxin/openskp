@@ -156,6 +156,7 @@ class SkpFile {
         uvTransformBack: f.uvTransformBack,
         uvProjected: f.uvProjected,
         uvProjectedBack: f.uvProjectedBack,
+        hidden: f.hidden,
       );
     }
 
@@ -166,6 +167,7 @@ class SkpFile {
         guid: inst.refGuid ?? '',
         matrix: inst.matrix,
         materialId: inst.materialId,
+        hidden: inst.hidden,
       ));
     }
 

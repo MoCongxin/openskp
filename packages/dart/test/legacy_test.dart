@@ -109,5 +109,13 @@ void main() {
         .toList()
       ..sort();
     expect(byRefIdx, ['grada', 'grada', 'puerta']);
+    for (final inst in model.root.instances) {
+      expect(inst.hidden, isFalse);
+    }
+    for (final def in model.definitions.values) {
+      for (final face in def.faces.values) {
+        expect(face.hidden, isFalse);
+      }
+    }
   });
 }

@@ -16,6 +16,7 @@ class GeometryBuilderFace {
   List<double>? uvTransformBack;
   bool uvProjected = false;
   bool uvProjectedBack = false;
+  bool hidden = false;
 }
 
 class GeometryBuilderInstance {
@@ -25,6 +26,7 @@ class GeometryBuilderInstance {
   String? name;
   List<double> matrix = [];
   int? materialId;
+  bool hidden = false;
   List<TlvNode> children = const [];
 }
 
@@ -261,6 +263,7 @@ class Geometry {
           int? faceMatId;
           List<double>? uvFront;
           List<double>? uvBack;
+          var faceHidden = false;
           final d007 = el.children.where((c) => c.tag == 'D007').firstOrNull;
           if (d007 != null) {
             final d107 =
@@ -274,6 +277,14 @@ class Geometry {
               final (f, b) = extractUvTransforms(dc05.payload);
               uvFront = f;
               uvBack = b;
+            }
+            // D307 = display flags, same record edges already read (base
+            // 0x06, +0x01 hidden) - faces carry the identical tag under
+            // their own D007 container.
+            final d307 =
+                d007.children.where((c) => c.tag == 'D307').firstOrNull;
+            if (d307 != null && d307.payload.isNotEmpty) {
+              faceHidden = (d307.payload[0] & 0x01) != 0;
             }
           }
 
@@ -289,7 +300,8 @@ class Geometry {
             ..materialId = faceMatId
             ..backMaterialId = backMatId
             ..uvTransform = uvFront
-            ..uvTransformBack = uvBack;
+            ..uvTransformBack = uvBack
+            ..hidden = faceHidden;
         }
       } else if (tag == '6419') {
         final nodesToSearch = el.children.isNotEmpty ? el.children : [el];
@@ -319,12 +331,20 @@ class Geometry {
         }
 
         int? instMatId;
+        var instHidden = false;
         final instD007 = el.children.where((c) => c.tag == 'D007').firstOrNull;
         if (instD007 != null) {
           final d107 =
               instD007.children.where((c) => c.tag == 'D107').firstOrNull;
           if (d107 != null) {
             instMatId = Tlv.parseVarInt(d107.payload, 0, d107.payload.length);
+          }
+          // D307 = display flags, same record edges/faces already read
+          // (base 0x06, +0x01 hidden).
+          final instD307 =
+              instD007.children.where((c) => c.tag == 'D307').firstOrNull;
+          if (instD307 != null && instD307.payload.isNotEmpty) {
+            instHidden = (instD307.payload[0] & 0x01) != 0;
           }
         }
 
@@ -335,6 +355,7 @@ class Geometry {
           ..name = name
           ..matrix = matrix
           ..materialId = instMatId
+          ..hidden = instHidden
           ..children = el.children);
       } else if (el.children.isNotEmpty) {
         extractGeometryFromNodes(el.children, builder);

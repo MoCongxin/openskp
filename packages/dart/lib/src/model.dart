@@ -48,6 +48,10 @@ class Face {
   /// Same for the face's back side.
   final bool uvProjectedBack;
 
+  /// Whether the face is hidden (SketchUp's "Hide" on this specific face,
+  /// not a layer/tag visibility toggle).
+  final bool hidden;
+
   Face({
     required this.id,
     this.loops = const [],
@@ -58,6 +62,7 @@ class Face {
     this.uvTransformBack,
     this.uvProjected = false,
     this.uvProjectedBack = false,
+    this.hidden = false,
   });
 }
 
@@ -142,6 +147,11 @@ class Instance {
   final List<Instance> children;
   final int? materialId;
 
+  /// Whether the instance itself is hidden (SketchUp's "Hide" on this
+  /// specific component/group placement, not a layer/tag visibility
+  /// toggle).
+  final bool hidden;
+
   Instance({
     this.name = '',
     this.refIdx,
@@ -151,6 +161,7 @@ class Instance {
     this.properties = const {},
     this.children = const [],
     this.materialId,
+    this.hidden = false,
   });
 }
 
