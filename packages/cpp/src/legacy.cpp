@@ -604,6 +604,7 @@ void fill(GeometryBuilder& b,
       f.normal = {v->plane[0], v->plane[1], v->plane[2]};
       if (v->mat) f.material_id = v->mat;
       if (v->back_mat) f.back_material_id = v->back_mat;
+      f.hidden = v->hidden != 0;
       for (auto& lp : v->loops) {
         std::vector<CoEdge> co;
         for (auto& u : lp->uses) {
@@ -649,6 +650,7 @@ void fill(GeometryBuilder& b,
       i.matrix = v->xf;
       if (v->mat) i.material_id = v->mat;
       if (v->layer) i.layer = std::to_string(v->layer);
+      i.hidden = v->hidden != 0;
       b.instances.push_back(std::move(i));
     }
   }

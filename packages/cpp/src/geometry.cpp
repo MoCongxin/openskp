@@ -178,6 +178,11 @@ void collect_geometry(const std::vector<TlvNode>& es, GeometryBuilder& b) {
                 f.material_id = parse_varint(x.payload, 0, x.payload.size());
               else if (x.tag == "DC05")
                 std::tie(f.uv_transform, f.uv_transform_back) = uv(x.payload);
+              // D307 = display flags, same record edges already read (base
+              // 0x06, +0x01 hidden) - faces carry the identical tag under
+              // their own D007 container.
+              else if (x.tag == "D307" && !x.payload.empty())
+                f.hidden = (x.payload[0] & 0x01) != 0;
             }
         for (auto& x : e.children)
           if (x.tag == "AF0D" && !x.payload.empty())
@@ -206,6 +211,10 @@ void collect_geometry(const std::vector<TlvNode>& es, GeometryBuilder& b) {
               i.layer = std::to_string(parse_varint(x.payload, 0, x.payload.size()));
             else if (x.tag == "DC05")
               scan_properties(x.payload, i.properties);
+            // D307 = display flags, same record edges/faces already read
+            // (base 0x06, +0x01 hidden).
+            else if (x.tag == "D307" && !x.payload.empty())
+              i.hidden = (x.payload[0] & 0x01) != 0;
           }
       b.instances.push_back(std::move(i));
     } else if (!e.children.empty())

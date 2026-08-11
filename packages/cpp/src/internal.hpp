@@ -31,6 +31,7 @@ struct RawFace {
   std::optional<std::array<double, 9>> uv_transform_back;
   bool uv_projected{};
   bool uv_projected_back{};
+  bool hidden{};
 };
 
 struct RawInstance {
@@ -43,6 +44,7 @@ struct RawInstance {
   std::vector<TlvNode> children;
   std::string layer;
   std::map<std::string, std::string> properties;
+  bool hidden{};
 };
 
 struct GeometryBuilder {

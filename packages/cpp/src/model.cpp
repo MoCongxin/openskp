@@ -51,6 +51,7 @@ static Definition definition(EntityId id, RawDefinition&& r) {
     x.uv_transform_back = f.second.uv_transform_back;
     x.uv_projected = f.second.uv_projected;
     x.uv_projected_back = f.second.uv_projected_back;
+    x.hidden = f.second.hidden;
     d.faces.emplace(f.first, std::move(x));
   }
   for (auto& i : r.builder.instances)
@@ -61,7 +62,8 @@ static Definition definition(EntityId id, RawDefinition&& r) {
                            std::move(i.layer),
                            std::move(i.properties),
                            {},
-                           i.material_id});
+                           i.material_id,
+                           i.hidden});
   return d;
 }
 
