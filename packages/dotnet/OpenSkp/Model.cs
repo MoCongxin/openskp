@@ -55,6 +55,13 @@ namespace OpenSkp
         public int ColorR { get; set; } = 200;
         public int ColorG { get; set; } = 200;
         public int ColorB { get; set; } = 200;
+
+        /// <summary>Whether the layer's visibility is switched off. Only
+        /// populated for legacy (pre-2021 MFC) files, where the byte is read
+        /// directly from the layer record - modern (VFF) files derive layers
+        /// from Layer_&lt;name&gt;-prefixed materials, which carry no
+        /// visibility data, so this is always false there.</summary>
+        public bool Hidden { get; set; }
     }
 
     public sealed class Style

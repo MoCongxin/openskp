@@ -73,6 +73,7 @@ namespace OpenSkp.Tests
 
             Assert.Single(model.Layers);
             Assert.Equal("Layer0", model.Layers[0].Name);
+            Assert.False(model.Layers[0].Hidden);
 
             double minX = double.PositiveInfinity, minY = double.PositiveInfinity, minZ = double.PositiveInfinity;
             double maxX = double.NegativeInfinity, maxY = double.NegativeInfinity, maxZ = double.NegativeInfinity;

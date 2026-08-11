@@ -1326,17 +1326,23 @@ namespace OpenSkp
             }
 
             var layerColors = new Dictionary<string, (int, int, int)>();
+            var layerHidden = new Dictionary<string, bool>();
             var layerIdToName = new Dictionary<long, string>();
             foreach (var (s, vObj) in walkResult.Layers)
             {
                 var v = (LayerRec)vObj!;
                 byte[] rgba = v.Rgba;
                 layerColors[v.Name] = (rgba[0], rgba[1], rgba[2]);
+                layerHidden[v.Name] = v.Hidden != 0;
                 layerIdToName[s] = v.Name;
             }
             if (!layerColors.ContainsKey("Layer0"))
             {
                 layerColors["Layer0"] = (136, 136, 136);
+            }
+            if (!layerHidden.ContainsKey("Layer0"))
+            {
+                layerHidden["Layer0"] = false;
             }
 
             var defsDict = new Dictionary<long, Geometry.RawDefinition>();
@@ -1387,6 +1393,7 @@ namespace OpenSkp
             {
                 Version = version,
                 LayerColors = layerColors,
+                LayerHidden = layerHidden,
                 LayerIdToName = layerIdToName,
                 MaterialIdToName = materialIdToName,
                 Materials = materialsMap,

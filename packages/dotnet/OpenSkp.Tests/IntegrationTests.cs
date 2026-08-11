@@ -39,6 +39,9 @@ namespace OpenSkp.Tests
             var layer0 = model.Layers.FirstOrDefault(l => l.Name == "Layer0");
             Assert.NotNull(layer0);
 
+            // VFF files carry no known layer-visibility tag - always false here.
+            Assert.All(model.Layers, l => Assert.False(l.Hidden));
+
             Assert.Equal(15, model.Materials.Count);
             var expectedMaterials = new[]
             {

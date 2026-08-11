@@ -29,7 +29,8 @@ namespace OpenSkp
 
             foreach (var kv in parsed.LayerColors)
             {
-                model.Layers.Add(new Layer { Name = kv.Key, ColorR = kv.Value.R, ColorG = kv.Value.G, ColorB = kv.Value.B });
+                bool hidden = parsed.LayerHidden.TryGetValue(kv.Key, out var h) && h;
+                model.Layers.Add(new Layer { Name = kv.Key, ColorR = kv.Value.R, ColorG = kv.Value.G, ColorB = kv.Value.B, Hidden = hidden });
             }
 
             var matForData = new Dictionary<Geometry.RawMaterial, Material>(ReferenceEqualityComparer.Instance);
