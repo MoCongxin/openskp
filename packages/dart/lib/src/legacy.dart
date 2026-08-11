@@ -1145,7 +1145,8 @@ class Legacy {
           ..materialId = v.db.mat != 0 ? v.db.mat : null
           ..backMaterialId = v.backMat != 0 ? v.backMat : null
           ..uvTransform = null
-          ..uvTransformBack = null;
+          ..uvTransformBack = null
+          ..hidden = v.db.hidden != 0;
         final attrs = v.attrs;
         if (attrs != null) {
           for (final (_, cv) in attrs.children) {
@@ -1166,6 +1167,7 @@ class Legacy {
           ..refGuid = ''
           ..matrix = List<double>.from(v.xf)
           ..materialId = v.db.mat != 0 ? v.db.mat : null
+          ..hidden = v.db.hidden != 0
           ..children = const []);
       }
     }

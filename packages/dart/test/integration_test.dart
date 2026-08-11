@@ -92,6 +92,11 @@ void main() {
     expect(firstFace.uvTransform, isNull);
     expect(firstFace.uvTransformBack, isNull);
     expect(firstFace.normal, isNotNull);
+    // Real data: every face in this fixture is visible - D307's flag byte
+    // reads the plain baseline (0x06) throughout.
+    for (final face in def66.faces.values) {
+      expect(face.hidden, isFalse);
+    }
 
     final firstEdge = def66.edges.values.first;
     expect(firstEdge.soft, isFalse);
