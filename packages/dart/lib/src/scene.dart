@@ -106,12 +106,13 @@ class Scene {
 
 class _FaceGroup {
   final (int, int, int) color;
+  final bool doubleSided;
   final List<(double, double, double)> localVerts = [];
   final List<(double, double)> localUvs = [];
   final List<List<double>> normalsAccum = [];
   final List<List<int>> localFaces = [];
   final Map<(int, double, double), int> localVMap = {};
-  _FaceGroup(this.color);
+  _FaceGroup(this.color, this.doubleSided);
 }
 
 const double _inchesToMm = 25.4;
@@ -195,7 +196,7 @@ class SceneBuilder {
     final meshIndex = <String, MeshMetadata>{};
     final glbPrimitives = <GlbPrimitive>[];
 
-    final colorToMaterialIndex = <(int, int, int), int>{};
+    final colorToMaterialIndex = <((int, int, int), bool), int>{};
     final gltfMaterials = <Map<String, dynamic>>[];
 
     // Definitions currently being instantiated on the active recursion path
@@ -207,19 +208,22 @@ class SceneBuilder {
 
     (int, int, int) getLayerColor(String name) => layerColors[name] ?? (136, 136, 136);
 
-    int getMaterialIndex((int, int, int) color) {
-      final existing = colorToMaterialIndex[color];
+    int getMaterialIndex((int, int, int) color, bool doubleSided) {
+      final key = (color, doubleSided);
+      final existing = colorToMaterialIndex[key];
       if (existing != null) return existing;
       final idx = gltfMaterials.length;
       final (r, g, b) = color;
-      gltfMaterials.add({
+      final material = <String, dynamic>{
         'pbrMetallicRoughness': {
           'baseColorFactor': [r / 255, g / 255, b / 255, 1.0],
           'metallicFactor': 0.0,
           'roughnessFactor': 0.8,
         },
-      });
-      colorToMaterialIndex[color] = idx;
+      };
+      if (doubleSided) material['doubleSided'] = true;
+      gltfMaterials.add(material);
+      colorToMaterialIndex[key] = idx;
       return idx;
     }
 
@@ -250,23 +254,92 @@ class SceneBuilder {
       (int, int, int)? inheritedColor,
     ) {
       if (builder.faces.isNotEmpty) {
-        final faceGroups = <(int, int, int), _FaceGroup>{};
+        // Group faces sharing a resolved (color, doubleSided) pair into one
+        // mesh each - same grouping the C++ reference uses (the only port
+        // that already had this before this port): a face whose front/back
+        // resolve to the SAME color is emitted once, with its glTF material
+        // marked doubleSided so it's visible from either side without
+        // needing duplicate geometry; a face whose front/back genuinely
+        // differ is emitted as TWO single-sided triangle sets - one
+        // normal-wound using the front material, one reverse-wound using
+        // the back material - so each side renders its own correct color
+        // instead of the front material leaking onto (or the back
+        // vanishing from) the far side.
+        final faceGroups = <((int, int, int), bool), _FaceGroup>{};
+
+        RawMaterial? resolveMaterial(int? matId) {
+          if (matId == null) return null;
+          final matName = materialIdToName[matId];
+          if (matName == null) return null;
+          return materials[matName] ?? materialsByFolder[matName];
+        }
+
+        void addSide(
+          List<List<int>> triangles,
+          (double, double, double) fn,
+          (int, int, int) color,
+          bool doubleSided,
+          bool reverse,
+          RawMaterial? mat,
+          List<double>? uvTransform,
+          (double, double, double) xr,
+          (double, double, double) yr,
+        ) {
+          final key = (color, doubleSided);
+          final group = faceGroups.putIfAbsent(key, () => _FaceGroup(color, doubleSided));
+
+          final tex = mat?.texture;
+          final tileW = (tex != null && tex.xScale > 1e-9) ? tex.xScale : 1.0;
+          final tileH = (tex != null && tex.yScale > 1e-9) ? tex.yScale : 1.0;
+          final sideNormal = reverse ? (-fn.$1, -fn.$2, -fn.$3) : fn;
+
+          // Vertices are deduped per (vId, uv) rather than just vId: UVs
+          // are inherently per-face, so a vertex position shared by two
+          // faces that disagree on texture mapping must become two
+          // distinct output vertices (glTF requires position/normal/uv
+          // aligned per index).
+          final faceLocalMap = <int, int>{};
+          for (final tri in triangles) {
+            final triIds = reverse ? [tri[0], tri[2], tri[1]] : tri;
+            final faceIndices = <int>[];
+            for (final vId in triIds) {
+              if (!builder.vertices.containsKey(vId)) continue;
+              var idx = faceLocalMap[vId];
+              if (idx == null) {
+                final p = builder.vertices[vId]!;
+                final (u, v) = _computeFaceUv(p, xr, yr, uvTransform, tileW, tileH);
+                final key = (vId, u, v);
+                idx = group.localVMap[key];
+                if (idx == null) {
+                  group.localVerts.add(p);
+                  group.localUvs.add((u, v));
+                  group.normalsAccum.add([sideNormal.$1, sideNormal.$2, sideNormal.$3]);
+                  idx = group.localVerts.length - 1;
+                  group.localVMap[key] = idx;
+                } else {
+                  final accum = group.normalsAccum[idx];
+                  accum[0] += sideNormal.$1;
+                  accum[1] += sideNormal.$2;
+                  accum[2] += sideNormal.$3;
+                }
+                faceLocalMap[vId] = idx;
+              }
+              faceIndices.add(idx);
+            }
+            if (faceIndices.length == 3) {
+              group.localFaces.add(faceIndices);
+            }
+          }
+        }
 
         for (final faceEntry in builder.faces.entries) {
           final fData = faceEntry.value;
-          (int, int, int)? faceColor = inheritedColor;
-          final faceMatId = fData.materialId;
-          RawMaterial? mat;
-          if (faceMatId != null) {
-            final matName = materialIdToName[faceMatId];
-            if (matName != null) {
-              mat = materials[matName] ?? materialsByFolder[matName];
-              if (mat != null) faceColor = (mat.r, mat.g, mat.b);
-            }
-          }
-          final resolvedColor = faceColor ?? getLayerColor(parentLayer);
+          final fallbackColor = inheritedColor ?? getLayerColor(parentLayer);
 
-          final group = faceGroups.putIfAbsent(resolvedColor, () => _FaceGroup(resolvedColor));
+          final frontMat = resolveMaterial(fData.materialId);
+          final backMat = resolveMaterial(fData.backMaterialId);
+          final frontColor = (frontMat != null) ? (frontMat.r, frontMat.g, frontMat.b) : fallbackColor;
+          final backColor = (backMat != null) ? (backMat.r, backMat.g, backMat.b) : fallbackColor;
 
           final loops = <List<int>>[];
           for (final loop in fData.loops) {
@@ -286,56 +359,23 @@ class SceneBuilder {
           }
 
           final fn = fData.normal;
-          final tex = mat?.texture;
-          final tileW = (tex != null && tex.xScale > 1e-9) ? tex.xScale : 1.0;
-          final tileH = (tex != null && tex.yScale > 1e-9) ? tex.yScale : 1.0;
           final (xr, yr) = _faceUvBasis(fn);
           final uvTransform = fData.uvTransform;
+          final uvTransformBack = fData.uvTransformBack;
 
-          // Vertices are deduped per (vId, uv) rather than just vId: UVs
-          // are inherently per-face, so a vertex position shared by two
-          // faces that disagree on texture mapping must become two
-          // distinct output vertices (glTF requires position/normal/uv
-          // aligned per index).
-          final faceLocalMap = <int, int>{};
-          for (final tri in triangles) {
-            final faceIndices = <int>[];
-            for (final vId in tri) {
-              if (!builder.vertices.containsKey(vId)) continue;
-              var idx = faceLocalMap[vId];
-              if (idx == null) {
-                final p = builder.vertices[vId]!;
-                final (u, v) = _computeFaceUv(p, xr, yr, uvTransform, tileW, tileH);
-                final key = (vId, u, v);
-                idx = group.localVMap[key];
-                if (idx == null) {
-                  group.localVerts.add(p);
-                  group.localUvs.add((u, v));
-                  group.normalsAccum.add([fn.$1, fn.$2, fn.$3]);
-                  idx = group.localVerts.length - 1;
-                  group.localVMap[key] = idx;
-                } else {
-                  final accum = group.normalsAccum[idx];
-                  accum[0] += fn.$1;
-                  accum[1] += fn.$2;
-                  accum[2] += fn.$3;
-                }
-                faceLocalMap[vId] = idx;
-              }
-              faceIndices.add(idx);
-            }
-            if (faceIndices.length == 3) {
-              group.localFaces.add(faceIndices);
-            }
+          if (frontColor == backColor) {
+            addSide(triangles, fn, frontColor, true, false, frontMat, uvTransform, xr, yr);
+          } else {
+            addSide(triangles, fn, frontColor, false, false, frontMat, uvTransform, xr, yr);
+            addSide(triangles, fn, backColor, false, true, backMat, uvTransformBack, xr, yr);
           }
         }
 
         final isRootPath = pathName == 'ROOT';
         final multiGroup = faceGroups.length > 1;
 
-        for (final groupEntry in faceGroups.entries) {
-          final color = groupEntry.key;
-          final group = groupEntry.value;
+        for (final group in faceGroups.values) {
+          final color = group.color;
           if (group.localFaces.isEmpty) continue;
 
           final tx = isRootPath ? 0.0 : (currentMatrix.length > 9 ? currentMatrix[9] : 0.0) * _inchesToMm;
@@ -344,7 +384,9 @@ class SceneBuilder {
 
           var safePath = pathName.replaceAll(' / ', '__').replaceAll(' ', '_');
           if (safePath.length > 80) safePath = safePath.substring(0, 80);
-          final colorSuffix = multiGroup ? '_${color.$1}_${color.$2}_${color.$3}' : '';
+          final colorSuffix = multiGroup
+              ? '_${color.$1}_${color.$2}_${color.$3}_${group.doubleSided ? 'ds' : 'ss'}'
+              : '';
           final geomName = 'mesh_${meshCounter}_${safePath}_$parentLayer$colorSuffix';
           meshCounter++;
 
@@ -417,7 +459,7 @@ class SceneBuilder {
             indices.add(tri[2]);
           }
 
-          final materialIndex = getMaterialIndex(color);
+          final materialIndex = getMaterialIndex(color, group.doubleSided);
           glbPrimitives.add(GlbPrimitive(
             positions: positions,
             normals: normals,
