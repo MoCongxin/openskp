@@ -1497,6 +1497,156 @@ class TestLegacyRealFile:
         assert all(isinstance(k, int) for k in model.definitions)
 
 
+class TestModernRealFile:
+    """Decode real modern (VFF/2021+) ``.skp`` files end to end and assert
+    against known ground truth.
+
+    Python's ``tests/fixtures/`` previously had only the legacy MFC
+    fixture - ``Untitled.skp``/``SU_File.skp`` (which every other language
+    pins exact values against in its own integration test) didn't exist in
+    Python's tree at all, meaning the VFF/modern-format path had zero
+    real-file coverage here specifically. Both fixtures are the exact same
+    files already used by the TypeScript/Dart/C++/.NET ports (confirmed
+    byte-identical via checksum before copying), and every assertion below
+    was cross-checked directly against a real Python parse of these files
+    before being written (not copied blind from the other ports' tests).
+    """
+
+    FIXTURE_UNTITLED = pathlib.Path(__file__).parent / "fixtures" / "Untitled.skp"
+    FIXTURE_SU_FILE = pathlib.Path(__file__).parent / "fixtures" / "SU_File.skp"
+
+    def _model(self, fixture: pathlib.Path):
+        if not fixture.exists():
+            pytest.skip("modern fixture not present")
+        from openskp.model import SkpFile
+        return SkpFile.open(str(fixture))
+
+    def test_untitled_skp_matches_ground_truth(self) -> None:
+        skp = self._model(self.FIXTURE_UNTITLED)
+        model = skp.parse()
+
+        # 1. Version and units
+        assert model.version == "{25.0.575}"
+        assert model.units == "Millimeter"
+
+        # 2. Layers
+        assert len(model.layers) == 14
+        expected_layers = {
+            "Layer0", "BottomPlate", "TopPlate", "Stud", "Nog", "KingStud",
+            "HeaderJackStud", "HeaderPlate1", "HeaderPlate2", "SillPlate1",
+            "VerticalHeaderStud", "generic_frame", "dimension", "Hat Sections",
+        }
+        assert expected_layers <= {layer.name for layer in model.layers}
+        layer0 = next(layer for layer in model.layers if layer.name == "Layer0")
+        assert (layer0.color_r, layer0.color_g, layer0.color_b) == (136, 136, 136)
+        # VFF files carry no known layer-visibility tag - always False here.
+        assert all(not layer.hidden for layer in model.layers)
+
+        # 3. Materials
+        assert len(model.materials) == 15
+        mat_layer0 = next(m for m in model.materials if m.name == "Layer_Layer0")
+        # Real data: none of this fixture's materials have useTrans="1" set,
+        # so all correctly read fully opaque.
+        assert mat_layer0.transparency == 1.0
+        assert mat_layer0.id is None
+        assert mat_layer0.texture is None
+        assert mat_layer0.colorized is False
+        assert mat_layer0.colorize_type == 0
+
+        # Real join: TLV material ID 26180 resolves to the default "*"
+        # material, and the resolved object is the SAME instance held in
+        # model.materials (not a copy) - the join shares identity.
+        joined = model.materials_by_id.get(26180)
+        assert joined is not None
+        assert joined.name == "*"
+        assert joined in model.materials
+        assert joined.id == 26180
+
+        # 4. Definitions
+        assert len(model.definitions) == 46
+        def66 = model.definitions[66]
+        assert def66.name == "Group200#2"
+        assert len(def66.guid) == 32  # GUID as hex string
+        assert def66.always_faces_camera is False
+        assert def66.is_image is False
+        assert isinstance(def66.instances, list)
+
+        # 5. Vertices/edges/faces in Definition 66
+        assert len(def66.vertices) == 136
+        first_vertex = next(iter(def66.vertices.values()))
+        assert isinstance(first_vertex.x, float)
+        assert isinstance(first_vertex.y, float)
+        assert isinstance(first_vertex.z, float)
+
+        assert len(def66.edges) == 158
+        first_edge = next(iter(def66.edges.values()))
+        assert first_edge.soft is False
+        assert first_edge.smooth is False
+        assert first_edge.hidden is False
+
+        assert len(def66.faces) == 26
+        first_face = next(iter(def66.faces.values()))
+        assert len(first_face.loops) > 0
+        edge_id, orientation = first_face.loops[0][0]
+        assert isinstance(edge_id, int)
+        assert isinstance(orientation, int)
+        assert first_face.normal is not None
+        assert len(first_face.normal) == 3
+        assert first_face.back_material_id is None
+        assert first_face.uv_transform is None
+        assert first_face.uv_transform_back is None
+        # Real data: every face/instance in this fixture is visible - D307's
+        # flag byte reads the plain baseline (0x06) throughout.
+        assert all(not f.hidden for f in def66.faces.values())
+
+        # 6. Styles - this fixture bundles two style.xml files (the second
+        # is SketchUp's "_1" duplicate-naming convention), both named
+        # "[Construction Documentation Style]" with the same front/back
+        # colors.
+        assert len(model.styles) == 2
+        assert model.styles[0].name == "[Construction Documentation Style]"
+        assert model.styles[0].front_color == (255, 255, 255)
+        assert model.styles[0].back_color == (208, 209, 189)
+
+        # 7. Scene hierarchy & mesh index - a separate, opt-in step
+        # (build_scene()) from parse(), so it never costs a plain parse()
+        # call anything.
+        scene = skp.build_scene()
+        assert scene.scene_hierarchy.name == "ROOT"
+        assert scene.scene_hierarchy.definition_name == "ROOT_MODEL"
+        assert len(scene.scene_hierarchy.children) > 0
+
+        assert len(scene.mesh_index) == 43
+        first_mesh = next(iter(scene.mesh_index.values()))
+        assert first_mesh.name is not None
+        assert first_mesh.layer is not None
+        assert len(first_mesh.position_mm) == 3
+
+    def test_su_file_skp_matches_ground_truth(self) -> None:
+        skp = self._model(self.FIXTURE_SU_FILE)
+        model = skp.parse()
+
+        assert model.version == "{25.0.575}"
+
+        assert len(model.layers) == 1
+        assert model.layers[0].name == "Layer0"
+
+        assert len(model.materials) == 1
+        assert model.materials[0].name == "Layer_Layer0"
+
+        # Only ROOT holds geometry in this fixture, so the numeric
+        # definitions map (which excludes ROOT) is empty.
+        assert len(model.definitions) == 0
+
+        scene = skp.build_scene()
+        assert scene.scene_hierarchy.name == "ROOT"
+        assert scene.scene_hierarchy.definition_name == "ROOT_MODEL"
+
+        assert len(scene.mesh_index) == 1
+        first_mesh = next(iter(scene.mesh_index.values()))
+        assert first_mesh.definition_name == "ROOT_MODEL"
+
+
 class TestLegacyDynamicProperties:
     """Legacy (pre-2021 MFC) instances now carry their already-parsed
     ``CAttributeContainer`` through to ``build_scene()``, instead of it
