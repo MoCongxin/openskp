@@ -52,4 +52,4 @@ jobs:
         run: pip install ruff==0.15.13
 
       - name: Lint
-        run: ruff check packages/python/src/
+        run: ruff check packages/python/src/ packages/python/tests/
