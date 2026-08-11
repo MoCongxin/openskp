@@ -89,6 +89,11 @@ struct RawStyle {
 struct RawParsed {
   std::string version{"unknown"};
   std::map<std::string, Color3> layer_colors;
+  // Modern (VFF) files derive layers from Layer_<name>-prefixed materials,
+  // which carry no visibility flag of their own - unlike legacy MFC files,
+  // there is currently no known tag exposing a VFF layer's hidden state,
+  // so every VFF layer defaults to visible.
+  std::map<std::string, bool> layer_hidden;
   std::map<EntityId, std::string> layer_id_to_name;
   std::map<EntityId, std::string> material_id_to_name;
   std::map<std::string, std::shared_ptr<RawMaterial>> materials;

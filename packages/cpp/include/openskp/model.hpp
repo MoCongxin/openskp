@@ -60,6 +60,12 @@ struct Face {
 struct Layer {
   std::string name;
   Color3 color{200, 200, 200};
+  // Whether the layer's visibility is switched off. Only populated for
+  // legacy (pre-2021 MFC) files, where the byte is read directly from the
+  // layer record - modern (VFF) files derive layers from
+  // Layer_<name>-prefixed materials, which carry no visibility data, so
+  // this is always false there.
+  bool hidden{};
 };
 
 struct Texture {

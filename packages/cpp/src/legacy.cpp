@@ -328,6 +328,7 @@ struct Archive {
       v->name = r.utf16();
       ByteBuffer mid;
       while (mid.size() < 8 && !r.marker()) mid.push_back(r.u8());
+      v->hidden = mid.empty() ? 0 : mid[0];
       r.utf16();
       r.u16();
       auto c = r.raw(4);
@@ -745,8 +746,10 @@ RawParsed parse_legacy(const ByteBuffer& data, const ParseOptions& o) {
       out.layer_id_to_name[l.first] = l.second->name;
       out.layer_colors[l.second->name] = {uint8_t(l.second->r), uint8_t(l.second->g),
                                           uint8_t(l.second->b)};
+      out.layer_hidden[l.second->name] = l.second->hidden != 0;
     }
     if (!out.layer_colors.count("Layer0")) out.layer_colors["Layer0"] = {136, 136, 136};
+    if (!out.layer_hidden.count("Layer0")) out.layer_hidden["Layer0"] = false;
     for (auto& s : ar.slots)
       if (!s.second.cls && s.second.name == "CComponentDefinition" && s.second.v) {
         RawDefinition d;
