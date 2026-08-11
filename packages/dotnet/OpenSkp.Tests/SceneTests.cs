@@ -11,11 +11,15 @@ namespace OpenSkp.Tests
     /// scene-hierarchy + triangulation + GLB mesh capability, ported from
     /// the TypeScript reference implementation.
     ///
-    /// Cross-validated directly against Python's and TypeScript's
-    /// SkpFile.build_scene()/buildScene() on this exact fixture: mesh
-    /// count, mesh_index count, gltf_materials count, root instance count,
-    /// and the first three meshes' exact vertex/triangle counts and
-    /// material indices all match precisely.
+    /// Root instance count is cross-validated directly against Python's
+    /// and TypeScript's SkpFile.build_scene()/buildScene() on this exact
+    /// fixture. Mesh/GltfMaterials counts (21/21/13) instead match C++'s
+    /// independently-verified reference for this file - the correct
+    /// counts once faces with genuinely different front/back materials
+    /// are split into two single-sided primitives each, rather than the
+    /// pre-fix single-sided-only count (13/13/9). This fixture has 30
+    /// such faces (confirmed by direct inspection), so the split isn't a
+    /// rare edge case here.
     /// </summary>
     public class SceneTests
     {
@@ -27,9 +31,9 @@ namespace OpenSkp.Tests
         {
             var scene = SkpFile.BuildScene(FixturePath("capilla_quiroz_v17.skp"));
 
-            Assert.Equal(13, scene.GlbPrimitives.Count);
-            Assert.Equal(13, scene.MeshIndex.Count);
-            Assert.Equal(9, scene.GltfMaterials.Count);
+            Assert.Equal(21, scene.GlbPrimitives.Count);
+            Assert.Equal(21, scene.MeshIndex.Count);
+            Assert.Equal(13, scene.GltfMaterials.Count);
 
             Assert.Equal("ROOT", scene.SceneHierarchy.Name);
             Assert.Equal("ROOT_MODEL", scene.SceneHierarchy.DefinitionName);
@@ -61,7 +65,35 @@ namespace OpenSkp.Tests
             // BuildScene() must not require Parse()/Open() to have been
             // called first - it re-parses independently.
             var scene = SkpFile.BuildScene(FixturePath("capilla_quiroz_v17.skp"));
-            Assert.Equal(13, scene.GlbPrimitives.Count);
+            Assert.Equal(21, scene.GlbPrimitives.Count);
+        }
+
+        [Fact]
+        public void RendersBackFaceMaterialsCorrectly()
+        {
+            // This fixture has 30 faces (e.g. faces 133/152 in the
+            // 'puerta' definition) whose front and back materials resolve
+            // to genuinely different colors. Verified directly: front
+            // material 29 is blue (2, 0, 237), back material 27 is light
+            // blue (204, 235, 244).
+            var scene = SkpFile.BuildScene(FixturePath("capilla_quiroz_v17.skp"));
+
+            bool HasColor(int r, int g, int b) => scene.GltfMaterials.Any(m =>
+            {
+                var dict = (System.Collections.Generic.IDictionary<string, object>)m;
+                dynamic pbr = dict["pbrMetallicRoughness"];
+                double[] c = pbr.baseColorFactor;
+                return (int)Math.Round(c[0] * 255) == r &&
+                    (int)Math.Round(c[1] * 255) == g &&
+                    (int)Math.Round(c[2] * 255) == b;
+            });
+
+            Assert.True(HasColor(2, 0, 237));
+            Assert.True(HasColor(204, 235, 244));
+
+            int doubleSidedCount = scene.GltfMaterials.Count(m =>
+                ((System.Collections.Generic.IDictionary<string, object>)m).TryGetValue("doubleSided", out var v) && v is bool b && b);
+            Assert.Equal(4, doubleSidedCount);
         }
     }
 }
