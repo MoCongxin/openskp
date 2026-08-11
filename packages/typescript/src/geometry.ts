@@ -12,6 +12,11 @@ export interface GeometryBuilderInstance {
   layerId?: number | null;
   hidden?: boolean;
   children: TlvNode[];
+  /** Dynamic Component properties precomputed for legacy (pre-2021 MFC)
+   * instances (see legacy.ts's extractLegacyDynamicProperties) - VFF
+   * instances don't set this, since their properties come from a lazy
+   * D007/DC05 TLV walk over `children` instead (see model.ts). */
+  properties?: Record<string, string>;
 }
 
 export interface GeometryBuilderFace {

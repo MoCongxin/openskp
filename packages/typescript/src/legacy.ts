@@ -456,6 +456,44 @@ function readAttrNamed(ar: Archive, r: R): any {
   return { k: 'dict', name: dictname, entries };
 }
 
+// SketchUp's Dynamic Components extension stores its data in an attribute
+// dictionary literally named "dynamic_attributes" - a stable, publicly
+// documented part of the SketchUp Ruby API
+// (Entity#attribute_dictionary("dynamic_attributes")). readAttrContainer/
+// readAttrNamed above already fully decode an entity's
+// CAttributeContainer into typed (dict-name, {key: value}) pairs for
+// other purposes (CFaceTextureCoords lookup on faces) - this just looks
+// up that one dictionary by name, mirroring what the VFF path's
+// extractDynamicProperties() (geometry.ts) does for D007/DC05 TLV data.
+const DYNAMIC_ATTRIBUTES_DICT_NAME = 'dynamic_attributes';
+
+/** Render an already-typed legacy attribute value (number, string, array,
+ * or null) as a string, matching the string-valued Record<string, string>
+ * contract the VFF path's extractDynamicProperties() produces. */
+export function stringifyAttrValue(value: any): string {
+  if (value === null || value === undefined) return '';
+  if (Array.isArray(value)) return value.map(stringifyAttrValue).join(',');
+  return String(value);
+}
+
+/** Extract Dynamic Component attribute key/value pairs from a legacy
+ * entity's already-parsed CAttributeContainer, or {} when the entity
+ * carries no attribute container or no dynamic_attributes dictionary. */
+export function extractLegacyDynamicProperties(attrs: any): Record<string, string> {
+  if (!attrs || typeof attrs !== 'object') return {};
+  for (const [name, value] of attrs.children || []) {
+    if (name === DYNAMIC_ATTRIBUTES_DICT_NAME && value && typeof value === 'object') {
+      const entries = value.entries || {};
+      const properties: Record<string, string> = {};
+      for (const key of Object.keys(entries)) {
+        properties[key] = stringifyAttrValue(entries[key]);
+      }
+      return properties;
+    }
+  }
+  return {};
+}
+
 function readLayer(ar: Archive, r: R): any {
   preamble(ar, r);
   const name = r.utf16();
@@ -762,7 +800,7 @@ function readDefinition(ar: Archive, r: R): any {
 
 function readInstance(ar: Archive, r: R): any {
   const cls = ar.currentClass;
-  preamble(ar, r);
+  const pre = preamble(ar, r);
   const db = drawbase(ar, r);
   const [ds, dn] = ar.readObject(r, 'CComponentDefinition');
   if (dn !== 'CComponentDefinition') {
@@ -778,7 +816,7 @@ function readInstance(ar: Archive, r: R): any {
   const schema = cls !== null ? ar.classSchema.get(cls) : undefined;
   const guid = schema === undefined || schema >= minSchema ? r.raw(16) : new Uint8Array(0);
 
-  return { k: 'instance', db, def: ds, xf, name, guid: toHex(guid) };
+  return { k: 'instance', db, def: ds, xf, name, guid: toHex(guid), attrs: pre.attrs };
 }
 
 const READERS: Record<string, (ar: Archive, r: R) => any> = {
@@ -1031,6 +1069,7 @@ function fillBuilder(builder: LegacyBuilder, ents: [number, string | null, any][
         layerId: v.db.layer || null,
         hidden: Boolean(v.db.hidden),
         children: [],
+        properties: extractLegacyDynamicProperties(v.attrs),
       });
     }
   }
