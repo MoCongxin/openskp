@@ -190,6 +190,12 @@ class Definition {
 class SkpModel {
   String version = 'unknown';
 
+  /// The model's unit-system string (e.g. "Millimeter"), read from
+  /// meta/meta.dat in modern (VFF) files. Null for legacy (pre-2021 MFC)
+  /// files, which carry no equivalent container, or when the tag isn't
+  /// found.
+  String? units;
+
   /// Component/group definitions keyed by their numeric TLV entity ID. The
   /// implicit root definition (Python's "ROOT" dict entry, which has no
   /// numeric ID) is exposed separately via [root] instead of living in this

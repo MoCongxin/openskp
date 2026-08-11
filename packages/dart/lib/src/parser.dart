@@ -62,7 +62,9 @@ class SkpFile {
   SkpModel parse([ParseOptions? options]) {
     final parsed = _parseToRaw(options);
 
-    final model = SkpModel()..version = parsed.version;
+    final model = SkpModel()
+      ..version = parsed.version
+      ..units = parsed.units;
 
     for (final entry in parsed.defsDict.entries) {
       model.definitions[entry.key] = _buildDefinition(entry.key, entry.value);

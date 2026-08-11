@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:archive/archive.dart';
 
 import 'errors.dart';
+import 'tlv.dart';
 
 /// Container-level helpers for the modern (2021+) VFF/ZIP .skp format:
 /// header validation, version-string extraction, and locating the embedded
@@ -93,6 +94,31 @@ class Vff {
   static const int _maxUncompressedEntryBytes = 16 * 1024 * 1024 * 1024; // 16 GB
   static const int _maxCompressionRatio = 1000;
   static const int _ratioCheckThresholdBytes = 1024 * 1024; // 1 MB
+
+  // meta/meta.dat uses the exact same low-level TLV framing as model.dat
+  // (2-byte tag + 4-byte little-endian length + payload), but as one flat,
+  // non-recursive record list wrapped in a single outer record (tag
+  // 0x6400/"6400"). Tag 0x6D00/"6D00" carries the model's unit-system
+  // string ("Millimeter" etc.) as plain text. Confirmed byte-for-byte
+  // against a real fixture - never opened by any parser in this codebase
+  // before.
+  static const String _metaWrapperTag = '6400';
+  static const String _metaUnitsTag = '6D00';
+
+  /// Extract the model's unit-system string from a VFF file's
+  /// meta/meta.dat contents, or null if the expected tags aren't found.
+  static String? readMetaUnits(Uint8List metaBytes) {
+    final records = Tlv.parseFlat(metaBytes);
+    final wrapper = Tlv.findFlat(records, _metaWrapperTag);
+    if (wrapper != null) {
+      return readMetaUnits(wrapper);
+    }
+    final units = Tlv.findFlat(records, _metaUnitsTag);
+    if (units != null) {
+      return Tlv.decodeUtf8(units);
+    }
+    return null;
+  }
 
   /// Reject a ZIP entry whose declared uncompressed size is implausible,
   /// before any code reads (and so decompresses/allocates for) its

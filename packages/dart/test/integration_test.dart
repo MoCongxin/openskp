@@ -14,6 +14,7 @@ void main() {
     final model = SkpFile.open(fixture('Untitled.skp')).parse();
 
     expect(model.version, '{25.0.575}');
+    expect(model.units, 'Millimeter');
 
     expect(model.layers.length, 14);
     const expectedLayers = [

@@ -1319,6 +1319,10 @@ class Legacy {
 
     return RawParsed()
       ..version = version
+      // Legacy (pre-2021 MFC) files carry no meta/meta.dat container -
+      // that's a VFF/ZIP-only construct - so there is no known source for
+      // the model's unit-system string here.
+      ..units = null
       ..layerColors.addAll(layerColors)
       ..layerHidden.addAll(layerHidden)
       ..layerIdToName.addAll(layerIdToName)
