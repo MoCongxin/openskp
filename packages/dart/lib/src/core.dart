@@ -13,6 +13,11 @@ import 'vff.dart';
 class RawParsed {
   String version = 'unknown';
   final Map<String, (int, int, int)> layerColors = {};
+  // Modern (VFF) files derive layers from Layer_<name>-prefixed materials,
+  // which carry no visibility flag of their own - unlike legacy MFC files,
+  // there is currently no known tag exposing a VFF layer's hidden state,
+  // so every VFF layer defaults to visible.
+  final Map<String, bool> layerHidden = {};
   final Map<int, String> layerIdToName = {};
   final Map<int, String> materialIdToName = {};
   final Map<String, RawMaterial> materials = {};
@@ -53,6 +58,7 @@ class Core {
     final zip = Vff.openZip(data, pkPos);
 
     final layerColors = <String, (int, int, int)>{};
+    final layerHidden = <String, bool>{};
     final materials = <String, RawMaterial>{};
     final materialsByFolder = <String, RawMaterial>{};
 
@@ -75,6 +81,7 @@ class Core {
           }
           if (mat.name.startsWith('Layer_')) {
             layerColors[mat.name.substring(6)] = (mat.r, mat.g, mat.b);
+            layerHidden[mat.name.substring(6)] = false;
           }
         }
       }
@@ -150,10 +157,14 @@ class Core {
     if (!layerColors.containsKey('Layer0')) {
       layerColors['Layer0'] = (136, 136, 136);
     }
+    if (!layerHidden.containsKey('Layer0')) {
+      layerHidden['Layer0'] = false;
+    }
 
     return RawParsed()
       ..version = version
       ..layerColors.addAll(layerColors)
+      ..layerHidden.addAll(layerHidden)
       ..layerIdToName.addAll(layerIdToName)
       ..materialIdToName.addAll(materialIdToName)
       ..materials.addAll(materials)

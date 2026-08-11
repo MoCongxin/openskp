@@ -36,6 +36,10 @@ void main() {
     for (final name in expectedLayers) {
       expect(parsedLayers, contains(name));
     }
+    // VFF files carry no known layer-visibility tag - always false here.
+    for (final layer in model.layers) {
+      expect(layer.hidden, false);
+    }
 
     expect(model.materials.length, 15);
     const expectedMaterials = [
