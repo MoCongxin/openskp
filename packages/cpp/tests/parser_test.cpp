@@ -299,5 +299,27 @@ TEST(Parser, InvalidInputs) {
   EXPECT_THROW(SkpFile::open("not-skp.txt"), std::filesystem::filesystem_error);
 }
 
+TEST(Parser, MaterialsByIdMap) {
+  auto model = SkpFile::open(test::fixture("Untitled.skp")).parse();
+  auto by_id = model.materials_by_id();
+  EXPECT_FALSE(by_id.empty());
+  for (const auto& [id, mat] : by_id) {
+    ASSERT_NE(mat, nullptr);
+    EXPECT_TRUE(mat->id.has_value());
+    EXPECT_EQ(*mat->id, id);
+    EXPECT_EQ(model.material_by_id(id), mat);
+  }
+
+  const auto& const_model = model;
+  auto const_by_id = const_model.materials_by_id();
+  EXPECT_EQ(const_by_id.size(), by_id.size());
+  for (const auto& [id, mat] : const_by_id) {
+    ASSERT_NE(mat, nullptr);
+    EXPECT_TRUE(mat->id.has_value());
+    EXPECT_EQ(*mat->id, id);
+    EXPECT_EQ(const_model.material_by_id(id), mat);
+  }
+}
+
 }  // namespace
 }  // namespace openskp
