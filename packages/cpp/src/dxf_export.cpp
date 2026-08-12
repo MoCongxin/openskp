@@ -92,482 +92,2808 @@ static std::tuple<int, int, int> get_prim_rgb(const Scene& scene, const GlbPrimi
 // handle the reference file itself uses for its own first entity, so every
 // handle in an exported file stays globally unique ("monomorphic").
 
-static const std::vector<std::string> kHeaderStaticA = {
-    "  0", "SECTION", "  2", "HEADER", "  9", "$ACADVER",
-    "  1", "AC1015", "  9", "$ACADMAINTVER", " 70", "6",
-    "  9", "$DWGCODEPAGE", "  3", "ANSI_1252", "  9", "$INSBASE",
-    " 10", "0.0", " 20", "0.0", " 30", "0.0",
-    "  9", "$EXTMIN", " 10", "1e+20", " 20", "1e+20",
-    " 30", "1e+20", "  9", "$EXTMAX", " 10", "-1e+20",
-    " 20", "-1e+20", " 30", "-1e+20", "  9", "$LIMMIN",
-    " 10", "0.0", " 20", "0.0", "  9", "$LIMMAX",
-    " 10", "420.0", " 20", "297.0", "  9", "$ORTHOMODE",
-    " 70", "0", "  9", "$REGENMODE", " 70", "1",
-    "  9", "$FILLMODE", " 70", "1", "  9", "$QTEXTMODE",
-    " 70", "0", "  9", "$MIRRTEXT", " 70", "1",
-    "  9", "$LTSCALE", " 40", "1.0", "  9", "$ATTMODE",
-    " 70", "1", "  9", "$TEXTSIZE", " 40", "2.5",
-    "  9", "$TRACEWID", " 40", "1.0", "  9", "$TEXTSTYLE",
-    "  7", "Standard", "  9", "$CLAYER", "  8", "0",
-    "  9", "$CELTYPE", "  6", "ByLayer", "  9", "$CECOLOR",
-    " 62", "256", "  9", "$CELTSCALE", " 40", "1.0",
-    "  9", "$DISPSILH", " 70", "0", "  9", "$DIMSCALE",
-    " 40", "1.0", "  9", "$DIMASZ", " 40", "2.5",
-    "  9", "$DIMEXO", " 40", "0.625", "  9", "$DIMDLI",
-    " 40", "3.75", "  9", "$DIMRND", " 40", "0.0",
-    "  9", "$DIMDLE", " 40", "0.0", "  9", "$DIMEXE",
-    " 40", "1.25", "  9", "$DIMTP", " 40", "0.0",
-    "  9", "$DIMTM", " 40", "0.0", "  9", "$DIMTXT",
-    " 40", "2.5", "  9", "$DIMCEN", " 40", "2.5",
-    "  9", "$DIMTSZ", " 40", "0.0", "  9", "$DIMTOL",
-    " 70", "0", "  9", "$DIMLIM", " 70", "0",
-    "  9", "$DIMTIH", " 70", "0", "  9", "$DIMTOH",
-    " 70", "0", "  9", "$DIMSE1", " 70", "0",
-    "  9", "$DIMSE2", " 70", "0", "  9", "$DIMTAD",
-    " 70", "1", "  9", "$DIMZIN", " 70", "8",
-    "  9", "$DIMBLK", "  1", "", "  9", "$DIMASO",
-    " 70", "1", "  9", "$DIMSHO", " 70", "1",
-    "  9", "$DIMPOST", "  1", "", "  9", "$DIMAPOST",
-    "  1", "", "  9", "$DIMALT", " 70", "0",
-    "  9", "$DIMALTD", " 70", "3", "  9", "$DIMALTF",
-    " 40", "0.03937007874", "  9", "$DIMLFAC", " 40", "1.0",
-    "  9", "$DIMTOFL", " 70", "1", "  9", "$DIMTVP",
-    " 40", "0.0", "  9", "$DIMTIX", " 70", "0",
-    "  9", "$DIMSOXD", " 70", "0", "  9", "$DIMSAH",
-    " 70", "0", "  9", "$DIMBLK1", "  1", "",
-    "  9", "$DIMBLK2", "  1", "", "  9", "$DIMSTYLE",
-    "  2", "ISO-25", "  9", "$DIMCLRD", " 70", "0",
-    "  9", "$DIMCLRE", " 70", "0", "  9", "$DIMCLRT",
-    " 70", "0", "  9", "$DIMTFAC", " 40", "1.0",
-    "  9", "$DIMGAP", " 40", "0.625", "  9", "$DIMJUST",
-    " 70", "0", "  9", "$DIMSD1", " 70", "0",
-    "  9", "$DIMSD2", " 70", "0", "  9", "$DIMTOLJ",
-    " 70", "0", "  9", "$DIMTZIN", " 70", "8",
-    "  9", "$DIMALTZ", " 70", "0", "  9", "$DIMALTTZ",
-    " 70", "0", "  9", "$DIMUPT", " 70", "0",
-    "  9", "$DIMDEC", " 70", "2", "  9", "$DIMTDEC",
-    " 70", "2", "  9", "$DIMALTU", " 70", "2",
-    "  9", "$DIMALTTD", " 70", "3", "  9", "$DIMTXSTY",
-    "  7", "Standard", "  9", "$DIMAUNIT", " 70", "0",
-    "  9", "$DIMADEC", " 70", "0", "  9", "$DIMALTRND",
-    " 40", "0.0", "  9", "$DIMAZIN", " 70", "0",
-    "  9", "$DIMDSEP", " 70", "44", "  9", "$DIMATFIT",
-    " 70", "3", "  9", "$DIMFRAC", " 70", "0",
-    "  9", "$DIMLDRBLK", "  1", "", "  9", "$DIMLUNIT",
-    " 70", "2", "  9", "$DIMLWD", " 70", "-2",
-    "  9", "$DIMLWE", " 70", "-2", "  9", "$DIMTMOVE",
-    " 70", "0", "  9", "$LUNITS", " 70", "2",
-    "  9", "$LUPREC", " 70", "4", "  9", "$SKETCHINC",
-    " 40", "1.0", "  9", "$FILLETRAD", " 40", "10.0",
-    "  9", "$AUNITS", " 70", "0", "  9", "$AUPREC",
-    " 70", "2", "  9", "$MENU", "  1", ".",
-    "  9", "$ELEVATION", " 40", "0.0", "  9", "$PELEVATION",
-    " 40", "0.0", "  9", "$THICKNESS", " 40", "0.0",
-    "  9", "$LIMCHECK", " 70", "0", "  9", "$CHAMFERA",
-    " 40", "0.0", "  9", "$CHAMFERB", " 40", "0.0",
-    "  9", "$CHAMFERC", " 40", "0.0", "  9", "$CHAMFERD",
-    " 40", "0.0", "  9", "$SKPOLY", " 70", "0",
-    "  9", "$TDCREATE", " 40", "2461265.626689815", "  9", "$TDUCREATE",
-    " 40", "2458532.153996898", "  9", "$TDUPDATE", " 40", "2461265.626689815",
-    "  9", "$TDUUPDATE", " 40", "2458532.1544311", "  9", "$TDINDWG",
-    " 40", "0.0", "  9", "$TDUSRTIMER", " 40", "0.0",
-    "  9", "$USRTIMER", " 70", "1", "  9", "$ANGBASE",
-    " 50", "0.0", "  9", "$ANGDIR", " 70", "0",
-    "  9", "$PDMODE", " 70", "0", "  9", "$PDSIZE",
-    " 40", "0.0", "  9", "$PLINEWID", " 40", "0.0",
-    "  9", "$SPLFRAME", " 70", "0", "  9", "$SPLINETYPE",
-    " 70", "6", "  9", "$SPLINESEGS", " 70", "8",
-    "  9", "$HANDSEED", "  5", "__HANDSEED__", "  9", "$SURFTAB1",
-    " 70", "6", "  9", "$SURFTAB2", " 70", "6",
-    "  9", "$SURFTYPE", " 70", "6", "  9", "$SURFU",
-    " 70", "6", "  9", "$SURFV", " 70", "6",
-    "  9", "$UCSBASE", "  2", "", "  9", "$UCSNAME",
-    "  2", "", "  9", "$UCSORG", " 10", "0.0",
-    " 20", "0.0", " 30", "0.0", "  9", "$UCSXDIR",
-    " 10", "1.0", " 20", "0.0", " 30", "0.0",
-    "  9", "$UCSYDIR", " 10", "0.0", " 20", "1.0",
-    " 30", "0.0", "  9", "$UCSORTHOREF", "  2", "",
-    "  9", "$UCSORTHOVIEW", " 70", "0", "  9", "$UCSORGTOP",
-    " 10", "0.0", " 20", "0.0", " 30", "0.0",
-    "  9", "$UCSORGBOTTOM", " 10", "0.0", " 20", "0.0",
-    " 30", "0.0", "  9", "$UCSORGLEFT", " 10", "0.0",
-    " 20", "0.0", " 30", "0.0", "  9", "$UCSORGRIGHT",
-    " 10", "0.0", " 20", "0.0", " 30", "0.0",
-    "  9", "$UCSORGFRONT", " 10", "0.0", " 20", "0.0",
-    " 30", "0.0", "  9", "$UCSORGBACK", " 10", "0.0",
-    " 20", "0.0", " 30", "0.0", "  9", "$PUCSBASE",
-    "  2", "", "  9", "$PUCSNAME", "  2", "",
-    "  9", "$PUCSORG", " 10", "0.0", " 20", "0.0",
-    " 30", "0.0", "  9", "$PUCSXDIR", " 10", "1.0",
-    " 20", "0.0", " 30", "0.0", "  9", "$PUCSYDIR",
-    " 10", "0.0", " 20", "1.0", " 30", "0.0",
-    "  9", "$PUCSORTHOREF", "  2", "", "  9", "$PUCSORTHOVIEW",
-    " 70", "0", "  9", "$PUCSORGTOP", " 10", "0.0",
-    " 20", "0.0", " 30", "0.0", "  9", "$PUCSORGBOTTOM",
-    " 10", "0.0", " 20", "0.0", " 30", "0.0",
-    "  9", "$PUCSORGLEFT", " 10", "0.0", " 20", "0.0",
-    " 30", "0.0", "  9", "$PUCSORGRIGHT", " 10", "0.0",
-    " 20", "0.0", " 30", "0.0", "  9", "$PUCSORGFRONT",
-    " 10", "0.0", " 20", "0.0", " 30", "0.0",
-    "  9", "$PUCSORGBACK", " 10", "0.0", " 20", "0.0",
-    " 30", "0.0", "  9", "$USERI1", " 70", "0",
-    "  9", "$USERI2", " 70", "0", "  9", "$USERI3",
-    " 70", "0", "  9", "$USERI4", " 70", "0",
-    "  9", "$USERI5", " 70", "0", "  9", "$USERR1",
-    " 40", "0.0", "  9", "$USERR2", " 40", "0.0",
-    "  9", "$USERR3", " 40", "0.0", "  9", "$USERR4",
-    " 40", "0.0", "  9", "$USERR5", " 40", "0.0",
-    "  9", "$WORLDVIEW", " 70", "1", "  9", "$SHADEDGE",
-    " 70", "3", "  9", "$SHADEDIF", " 70", "70",
-    "  9", "$TILEMODE", " 70", "1", "  9", "$MAXACTVP",
-    " 70", "64", "  9", "$PINSBASE", " 10", "0.0",
-    " 20", "0.0", " 30", "0.0", "  9", "$PLIMCHECK",
-    " 70", "0", "  9", "$PEXTMIN", " 10", "1e+20",
-    " 20", "1e+20", " 30", "1e+20", "  9", "$PEXTMAX",
-    " 10", "-1e+20", " 20", "-1e+20", " 30", "-1e+20",
-    "  9", "$PLIMMIN", " 10", "0.0", " 20", "0.0",
-    "  9", "$PLIMMAX", " 10", "420.0", " 20", "297.0",
-    "  9", "$UNITMODE", " 70", "0", "  9", "$VISRETAIN",
-    " 70", "1", "  9", "$PLINEGEN", " 70", "0",
-    "  9", "$PSLTSCALE", " 70", "1", "  9", "$TREEDEPTH",
-    " 70", "3020", "  9", "$CMLSTYLE", "  2", "Standard",
-    "  9", "$CMLJUST", " 70", "0", "  9", "$CMLSCALE",
-    " 40", "20.0", "  9", "$PROXYGRAPHICS", " 70", "1",
-    "  9", "$MEASUREMENT", " 70", "1", "  9", "$CELWEIGHT",
-    "370", "-1", "  9", "$ENDCAPS", "280", "0",
-    "  9", "$JOINSTYLE", "280", "0", "  9", "$LWDISPLAY",
-    "290", "0", "  9", "$INSUNITS", " 70", "1",
-    "  9", "$HYPERLINKBASE", "  1", "", "  9", "$STYLESHEET",
-    "  1", "", "  9", "$XEDIT", "290", "1",
-    "  9", "$CEPSNTYPE", "380", "0", "  9", "$PSTYLEMODE",
-    "290", "1", "  9", "$FINGERPRINTGUID", "  2", "{901E6446-C8CA-4381-B5FE-8494D931A798}",
-    "  9", "$VERSIONGUID", "  2", "{4B5A3BC4-57FB-4960-955B-D909E47DC28A}", "  9", "$EXTNAMES",
-    "290", "1", "  9", "$PSVPSCALE", " 40", "0.0",
-    "  9", "$OLESTARTUP", "290", "0", "  0", "ENDSEC",
-    "  0", "SECTION", "  2", "CLASSES", "  0", "CLASS",
-    "  1", "ACDBDICTIONARYWDFLT", "  2", "AcDbDictionaryWithDefault", "  3", "ObjectDBX Classes",
-    " 90", "0", "280", "0", "281", "0",
-    "  0", "CLASS", "  1", "SUN", "  2", "AcDbSun",
-    "  3", "SCENEOE", " 90", "1153", "280", "0",
-    "281", "0", "  0", "CLASS", "  1", "VISUALSTYLE",
-    "  2", "AcDbVisualStyle", "  3", "ObjectDBX Classes", " 90", "4095",
-    "280", "0", "281", "0", "  0", "CLASS",
-    "  1", "MATERIAL", "  2", "AcDbMaterial", "  3", "ObjectDBX Classes",
-    " 90", "1153", "280", "0", "281", "0",
-    "  0", "CLASS", "  1", "SCALE", "  2", "AcDbScale",
-    "  3", "ObjectDBX Classes", " 90", "1153", "280", "0",
-    "281", "0", "  0", "CLASS", "  1", "TABLESTYLE",
-    "  2", "AcDbTableStyle", "  3", "ObjectDBX Classes", " 90", "4095",
-    "280", "0", "281", "0", "  0", "CLASS",
-    "  1", "MLEADERSTYLE", "  2", "AcDbMLeaderStyle", "  3", "ACDB_MLEADERSTYLE_CLASS",
-    " 90", "4095", "280", "0", "281", "0",
-    "  0", "CLASS", "  1", "DICTIONARYVAR", "  2", "AcDbDictionaryVar",
-    "  3", "ObjectDBX Classes", " 90", "0", "280", "0",
-    "281", "0", "  0", "CLASS", "  1", "CELLSTYLEMAP",
-    "  2", "AcDbCellStyleMap", "  3", "ObjectDBX Classes", " 90", "1152",
-    "280", "0", "281", "0", "  0", "CLASS",
-    "  1", "MENTALRAYRENDERSETTINGS", "  2", "AcDbMentalRayRenderSettings", "  3", "SCENEOE",
-    " 90", "1024", "280", "0", "281", "0",
-    "  0", "CLASS", "  1", "ACDBDETAILVIEWSTYLE", "  2", "AcDbDetailViewStyle",
-    "  3", "ObjectDBX Classes", " 90", "1025", "280", "0",
-    "281", "0", "  0", "CLASS", "  1", "ACDBSECTIONVIEWSTYLE",
-    "  2", "AcDbSectionViewStyle", "  3", "ObjectDBX Classes", " 90", "1025",
-    "280", "0", "281", "0", "  0", "CLASS",
-    "  1", "RASTERVARIABLES", "  2", "AcDbRasterVariables", "  3", "ISM",
-    " 90", "0", "280", "0", "281", "0",
-    "  0", "CLASS", "  1", "ACDBPLACEHOLDER", "  2", "AcDbPlaceHolder",
-    "  3", "ObjectDBX Classes", " 90", "0", "280", "0",
-    "281", "0", "  0", "CLASS", "  1", "LAYOUT",
-    "  2", "AcDbLayout", "  3", "ObjectDBX Classes", " 90", "0",
-    "280", "0", "281", "0", "  0", "ENDSEC",
-    "  0", "SECTION", "  2", "TABLES", "  0", "TABLE",
-    "  2", "VPORT", "  5", "8", "330", "0",
-    "100", "AcDbSymbolTable", " 70", "1", "  0", "VPORT",
-    "  5", "23", "330", "8", "100", "AcDbSymbolTableRecord",
-    "100", "AcDbViewportTableRecord", "  2", "*Active", " 70", "0",
-    " 10", "0.0", " 20", "0.0", " 11", "1.0",
-    " 21", "1.0", " 12", "0.0", " 22", "0.0",
-    " 13", "0.0", " 23", "0.0", " 14", "0.5",
-    " 24", "0.5", " 15", "0.5", " 25", "0.5",
-    " 16", "0.0", " 26", "0.0", " 36", "1.0",
-    " 17", "0.0", " 27", "0.0", " 37", "0.0",
-    " 40", "1000.0", " 41", "1.34", " 42", "50.0",
-    " 43", "0.0", " 44", "0.0", " 50", "0.0",
-    " 51", "0.0", " 71", "0", " 72", "1000",
-    " 73", "1", " 74", "3", " 75", "0",
-    " 76", "0", " 77", "0", " 78", "0",
-    "281", "0", " 65", "0", "146", "0.0",
-    "  0", "ENDTAB", "  0", "TABLE", "  2", "LTYPE",
-    "  5", "2", "330", "0", "100", "AcDbSymbolTable",
-    " 70", "3", "  0", "LTYPE", "  5", "24",
-    "330", "2", "100", "AcDbSymbolTableRecord", "100", "AcDbLinetypeTableRecord",
-    "  2", "ByBlock", " 70", "0", "  3", "",
-    " 72", "65", " 73", "0", " 40", "0.0",
-    "  0", "LTYPE", "  5", "25", "330", "2",
-    "100", "AcDbSymbolTableRecord", "100", "AcDbLinetypeTableRecord", "  2", "ByLayer",
-    " 70", "0", "  3", "", " 72", "65",
-    " 73", "0", " 40", "0.0", "  0", "LTYPE",
-    "  5", "26", "330", "2", "100", "AcDbSymbolTableRecord",
-    "100", "AcDbLinetypeTableRecord", "  2", "Continuous", " 70", "0",
-    "  3", "", " 72", "65", " 73", "0",
-    " 40", "0.0", "  0", "ENDTAB", "  0", "TABLE",
-    "  2", "LAYER", "  5", "1", "330", "0",
-    "100", "AcDbSymbolTable", " 70",
-};
+static const std::vector<std::string> kHeaderStaticA = [] {
+  std::vector<std::string> v;
+  v.push_back("  0");
+  v.push_back("SECTION");
+  v.push_back("  2");
+  v.push_back("HEADER");
+  v.push_back("  9");
+  v.push_back("$ACADVER");
+  v.push_back("  1");
+  v.push_back("AC1015");
+  v.push_back("  9");
+  v.push_back("$ACADMAINTVER");
+  v.push_back(" 70");
+  v.push_back("6");
+  v.push_back("  9");
+  v.push_back("$DWGCODEPAGE");
+  v.push_back("  3");
+  v.push_back("ANSI_1252");
+  v.push_back("  9");
+  v.push_back("$INSBASE");
+  v.push_back(" 10");
+  v.push_back("0.0");
+  v.push_back(" 20");
+  v.push_back("0.0");
+  v.push_back(" 30");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$EXTMIN");
+  v.push_back(" 10");
+  v.push_back("1e+20");
+  v.push_back(" 20");
+  v.push_back("1e+20");
+  v.push_back(" 30");
+  v.push_back("1e+20");
+  v.push_back("  9");
+  v.push_back("$EXTMAX");
+  v.push_back(" 10");
+  v.push_back("-1e+20");
+  v.push_back(" 20");
+  v.push_back("-1e+20");
+  v.push_back(" 30");
+  v.push_back("-1e+20");
+  v.push_back("  9");
+  v.push_back("$LIMMIN");
+  v.push_back(" 10");
+  v.push_back("0.0");
+  v.push_back(" 20");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$LIMMAX");
+  v.push_back(" 10");
+  v.push_back("420.0");
+  v.push_back(" 20");
+  v.push_back("297.0");
+  v.push_back("  9");
+  v.push_back("$ORTHOMODE");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$REGENMODE");
+  v.push_back(" 70");
+  v.push_back("1");
+  v.push_back("  9");
+  v.push_back("$FILLMODE");
+  v.push_back(" 70");
+  v.push_back("1");
+  v.push_back("  9");
+  v.push_back("$QTEXTMODE");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$MIRRTEXT");
+  v.push_back(" 70");
+  v.push_back("1");
+  v.push_back("  9");
+  v.push_back("$LTSCALE");
+  v.push_back(" 40");
+  v.push_back("1.0");
+  v.push_back("  9");
+  v.push_back("$ATTMODE");
+  v.push_back(" 70");
+  v.push_back("1");
+  v.push_back("  9");
+  v.push_back("$TEXTSIZE");
+  v.push_back(" 40");
+  v.push_back("2.5");
+  v.push_back("  9");
+  v.push_back("$TRACEWID");
+  v.push_back(" 40");
+  v.push_back("1.0");
+  v.push_back("  9");
+  v.push_back("$TEXTSTYLE");
+  v.push_back("  7");
+  v.push_back("Standard");
+  v.push_back("  9");
+  v.push_back("$CLAYER");
+  v.push_back("  8");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$CELTYPE");
+  v.push_back("  6");
+  v.push_back("ByLayer");
+  v.push_back("  9");
+  v.push_back("$CECOLOR");
+  v.push_back(" 62");
+  v.push_back("256");
+  v.push_back("  9");
+  v.push_back("$CELTSCALE");
+  v.push_back(" 40");
+  v.push_back("1.0");
+  v.push_back("  9");
+  v.push_back("$DISPSILH");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$DIMSCALE");
+  v.push_back(" 40");
+  v.push_back("1.0");
+  v.push_back("  9");
+  v.push_back("$DIMASZ");
+  v.push_back(" 40");
+  v.push_back("2.5");
+  v.push_back("  9");
+  v.push_back("$DIMEXO");
+  v.push_back(" 40");
+  v.push_back("0.625");
+  v.push_back("  9");
+  v.push_back("$DIMDLI");
+  v.push_back(" 40");
+  v.push_back("3.75");
+  v.push_back("  9");
+  v.push_back("$DIMRND");
+  v.push_back(" 40");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$DIMDLE");
+  v.push_back(" 40");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$DIMEXE");
+  v.push_back(" 40");
+  v.push_back("1.25");
+  v.push_back("  9");
+  v.push_back("$DIMTP");
+  v.push_back(" 40");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$DIMTM");
+  v.push_back(" 40");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$DIMTXT");
+  v.push_back(" 40");
+  v.push_back("2.5");
+  v.push_back("  9");
+  v.push_back("$DIMCEN");
+  v.push_back(" 40");
+  v.push_back("2.5");
+  v.push_back("  9");
+  v.push_back("$DIMTSZ");
+  v.push_back(" 40");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$DIMTOL");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$DIMLIM");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$DIMTIH");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$DIMTOH");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$DIMSE1");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$DIMSE2");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$DIMTAD");
+  v.push_back(" 70");
+  v.push_back("1");
+  v.push_back("  9");
+  v.push_back("$DIMZIN");
+  v.push_back(" 70");
+  v.push_back("8");
+  v.push_back("  9");
+  v.push_back("$DIMBLK");
+  v.push_back("  1");
+  v.push_back("");
+  v.push_back("  9");
+  v.push_back("$DIMASO");
+  v.push_back(" 70");
+  v.push_back("1");
+  v.push_back("  9");
+  v.push_back("$DIMSHO");
+  v.push_back(" 70");
+  v.push_back("1");
+  v.push_back("  9");
+  v.push_back("$DIMPOST");
+  v.push_back("  1");
+  v.push_back("");
+  v.push_back("  9");
+  v.push_back("$DIMAPOST");
+  v.push_back("  1");
+  v.push_back("");
+  v.push_back("  9");
+  v.push_back("$DIMALT");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$DIMALTD");
+  v.push_back(" 70");
+  v.push_back("3");
+  v.push_back("  9");
+  v.push_back("$DIMALTF");
+  v.push_back(" 40");
+  v.push_back("0.03937007874");
+  v.push_back("  9");
+  v.push_back("$DIMLFAC");
+  v.push_back(" 40");
+  v.push_back("1.0");
+  v.push_back("  9");
+  v.push_back("$DIMTOFL");
+  v.push_back(" 70");
+  v.push_back("1");
+  v.push_back("  9");
+  v.push_back("$DIMTVP");
+  v.push_back(" 40");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$DIMTIX");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$DIMSOXD");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$DIMSAH");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$DIMBLK1");
+  v.push_back("  1");
+  v.push_back("");
+  v.push_back("  9");
+  v.push_back("$DIMBLK2");
+  v.push_back("  1");
+  v.push_back("");
+  v.push_back("  9");
+  v.push_back("$DIMSTYLE");
+  v.push_back("  2");
+  v.push_back("ISO-25");
+  v.push_back("  9");
+  v.push_back("$DIMCLRD");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$DIMCLRE");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$DIMCLRT");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$DIMTFAC");
+  v.push_back(" 40");
+  v.push_back("1.0");
+  v.push_back("  9");
+  v.push_back("$DIMGAP");
+  v.push_back(" 40");
+  v.push_back("0.625");
+  v.push_back("  9");
+  v.push_back("$DIMJUST");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$DIMSD1");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$DIMSD2");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$DIMTOLJ");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$DIMTZIN");
+  v.push_back(" 70");
+  v.push_back("8");
+  v.push_back("  9");
+  v.push_back("$DIMALTZ");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$DIMALTTZ");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$DIMUPT");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$DIMDEC");
+  v.push_back(" 70");
+  v.push_back("2");
+  v.push_back("  9");
+  v.push_back("$DIMTDEC");
+  v.push_back(" 70");
+  v.push_back("2");
+  v.push_back("  9");
+  v.push_back("$DIMALTU");
+  v.push_back(" 70");
+  v.push_back("2");
+  v.push_back("  9");
+  v.push_back("$DIMALTTD");
+  v.push_back(" 70");
+  v.push_back("3");
+  v.push_back("  9");
+  v.push_back("$DIMTXSTY");
+  v.push_back("  7");
+  v.push_back("Standard");
+  v.push_back("  9");
+  v.push_back("$DIMAUNIT");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$DIMADEC");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$DIMALTRND");
+  v.push_back(" 40");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$DIMAZIN");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$DIMDSEP");
+  v.push_back(" 70");
+  v.push_back("44");
+  v.push_back("  9");
+  v.push_back("$DIMATFIT");
+  v.push_back(" 70");
+  v.push_back("3");
+  v.push_back("  9");
+  v.push_back("$DIMFRAC");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$DIMLDRBLK");
+  v.push_back("  1");
+  v.push_back("");
+  v.push_back("  9");
+  v.push_back("$DIMLUNIT");
+  v.push_back(" 70");
+  v.push_back("2");
+  v.push_back("  9");
+  v.push_back("$DIMLWD");
+  v.push_back(" 70");
+  v.push_back("-2");
+  v.push_back("  9");
+  v.push_back("$DIMLWE");
+  v.push_back(" 70");
+  v.push_back("-2");
+  v.push_back("  9");
+  v.push_back("$DIMTMOVE");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$LUNITS");
+  v.push_back(" 70");
+  v.push_back("2");
+  v.push_back("  9");
+  v.push_back("$LUPREC");
+  v.push_back(" 70");
+  v.push_back("4");
+  v.push_back("  9");
+  v.push_back("$SKETCHINC");
+  v.push_back(" 40");
+  v.push_back("1.0");
+  v.push_back("  9");
+  v.push_back("$FILLETRAD");
+  v.push_back(" 40");
+  v.push_back("10.0");
+  v.push_back("  9");
+  v.push_back("$AUNITS");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$AUPREC");
+  v.push_back(" 70");
+  v.push_back("2");
+  v.push_back("  9");
+  v.push_back("$MENU");
+  v.push_back("  1");
+  v.push_back(".");
+  v.push_back("  9");
+  v.push_back("$ELEVATION");
+  v.push_back(" 40");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$PELEVATION");
+  v.push_back(" 40");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$THICKNESS");
+  v.push_back(" 40");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$LIMCHECK");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$CHAMFERA");
+  v.push_back(" 40");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$CHAMFERB");
+  v.push_back(" 40");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$CHAMFERC");
+  v.push_back(" 40");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$CHAMFERD");
+  v.push_back(" 40");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$SKPOLY");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$TDCREATE");
+  v.push_back(" 40");
+  v.push_back("2461265.626689815");
+  v.push_back("  9");
+  v.push_back("$TDUCREATE");
+  v.push_back(" 40");
+  v.push_back("2458532.153996898");
+  v.push_back("  9");
+  v.push_back("$TDUPDATE");
+  v.push_back(" 40");
+  v.push_back("2461265.626689815");
+  v.push_back("  9");
+  v.push_back("$TDUUPDATE");
+  v.push_back(" 40");
+  v.push_back("2458532.1544311");
+  v.push_back("  9");
+  v.push_back("$TDINDWG");
+  v.push_back(" 40");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$TDUSRTIMER");
+  v.push_back(" 40");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$USRTIMER");
+  v.push_back(" 70");
+  v.push_back("1");
+  v.push_back("  9");
+  v.push_back("$ANGBASE");
+  v.push_back(" 50");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$ANGDIR");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$PDMODE");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$PDSIZE");
+  v.push_back(" 40");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$PLINEWID");
+  v.push_back(" 40");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$SPLFRAME");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$SPLINETYPE");
+  v.push_back(" 70");
+  v.push_back("6");
+  v.push_back("  9");
+  v.push_back("$SPLINESEGS");
+  v.push_back(" 70");
+  v.push_back("8");
+  v.push_back("  9");
+  v.push_back("$HANDSEED");
+  v.push_back("  5");
+  v.push_back("__HANDSEED__");
+  v.push_back("  9");
+  v.push_back("$SURFTAB1");
+  v.push_back(" 70");
+  v.push_back("6");
+  v.push_back("  9");
+  v.push_back("$SURFTAB2");
+  v.push_back(" 70");
+  v.push_back("6");
+  v.push_back("  9");
+  v.push_back("$SURFTYPE");
+  v.push_back(" 70");
+  v.push_back("6");
+  v.push_back("  9");
+  v.push_back("$SURFU");
+  v.push_back(" 70");
+  v.push_back("6");
+  v.push_back("  9");
+  v.push_back("$SURFV");
+  v.push_back(" 70");
+  v.push_back("6");
+  v.push_back("  9");
+  v.push_back("$UCSBASE");
+  v.push_back("  2");
+  v.push_back("");
+  v.push_back("  9");
+  v.push_back("$UCSNAME");
+  v.push_back("  2");
+  v.push_back("");
+  v.push_back("  9");
+  v.push_back("$UCSORG");
+  v.push_back(" 10");
+  v.push_back("0.0");
+  v.push_back(" 20");
+  v.push_back("0.0");
+  v.push_back(" 30");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$UCSXDIR");
+  v.push_back(" 10");
+  v.push_back("1.0");
+  v.push_back(" 20");
+  v.push_back("0.0");
+  v.push_back(" 30");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$UCSYDIR");
+  v.push_back(" 10");
+  v.push_back("0.0");
+  v.push_back(" 20");
+  v.push_back("1.0");
+  v.push_back(" 30");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$UCSORTHOREF");
+  v.push_back("  2");
+  v.push_back("");
+  v.push_back("  9");
+  v.push_back("$UCSORTHOVIEW");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$UCSORGTOP");
+  v.push_back(" 10");
+  v.push_back("0.0");
+  v.push_back(" 20");
+  v.push_back("0.0");
+  v.push_back(" 30");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$UCSORGBOTTOM");
+  v.push_back(" 10");
+  v.push_back("0.0");
+  v.push_back(" 20");
+  v.push_back("0.0");
+  v.push_back(" 30");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$UCSORGLEFT");
+  v.push_back(" 10");
+  v.push_back("0.0");
+  v.push_back(" 20");
+  v.push_back("0.0");
+  v.push_back(" 30");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$UCSORGRIGHT");
+  v.push_back(" 10");
+  v.push_back("0.0");
+  v.push_back(" 20");
+  v.push_back("0.0");
+  v.push_back(" 30");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$UCSORGFRONT");
+  v.push_back(" 10");
+  v.push_back("0.0");
+  v.push_back(" 20");
+  v.push_back("0.0");
+  v.push_back(" 30");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$UCSORGBACK");
+  v.push_back(" 10");
+  v.push_back("0.0");
+  v.push_back(" 20");
+  v.push_back("0.0");
+  v.push_back(" 30");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$PUCSBASE");
+  v.push_back("  2");
+  v.push_back("");
+  v.push_back("  9");
+  v.push_back("$PUCSNAME");
+  v.push_back("  2");
+  v.push_back("");
+  v.push_back("  9");
+  v.push_back("$PUCSORG");
+  v.push_back(" 10");
+  v.push_back("0.0");
+  v.push_back(" 20");
+  v.push_back("0.0");
+  v.push_back(" 30");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$PUCSXDIR");
+  v.push_back(" 10");
+  v.push_back("1.0");
+  v.push_back(" 20");
+  v.push_back("0.0");
+  v.push_back(" 30");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$PUCSYDIR");
+  v.push_back(" 10");
+  v.push_back("0.0");
+  v.push_back(" 20");
+  v.push_back("1.0");
+  v.push_back(" 30");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$PUCSORTHOREF");
+  v.push_back("  2");
+  v.push_back("");
+  v.push_back("  9");
+  v.push_back("$PUCSORTHOVIEW");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$PUCSORGTOP");
+  v.push_back(" 10");
+  v.push_back("0.0");
+  v.push_back(" 20");
+  v.push_back("0.0");
+  v.push_back(" 30");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$PUCSORGBOTTOM");
+  v.push_back(" 10");
+  v.push_back("0.0");
+  v.push_back(" 20");
+  v.push_back("0.0");
+  v.push_back(" 30");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$PUCSORGLEFT");
+  v.push_back(" 10");
+  v.push_back("0.0");
+  v.push_back(" 20");
+  v.push_back("0.0");
+  v.push_back(" 30");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$PUCSORGRIGHT");
+  v.push_back(" 10");
+  v.push_back("0.0");
+  v.push_back(" 20");
+  v.push_back("0.0");
+  v.push_back(" 30");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$PUCSORGFRONT");
+  v.push_back(" 10");
+  v.push_back("0.0");
+  v.push_back(" 20");
+  v.push_back("0.0");
+  v.push_back(" 30");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$PUCSORGBACK");
+  v.push_back(" 10");
+  v.push_back("0.0");
+  v.push_back(" 20");
+  v.push_back("0.0");
+  v.push_back(" 30");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$USERI1");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$USERI2");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$USERI3");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$USERI4");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$USERI5");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$USERR1");
+  v.push_back(" 40");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$USERR2");
+  v.push_back(" 40");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$USERR3");
+  v.push_back(" 40");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$USERR4");
+  v.push_back(" 40");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$USERR5");
+  v.push_back(" 40");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$WORLDVIEW");
+  v.push_back(" 70");
+  v.push_back("1");
+  v.push_back("  9");
+  v.push_back("$SHADEDGE");
+  v.push_back(" 70");
+  v.push_back("3");
+  v.push_back("  9");
+  v.push_back("$SHADEDIF");
+  v.push_back(" 70");
+  v.push_back("70");
+  v.push_back("  9");
+  v.push_back("$TILEMODE");
+  v.push_back(" 70");
+  v.push_back("1");
+  v.push_back("  9");
+  v.push_back("$MAXACTVP");
+  v.push_back(" 70");
+  v.push_back("64");
+  v.push_back("  9");
+  v.push_back("$PINSBASE");
+  v.push_back(" 10");
+  v.push_back("0.0");
+  v.push_back(" 20");
+  v.push_back("0.0");
+  v.push_back(" 30");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$PLIMCHECK");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$PEXTMIN");
+  v.push_back(" 10");
+  v.push_back("1e+20");
+  v.push_back(" 20");
+  v.push_back("1e+20");
+  v.push_back(" 30");
+  v.push_back("1e+20");
+  v.push_back("  9");
+  v.push_back("$PEXTMAX");
+  v.push_back(" 10");
+  v.push_back("-1e+20");
+  v.push_back(" 20");
+  v.push_back("-1e+20");
+  v.push_back(" 30");
+  v.push_back("-1e+20");
+  v.push_back("  9");
+  v.push_back("$PLIMMIN");
+  v.push_back(" 10");
+  v.push_back("0.0");
+  v.push_back(" 20");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$PLIMMAX");
+  v.push_back(" 10");
+  v.push_back("420.0");
+  v.push_back(" 20");
+  v.push_back("297.0");
+  v.push_back("  9");
+  v.push_back("$UNITMODE");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$VISRETAIN");
+  v.push_back(" 70");
+  v.push_back("1");
+  v.push_back("  9");
+  v.push_back("$PLINEGEN");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$PSLTSCALE");
+  v.push_back(" 70");
+  v.push_back("1");
+  v.push_back("  9");
+  v.push_back("$TREEDEPTH");
+  v.push_back(" 70");
+  v.push_back("3020");
+  v.push_back("  9");
+  v.push_back("$CMLSTYLE");
+  v.push_back("  2");
+  v.push_back("Standard");
+  v.push_back("  9");
+  v.push_back("$CMLJUST");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$CMLSCALE");
+  v.push_back(" 40");
+  v.push_back("20.0");
+  v.push_back("  9");
+  v.push_back("$PROXYGRAPHICS");
+  v.push_back(" 70");
+  v.push_back("1");
+  v.push_back("  9");
+  v.push_back("$MEASUREMENT");
+  v.push_back(" 70");
+  v.push_back("1");
+  v.push_back("  9");
+  v.push_back("$CELWEIGHT");
+  v.push_back("370");
+  v.push_back("-1");
+  v.push_back("  9");
+  v.push_back("$ENDCAPS");
+  v.push_back("280");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$JOINSTYLE");
+  v.push_back("280");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$LWDISPLAY");
+  v.push_back("290");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$INSUNITS");
+  v.push_back(" 70");
+  v.push_back("1");
+  v.push_back("  9");
+  v.push_back("$HYPERLINKBASE");
+  v.push_back("  1");
+  v.push_back("");
+  v.push_back("  9");
+  v.push_back("$STYLESHEET");
+  v.push_back("  1");
+  v.push_back("");
+  v.push_back("  9");
+  v.push_back("$XEDIT");
+  v.push_back("290");
+  v.push_back("1");
+  v.push_back("  9");
+  v.push_back("$CEPSNTYPE");
+  v.push_back("380");
+  v.push_back("0");
+  v.push_back("  9");
+  v.push_back("$PSTYLEMODE");
+  v.push_back("290");
+  v.push_back("1");
+  v.push_back("  9");
+  v.push_back("$FINGERPRINTGUID");
+  v.push_back("  2");
+  v.push_back("{901E6446-C8CA-4381-B5FE-8494D931A798}");
+  v.push_back("  9");
+  v.push_back("$VERSIONGUID");
+  v.push_back("  2");
+  v.push_back("{4B5A3BC4-57FB-4960-955B-D909E47DC28A}");
+  v.push_back("  9");
+  v.push_back("$EXTNAMES");
+  v.push_back("290");
+  v.push_back("1");
+  v.push_back("  9");
+  v.push_back("$PSVPSCALE");
+  v.push_back(" 40");
+  v.push_back("0.0");
+  v.push_back("  9");
+  v.push_back("$OLESTARTUP");
+  v.push_back("290");
+  v.push_back("0");
+  v.push_back("  0");
+  v.push_back("ENDSEC");
+  v.push_back("  0");
+  v.push_back("SECTION");
+  v.push_back("  2");
+  v.push_back("CLASSES");
+  v.push_back("  0");
+  v.push_back("CLASS");
+  v.push_back("  1");
+  v.push_back("ACDBDICTIONARYWDFLT");
+  v.push_back("  2");
+  v.push_back("AcDbDictionaryWithDefault");
+  v.push_back("  3");
+  v.push_back("ObjectDBX Classes");
+  v.push_back(" 90");
+  v.push_back("0");
+  v.push_back("280");
+  v.push_back("0");
+  v.push_back("281");
+  v.push_back("0");
+  v.push_back("  0");
+  v.push_back("CLASS");
+  v.push_back("  1");
+  v.push_back("SUN");
+  v.push_back("  2");
+  v.push_back("AcDbSun");
+  v.push_back("  3");
+  v.push_back("SCENEOE");
+  v.push_back(" 90");
+  v.push_back("1153");
+  v.push_back("280");
+  v.push_back("0");
+  v.push_back("281");
+  v.push_back("0");
+  v.push_back("  0");
+  v.push_back("CLASS");
+  v.push_back("  1");
+  v.push_back("VISUALSTYLE");
+  v.push_back("  2");
+  v.push_back("AcDbVisualStyle");
+  v.push_back("  3");
+  v.push_back("ObjectDBX Classes");
+  v.push_back(" 90");
+  v.push_back("4095");
+  v.push_back("280");
+  v.push_back("0");
+  v.push_back("281");
+  v.push_back("0");
+  v.push_back("  0");
+  v.push_back("CLASS");
+  v.push_back("  1");
+  v.push_back("MATERIAL");
+  v.push_back("  2");
+  v.push_back("AcDbMaterial");
+  v.push_back("  3");
+  v.push_back("ObjectDBX Classes");
+  v.push_back(" 90");
+  v.push_back("1153");
+  v.push_back("280");
+  v.push_back("0");
+  v.push_back("281");
+  v.push_back("0");
+  v.push_back("  0");
+  v.push_back("CLASS");
+  v.push_back("  1");
+  v.push_back("SCALE");
+  v.push_back("  2");
+  v.push_back("AcDbScale");
+  v.push_back("  3");
+  v.push_back("ObjectDBX Classes");
+  v.push_back(" 90");
+  v.push_back("1153");
+  v.push_back("280");
+  v.push_back("0");
+  v.push_back("281");
+  v.push_back("0");
+  v.push_back("  0");
+  v.push_back("CLASS");
+  v.push_back("  1");
+  v.push_back("TABLESTYLE");
+  v.push_back("  2");
+  v.push_back("AcDbTableStyle");
+  v.push_back("  3");
+  v.push_back("ObjectDBX Classes");
+  v.push_back(" 90");
+  v.push_back("4095");
+  v.push_back("280");
+  v.push_back("0");
+  v.push_back("281");
+  v.push_back("0");
+  v.push_back("  0");
+  v.push_back("CLASS");
+  v.push_back("  1");
+  v.push_back("MLEADERSTYLE");
+  v.push_back("  2");
+  v.push_back("AcDbMLeaderStyle");
+  v.push_back("  3");
+  v.push_back("ACDB_MLEADERSTYLE_CLASS");
+  v.push_back(" 90");
+  v.push_back("4095");
+  v.push_back("280");
+  v.push_back("0");
+  v.push_back("281");
+  v.push_back("0");
+  v.push_back("  0");
+  v.push_back("CLASS");
+  v.push_back("  1");
+  v.push_back("DICTIONARYVAR");
+  v.push_back("  2");
+  v.push_back("AcDbDictionaryVar");
+  v.push_back("  3");
+  v.push_back("ObjectDBX Classes");
+  v.push_back(" 90");
+  v.push_back("0");
+  v.push_back("280");
+  v.push_back("0");
+  v.push_back("281");
+  v.push_back("0");
+  v.push_back("  0");
+  v.push_back("CLASS");
+  v.push_back("  1");
+  v.push_back("CELLSTYLEMAP");
+  v.push_back("  2");
+  v.push_back("AcDbCellStyleMap");
+  v.push_back("  3");
+  v.push_back("ObjectDBX Classes");
+  v.push_back(" 90");
+  v.push_back("1152");
+  v.push_back("280");
+  v.push_back("0");
+  v.push_back("281");
+  v.push_back("0");
+  v.push_back("  0");
+  v.push_back("CLASS");
+  v.push_back("  1");
+  v.push_back("MENTALRAYRENDERSETTINGS");
+  v.push_back("  2");
+  v.push_back("AcDbMentalRayRenderSettings");
+  v.push_back("  3");
+  v.push_back("SCENEOE");
+  v.push_back(" 90");
+  v.push_back("1024");
+  v.push_back("280");
+  v.push_back("0");
+  v.push_back("281");
+  v.push_back("0");
+  v.push_back("  0");
+  v.push_back("CLASS");
+  v.push_back("  1");
+  v.push_back("ACDBDETAILVIEWSTYLE");
+  v.push_back("  2");
+  v.push_back("AcDbDetailViewStyle");
+  v.push_back("  3");
+  v.push_back("ObjectDBX Classes");
+  v.push_back(" 90");
+  v.push_back("1025");
+  v.push_back("280");
+  v.push_back("0");
+  v.push_back("281");
+  v.push_back("0");
+  v.push_back("  0");
+  v.push_back("CLASS");
+  v.push_back("  1");
+  v.push_back("ACDBSECTIONVIEWSTYLE");
+  v.push_back("  2");
+  v.push_back("AcDbSectionViewStyle");
+  v.push_back("  3");
+  v.push_back("ObjectDBX Classes");
+  v.push_back(" 90");
+  v.push_back("1025");
+  v.push_back("280");
+  v.push_back("0");
+  v.push_back("281");
+  v.push_back("0");
+  v.push_back("  0");
+  v.push_back("CLASS");
+  v.push_back("  1");
+  v.push_back("RASTERVARIABLES");
+  v.push_back("  2");
+  v.push_back("AcDbRasterVariables");
+  v.push_back("  3");
+  v.push_back("ISM");
+  v.push_back(" 90");
+  v.push_back("0");
+  v.push_back("280");
+  v.push_back("0");
+  v.push_back("281");
+  v.push_back("0");
+  v.push_back("  0");
+  v.push_back("CLASS");
+  v.push_back("  1");
+  v.push_back("ACDBPLACEHOLDER");
+  v.push_back("  2");
+  v.push_back("AcDbPlaceHolder");
+  v.push_back("  3");
+  v.push_back("ObjectDBX Classes");
+  v.push_back(" 90");
+  v.push_back("0");
+  v.push_back("280");
+  v.push_back("0");
+  v.push_back("281");
+  v.push_back("0");
+  v.push_back("  0");
+  v.push_back("CLASS");
+  v.push_back("  1");
+  v.push_back("LAYOUT");
+  v.push_back("  2");
+  v.push_back("AcDbLayout");
+  v.push_back("  3");
+  v.push_back("ObjectDBX Classes");
+  v.push_back(" 90");
+  v.push_back("0");
+  v.push_back("280");
+  v.push_back("0");
+  v.push_back("281");
+  v.push_back("0");
+  v.push_back("  0");
+  v.push_back("ENDSEC");
+  v.push_back("  0");
+  v.push_back("SECTION");
+  v.push_back("  2");
+  v.push_back("TABLES");
+  v.push_back("  0");
+  v.push_back("TABLE");
+  v.push_back("  2");
+  v.push_back("VPORT");
+  v.push_back("  5");
+  v.push_back("8");
+  v.push_back("330");
+  v.push_back("0");
+  v.push_back("100");
+  v.push_back("AcDbSymbolTable");
+  v.push_back(" 70");
+  v.push_back("1");
+  v.push_back("  0");
+  v.push_back("VPORT");
+  v.push_back("  5");
+  v.push_back("23");
+  v.push_back("330");
+  v.push_back("8");
+  v.push_back("100");
+  v.push_back("AcDbSymbolTableRecord");
+  v.push_back("100");
+  v.push_back("AcDbViewportTableRecord");
+  v.push_back("  2");
+  v.push_back("*Active");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back(" 10");
+  v.push_back("0.0");
+  v.push_back(" 20");
+  v.push_back("0.0");
+  v.push_back(" 11");
+  v.push_back("1.0");
+  v.push_back(" 21");
+  v.push_back("1.0");
+  v.push_back(" 12");
+  v.push_back("0.0");
+  v.push_back(" 22");
+  v.push_back("0.0");
+  v.push_back(" 13");
+  v.push_back("0.0");
+  v.push_back(" 23");
+  v.push_back("0.0");
+  v.push_back(" 14");
+  v.push_back("0.5");
+  v.push_back(" 24");
+  v.push_back("0.5");
+  v.push_back(" 15");
+  v.push_back("0.5");
+  v.push_back(" 25");
+  v.push_back("0.5");
+  v.push_back(" 16");
+  v.push_back("0.0");
+  v.push_back(" 26");
+  v.push_back("0.0");
+  v.push_back(" 36");
+  v.push_back("1.0");
+  v.push_back(" 17");
+  v.push_back("0.0");
+  v.push_back(" 27");
+  v.push_back("0.0");
+  v.push_back(" 37");
+  v.push_back("0.0");
+  v.push_back(" 40");
+  v.push_back("1000.0");
+  v.push_back(" 41");
+  v.push_back("1.34");
+  v.push_back(" 42");
+  v.push_back("50.0");
+  v.push_back(" 43");
+  v.push_back("0.0");
+  v.push_back(" 44");
+  v.push_back("0.0");
+  v.push_back(" 50");
+  v.push_back("0.0");
+  v.push_back(" 51");
+  v.push_back("0.0");
+  v.push_back(" 71");
+  v.push_back("0");
+  v.push_back(" 72");
+  v.push_back("1000");
+  v.push_back(" 73");
+  v.push_back("1");
+  v.push_back(" 74");
+  v.push_back("3");
+  v.push_back(" 75");
+  v.push_back("0");
+  v.push_back(" 76");
+  v.push_back("0");
+  v.push_back(" 77");
+  v.push_back("0");
+  v.push_back(" 78");
+  v.push_back("0");
+  v.push_back("281");
+  v.push_back("0");
+  v.push_back(" 65");
+  v.push_back("0");
+  v.push_back("146");
+  v.push_back("0.0");
+  v.push_back("  0");
+  v.push_back("ENDTAB");
+  v.push_back("  0");
+  v.push_back("TABLE");
+  v.push_back("  2");
+  v.push_back("LTYPE");
+  v.push_back("  5");
+  v.push_back("2");
+  v.push_back("330");
+  v.push_back("0");
+  v.push_back("100");
+  v.push_back("AcDbSymbolTable");
+  v.push_back(" 70");
+  v.push_back("3");
+  v.push_back("  0");
+  v.push_back("LTYPE");
+  v.push_back("  5");
+  v.push_back("24");
+  v.push_back("330");
+  v.push_back("2");
+  v.push_back("100");
+  v.push_back("AcDbSymbolTableRecord");
+  v.push_back("100");
+  v.push_back("AcDbLinetypeTableRecord");
+  v.push_back("  2");
+  v.push_back("ByBlock");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  3");
+  v.push_back("");
+  v.push_back(" 72");
+  v.push_back("65");
+  v.push_back(" 73");
+  v.push_back("0");
+  v.push_back(" 40");
+  v.push_back("0.0");
+  v.push_back("  0");
+  v.push_back("LTYPE");
+  v.push_back("  5");
+  v.push_back("25");
+  v.push_back("330");
+  v.push_back("2");
+  v.push_back("100");
+  v.push_back("AcDbSymbolTableRecord");
+  v.push_back("100");
+  v.push_back("AcDbLinetypeTableRecord");
+  v.push_back("  2");
+  v.push_back("ByLayer");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  3");
+  v.push_back("");
+  v.push_back(" 72");
+  v.push_back("65");
+  v.push_back(" 73");
+  v.push_back("0");
+  v.push_back(" 40");
+  v.push_back("0.0");
+  v.push_back("  0");
+  v.push_back("LTYPE");
+  v.push_back("  5");
+  v.push_back("26");
+  v.push_back("330");
+  v.push_back("2");
+  v.push_back("100");
+  v.push_back("AcDbSymbolTableRecord");
+  v.push_back("100");
+  v.push_back("AcDbLinetypeTableRecord");
+  v.push_back("  2");
+  v.push_back("Continuous");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  3");
+  v.push_back("");
+  v.push_back(" 72");
+  v.push_back("65");
+  v.push_back(" 73");
+  v.push_back("0");
+  v.push_back(" 40");
+  v.push_back("0.0");
+  v.push_back("  0");
+  v.push_back("ENDTAB");
+  v.push_back("  0");
+  v.push_back("TABLE");
+  v.push_back("  2");
+  v.push_back("LAYER");
+  v.push_back("  5");
+  v.push_back("1");
+  v.push_back("330");
+  v.push_back("0");
+  v.push_back("100");
+  v.push_back("AcDbSymbolTable");
+  v.push_back(" 70");
+  return v;
+}();
 
-static const std::vector<std::string> kHeaderStaticB = {
-    "  0", "LAYER", "  5", "27", "330", "1",
-    "100", "AcDbSymbolTableRecord", "100", "AcDbLayerTableRecord", "  2", "0",
-    " 70", "0", " 62", "7", "  6", "Continuous",
-    "370", "-3", "390", "13", "  0", "LAYER",
-    "  5", "28", "330", "1", "100", "AcDbSymbolTableRecord",
-    "100", "AcDbLayerTableRecord", "  2", "Defpoints", " 70", "0",
-    " 62", "7", "  6", "Continuous", "290", "0",
-    "370", "-3", "390", "13",
-};
+static const std::vector<std::string> kHeaderStaticB = [] {
+  std::vector<std::string> v;
+  v.push_back("  0");
+  v.push_back("LAYER");
+  v.push_back("  5");
+  v.push_back("27");
+  v.push_back("330");
+  v.push_back("1");
+  v.push_back("100");
+  v.push_back("AcDbSymbolTableRecord");
+  v.push_back("100");
+  v.push_back("AcDbLayerTableRecord");
+  v.push_back("  2");
+  v.push_back("0");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back(" 62");
+  v.push_back("7");
+  v.push_back("  6");
+  v.push_back("Continuous");
+  v.push_back("370");
+  v.push_back("-3");
+  v.push_back("390");
+  v.push_back("13");
+  v.push_back("  0");
+  v.push_back("LAYER");
+  v.push_back("  5");
+  v.push_back("28");
+  v.push_back("330");
+  v.push_back("1");
+  v.push_back("100");
+  v.push_back("AcDbSymbolTableRecord");
+  v.push_back("100");
+  v.push_back("AcDbLayerTableRecord");
+  v.push_back("  2");
+  v.push_back("Defpoints");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back(" 62");
+  v.push_back("7");
+  v.push_back("  6");
+  v.push_back("Continuous");
+  v.push_back("290");
+  v.push_back("0");
+  v.push_back("370");
+  v.push_back("-3");
+  v.push_back("390");
+  v.push_back("13");
+  return v;
+}();
 
-static const std::vector<std::string> kHeaderStaticC = {
-    "  0", "ENDTAB", "  0", "TABLE", "  2", "STYLE",
-    "  5", "5", "330", "0", "100", "AcDbSymbolTable",
-    " 70", "1", "  0", "STYLE", "  5", "29",
-    "330", "5", "100", "AcDbSymbolTableRecord", "100", "AcDbTextStyleTableRecord",
-    "  2", "Standard", " 70", "0", " 40", "0.0",
-    " 41", "1.0", " 50", "0.0", " 71", "0",
-    " 42", "2.5", "  3", "txt", "  4", "",
-    "  0", "ENDTAB", "  0", "TABLE", "  2", "VIEW",
-    "  5", "7", "330", "0", "100", "AcDbSymbolTable",
-    " 70", "0", "  0", "ENDTAB", "  0", "TABLE",
-    "  2", "UCS", "  5", "6", "330", "0",
-    "100", "AcDbSymbolTable", " 70", "0", "  0", "ENDTAB",
-    "  0", "TABLE", "  2", "APPID", "  5", "3",
-    "330", "0", "100", "AcDbSymbolTable", " 70", "3",
-    "  0", "APPID", "  5", "2A", "330", "3",
-    "100", "AcDbSymbolTableRecord", "100", "AcDbRegAppTableRecord", "  2", "ACAD",
-    " 70", "0", "  0", "APPID", "  5", "2F",
-    "330", "3", "100", "AcDbSymbolTableRecord", "100", "AcDbRegAppTableRecord",
-    "  2", "HATCHBACKGROUNDCOLOR", " 70", "0", "  0", "APPID",
-    "  5", "30", "330", "3", "100", "AcDbSymbolTableRecord",
-    "100", "AcDbRegAppTableRecord", "  2", "EZDXF", " 70", "0",
-    "  0", "ENDTAB", "  0", "TABLE", "  2", "DIMSTYLE",
-    "  5", "4", "330", "0", "100", "AcDbSymbolTable",
-    " 70", "1", "100", "AcDbDimStyleTable", "  0", "DIMSTYLE",
-    "105", "2B", "330", "4", "100", "AcDbSymbolTableRecord",
-    "100", "AcDbDimStyleTableRecord", "  2", "Standard", " 70", "0",
-    "  3", "", "  4", "", " 40", "1.0",
-    " 41", "2.5", " 42", "0.625", " 43", "3.75",
-    " 44", "1.25", " 45", "0.0", " 46", "0.0",
-    " 47", "0.0", " 48", "0.0", "140", "2.5",
-    "141", "2.5", "142", "0.0", "143", "0.03937007874",
-    "144", "1.0", "145", "0.0", "146", "1.0",
-    "147", "0.625", "148", "0.0", " 71", "0",
-    " 72", "0", " 73", "0", " 74", "0",
-    " 75", "0", " 76", "0", " 77", "1",
-    " 78", "8", " 79", "3", "170", "0",
-    "171", "3", "172", "1", "173", "0",
-    "174", "0", "175", "0", "176", "0",
-    "177", "0", "178", "0", "179", "2",
-    "271", "2", "272", "2", "273", "2",
-    "274", "3", "275", "0", "276", "0",
-    "277", "2", "278", "44", "279", "0",
-    "280", "0", "281", "0", "282", "0",
-    "283", "0", "284", "8", "285", "0",
-    "286", "0", "288", "0", "289", "3",
-    "371", "-2", "372", "-2", "  0", "ENDTAB",
-    "  0", "TABLE", "  2", "BLOCK_RECORD", "  5", "9",
-    "330", "0", "100", "AcDbSymbolTable", " 70", "2",
-    "  0", "BLOCK_RECORD", "  5", "17", "330", "9",
-    "100", "AcDbSymbolTableRecord", "100", "AcDbBlockTableRecord", "  2", "*Model_Space",
-    "340", "1A", "  0", "BLOCK_RECORD", "  5", "1B",
-    "330", "9", "100", "AcDbSymbolTableRecord", "100", "AcDbBlockTableRecord",
-    "  2", "*Paper_Space", "340", "1E", "  0", "ENDTAB",
-    "  0", "ENDSEC", "  0", "SECTION", "  2", "BLOCKS",
-    "  0", "BLOCK", "  5", "18", "330", "17",
-    "100", "AcDbEntity", "  8", "0", "100", "AcDbBlockBegin",
-    "  2", "*Model_Space", " 70", "0", " 10", "0.0",
-    " 20", "0.0", " 30", "0.0", "  3", "*Model_Space",
-    "  1", "", "  0", "ENDBLK", "  5", "19",
-    "330", "17", "100", "AcDbEntity", "  8", "0",
-    "100", "AcDbBlockEnd", "  0", "BLOCK", "  5", "1C",
-    "330", "1B", "100", "AcDbEntity", "  8", "0",
-    "100", "AcDbBlockBegin", "  2", "*Paper_Space", " 70", "0",
-    " 10", "0.0", " 20", "0.0", " 30", "0.0",
-    "  3", "*Paper_Space", "  1", "", "  0", "ENDBLK",
-    "  5", "1D", "330", "1B", "100", "AcDbEntity",
-    "  8", "0", "100", "AcDbBlockEnd", "  0", "ENDSEC",
-};
+static const std::vector<std::string> kHeaderStaticC = [] {
+  std::vector<std::string> v;
+  v.push_back("  0");
+  v.push_back("ENDTAB");
+  v.push_back("  0");
+  v.push_back("TABLE");
+  v.push_back("  2");
+  v.push_back("STYLE");
+  v.push_back("  5");
+  v.push_back("5");
+  v.push_back("330");
+  v.push_back("0");
+  v.push_back("100");
+  v.push_back("AcDbSymbolTable");
+  v.push_back(" 70");
+  v.push_back("1");
+  v.push_back("  0");
+  v.push_back("STYLE");
+  v.push_back("  5");
+  v.push_back("29");
+  v.push_back("330");
+  v.push_back("5");
+  v.push_back("100");
+  v.push_back("AcDbSymbolTableRecord");
+  v.push_back("100");
+  v.push_back("AcDbTextStyleTableRecord");
+  v.push_back("  2");
+  v.push_back("Standard");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back(" 40");
+  v.push_back("0.0");
+  v.push_back(" 41");
+  v.push_back("1.0");
+  v.push_back(" 50");
+  v.push_back("0.0");
+  v.push_back(" 71");
+  v.push_back("0");
+  v.push_back(" 42");
+  v.push_back("2.5");
+  v.push_back("  3");
+  v.push_back("txt");
+  v.push_back("  4");
+  v.push_back("");
+  v.push_back("  0");
+  v.push_back("ENDTAB");
+  v.push_back("  0");
+  v.push_back("TABLE");
+  v.push_back("  2");
+  v.push_back("VIEW");
+  v.push_back("  5");
+  v.push_back("7");
+  v.push_back("330");
+  v.push_back("0");
+  v.push_back("100");
+  v.push_back("AcDbSymbolTable");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  0");
+  v.push_back("ENDTAB");
+  v.push_back("  0");
+  v.push_back("TABLE");
+  v.push_back("  2");
+  v.push_back("UCS");
+  v.push_back("  5");
+  v.push_back("6");
+  v.push_back("330");
+  v.push_back("0");
+  v.push_back("100");
+  v.push_back("AcDbSymbolTable");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  0");
+  v.push_back("ENDTAB");
+  v.push_back("  0");
+  v.push_back("TABLE");
+  v.push_back("  2");
+  v.push_back("APPID");
+  v.push_back("  5");
+  v.push_back("3");
+  v.push_back("330");
+  v.push_back("0");
+  v.push_back("100");
+  v.push_back("AcDbSymbolTable");
+  v.push_back(" 70");
+  v.push_back("3");
+  v.push_back("  0");
+  v.push_back("APPID");
+  v.push_back("  5");
+  v.push_back("2A");
+  v.push_back("330");
+  v.push_back("3");
+  v.push_back("100");
+  v.push_back("AcDbSymbolTableRecord");
+  v.push_back("100");
+  v.push_back("AcDbRegAppTableRecord");
+  v.push_back("  2");
+  v.push_back("ACAD");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  0");
+  v.push_back("APPID");
+  v.push_back("  5");
+  v.push_back("2F");
+  v.push_back("330");
+  v.push_back("3");
+  v.push_back("100");
+  v.push_back("AcDbSymbolTableRecord");
+  v.push_back("100");
+  v.push_back("AcDbRegAppTableRecord");
+  v.push_back("  2");
+  v.push_back("HATCHBACKGROUNDCOLOR");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  0");
+  v.push_back("APPID");
+  v.push_back("  5");
+  v.push_back("30");
+  v.push_back("330");
+  v.push_back("3");
+  v.push_back("100");
+  v.push_back("AcDbSymbolTableRecord");
+  v.push_back("100");
+  v.push_back("AcDbRegAppTableRecord");
+  v.push_back("  2");
+  v.push_back("EZDXF");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  0");
+  v.push_back("ENDTAB");
+  v.push_back("  0");
+  v.push_back("TABLE");
+  v.push_back("  2");
+  v.push_back("DIMSTYLE");
+  v.push_back("  5");
+  v.push_back("4");
+  v.push_back("330");
+  v.push_back("0");
+  v.push_back("100");
+  v.push_back("AcDbSymbolTable");
+  v.push_back(" 70");
+  v.push_back("1");
+  v.push_back("100");
+  v.push_back("AcDbDimStyleTable");
+  v.push_back("  0");
+  v.push_back("DIMSTYLE");
+  v.push_back("105");
+  v.push_back("2B");
+  v.push_back("330");
+  v.push_back("4");
+  v.push_back("100");
+  v.push_back("AcDbSymbolTableRecord");
+  v.push_back("100");
+  v.push_back("AcDbDimStyleTableRecord");
+  v.push_back("  2");
+  v.push_back("Standard");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  3");
+  v.push_back("");
+  v.push_back("  4");
+  v.push_back("");
+  v.push_back(" 40");
+  v.push_back("1.0");
+  v.push_back(" 41");
+  v.push_back("2.5");
+  v.push_back(" 42");
+  v.push_back("0.625");
+  v.push_back(" 43");
+  v.push_back("3.75");
+  v.push_back(" 44");
+  v.push_back("1.25");
+  v.push_back(" 45");
+  v.push_back("0.0");
+  v.push_back(" 46");
+  v.push_back("0.0");
+  v.push_back(" 47");
+  v.push_back("0.0");
+  v.push_back(" 48");
+  v.push_back("0.0");
+  v.push_back("140");
+  v.push_back("2.5");
+  v.push_back("141");
+  v.push_back("2.5");
+  v.push_back("142");
+  v.push_back("0.0");
+  v.push_back("143");
+  v.push_back("0.03937007874");
+  v.push_back("144");
+  v.push_back("1.0");
+  v.push_back("145");
+  v.push_back("0.0");
+  v.push_back("146");
+  v.push_back("1.0");
+  v.push_back("147");
+  v.push_back("0.625");
+  v.push_back("148");
+  v.push_back("0.0");
+  v.push_back(" 71");
+  v.push_back("0");
+  v.push_back(" 72");
+  v.push_back("0");
+  v.push_back(" 73");
+  v.push_back("0");
+  v.push_back(" 74");
+  v.push_back("0");
+  v.push_back(" 75");
+  v.push_back("0");
+  v.push_back(" 76");
+  v.push_back("0");
+  v.push_back(" 77");
+  v.push_back("1");
+  v.push_back(" 78");
+  v.push_back("8");
+  v.push_back(" 79");
+  v.push_back("3");
+  v.push_back("170");
+  v.push_back("0");
+  v.push_back("171");
+  v.push_back("3");
+  v.push_back("172");
+  v.push_back("1");
+  v.push_back("173");
+  v.push_back("0");
+  v.push_back("174");
+  v.push_back("0");
+  v.push_back("175");
+  v.push_back("0");
+  v.push_back("176");
+  v.push_back("0");
+  v.push_back("177");
+  v.push_back("0");
+  v.push_back("178");
+  v.push_back("0");
+  v.push_back("179");
+  v.push_back("2");
+  v.push_back("271");
+  v.push_back("2");
+  v.push_back("272");
+  v.push_back("2");
+  v.push_back("273");
+  v.push_back("2");
+  v.push_back("274");
+  v.push_back("3");
+  v.push_back("275");
+  v.push_back("0");
+  v.push_back("276");
+  v.push_back("0");
+  v.push_back("277");
+  v.push_back("2");
+  v.push_back("278");
+  v.push_back("44");
+  v.push_back("279");
+  v.push_back("0");
+  v.push_back("280");
+  v.push_back("0");
+  v.push_back("281");
+  v.push_back("0");
+  v.push_back("282");
+  v.push_back("0");
+  v.push_back("283");
+  v.push_back("0");
+  v.push_back("284");
+  v.push_back("8");
+  v.push_back("285");
+  v.push_back("0");
+  v.push_back("286");
+  v.push_back("0");
+  v.push_back("288");
+  v.push_back("0");
+  v.push_back("289");
+  v.push_back("3");
+  v.push_back("371");
+  v.push_back("-2");
+  v.push_back("372");
+  v.push_back("-2");
+  v.push_back("  0");
+  v.push_back("ENDTAB");
+  v.push_back("  0");
+  v.push_back("TABLE");
+  v.push_back("  2");
+  v.push_back("BLOCK_RECORD");
+  v.push_back("  5");
+  v.push_back("9");
+  v.push_back("330");
+  v.push_back("0");
+  v.push_back("100");
+  v.push_back("AcDbSymbolTable");
+  v.push_back(" 70");
+  v.push_back("2");
+  v.push_back("  0");
+  v.push_back("BLOCK_RECORD");
+  v.push_back("  5");
+  v.push_back("17");
+  v.push_back("330");
+  v.push_back("9");
+  v.push_back("100");
+  v.push_back("AcDbSymbolTableRecord");
+  v.push_back("100");
+  v.push_back("AcDbBlockTableRecord");
+  v.push_back("  2");
+  v.push_back("*Model_Space");
+  v.push_back("340");
+  v.push_back("1A");
+  v.push_back("  0");
+  v.push_back("BLOCK_RECORD");
+  v.push_back("  5");
+  v.push_back("1B");
+  v.push_back("330");
+  v.push_back("9");
+  v.push_back("100");
+  v.push_back("AcDbSymbolTableRecord");
+  v.push_back("100");
+  v.push_back("AcDbBlockTableRecord");
+  v.push_back("  2");
+  v.push_back("*Paper_Space");
+  v.push_back("340");
+  v.push_back("1E");
+  v.push_back("  0");
+  v.push_back("ENDTAB");
+  v.push_back("  0");
+  v.push_back("ENDSEC");
+  v.push_back("  0");
+  v.push_back("SECTION");
+  v.push_back("  2");
+  v.push_back("BLOCKS");
+  v.push_back("  0");
+  v.push_back("BLOCK");
+  v.push_back("  5");
+  v.push_back("18");
+  v.push_back("330");
+  v.push_back("17");
+  v.push_back("100");
+  v.push_back("AcDbEntity");
+  v.push_back("  8");
+  v.push_back("0");
+  v.push_back("100");
+  v.push_back("AcDbBlockBegin");
+  v.push_back("  2");
+  v.push_back("*Model_Space");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back(" 10");
+  v.push_back("0.0");
+  v.push_back(" 20");
+  v.push_back("0.0");
+  v.push_back(" 30");
+  v.push_back("0.0");
+  v.push_back("  3");
+  v.push_back("*Model_Space");
+  v.push_back("  1");
+  v.push_back("");
+  v.push_back("  0");
+  v.push_back("ENDBLK");
+  v.push_back("  5");
+  v.push_back("19");
+  v.push_back("330");
+  v.push_back("17");
+  v.push_back("100");
+  v.push_back("AcDbEntity");
+  v.push_back("  8");
+  v.push_back("0");
+  v.push_back("100");
+  v.push_back("AcDbBlockEnd");
+  v.push_back("  0");
+  v.push_back("BLOCK");
+  v.push_back("  5");
+  v.push_back("1C");
+  v.push_back("330");
+  v.push_back("1B");
+  v.push_back("100");
+  v.push_back("AcDbEntity");
+  v.push_back("  8");
+  v.push_back("0");
+  v.push_back("100");
+  v.push_back("AcDbBlockBegin");
+  v.push_back("  2");
+  v.push_back("*Paper_Space");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back(" 10");
+  v.push_back("0.0");
+  v.push_back(" 20");
+  v.push_back("0.0");
+  v.push_back(" 30");
+  v.push_back("0.0");
+  v.push_back("  3");
+  v.push_back("*Paper_Space");
+  v.push_back("  1");
+  v.push_back("");
+  v.push_back("  0");
+  v.push_back("ENDBLK");
+  v.push_back("  5");
+  v.push_back("1D");
+  v.push_back("330");
+  v.push_back("1B");
+  v.push_back("100");
+  v.push_back("AcDbEntity");
+  v.push_back("  8");
+  v.push_back("0");
+  v.push_back("100");
+  v.push_back("AcDbBlockEnd");
+  v.push_back("  0");
+  v.push_back("ENDSEC");
+  return v;
+}();
 
-static const std::vector<std::string> kObjectsStatic = {
-    "  0", "SECTION", "  2", "OBJECTS", "  0", "DICTIONARY",
-    "  5", "A", "330", "0", "100", "AcDbDictionary",
-    "281", "1", "  3", "ACAD_COLOR", "350", "B",
-    "  3", "ACAD_GROUP", "350", "C", "  3", "ACAD_LAYOUT",
-    "350", "D", "  3", "ACAD_MATERIAL", "350", "E",
-    "  3", "ACAD_MLEADERSTYLE", "350", "F", "  3", "ACAD_MLINESTYLE",
-    "350", "10", "  3", "ACAD_PLOTSETTINGS", "350", "11",
-    "  3", "ACAD_PLOTSTYLENAME", "350", "12", "  3", "ACAD_SCALELIST",
-    "350", "14", "  3", "ACAD_TABLESTYLE", "350", "15",
-    "  3", "ACAD_VISUALSTYLE", "350", "16", "  3", "EZDXF_META",
-    "350", "2D", "  0", "DICTIONARY", "  5", "B",
-    "330", "A", "100", "AcDbDictionary", "281", "1",
-    "  0", "DICTIONARY", "  5", "C", "330", "A",
-    "100", "AcDbDictionary", "281", "1", "  0", "DICTIONARY",
-    "  5", "D", "330", "A", "100", "AcDbDictionary",
-    "281", "1", "  3", "Model", "350", "1A",
-    "  3", "Layout1", "350", "1E", "  0", "DICTIONARY",
-    "  5", "E", "330", "A", "100", "AcDbDictionary",
-    "281", "1", "  3", "ByBlock", "350", "1F",
-    "  3", "ByLayer", "350", "20", "  3", "Global",
-    "350", "21", "  0", "DICTIONARY", "  5", "F",
-    "330", "A", "100", "AcDbDictionary", "281", "1",
-    "  3", "Standard", "350", "2C", "  0", "DICTIONARY",
-    "  5", "10", "330", "A", "100", "AcDbDictionary",
-    "281", "1", "  3", "Standard", "350", "22",
-    "  0", "DICTIONARY", "  5", "11", "330", "A",
-    "100", "AcDbDictionary", "281", "1", "  0", "ACDBDICTIONARYWDFLT",
-    "  5", "12", "330", "A", "100", "AcDbDictionary",
-    "281", "1", "  3", "Normal", "350", "13",
-    "100", "AcDbDictionaryWithDefault", "340", "13", "  0", "ACDBPLACEHOLDER",
-    "  5", "13", "330", "12", "  0", "DICTIONARY",
-    "  5", "14", "330", "A", "100", "AcDbDictionary",
-    "281", "1", "  0", "DICTIONARY", "  5", "15",
-    "330", "A", "100", "AcDbDictionary", "281", "1",
-    "  0", "DICTIONARY", "  5", "16", "330", "A",
-    "100", "AcDbDictionary", "281", "1", "  0", "LAYOUT",
-    "  5", "1A", "330", "D", "100", "AcDbPlotSettings",
-    "  1", "", "  4", "A3", "  6", "",
-    " 40", "7.5", " 41", "20.0", " 42", "7.5",
-    " 43", "20.0", " 44", "420.0", " 45", "297.0",
-    " 46", "0.0", " 47", "0.0", " 48", "0.0",
-    " 49", "0.0", "140", "0.0", "141", "0.0",
-    "142", "1.0", "143", "1.0", " 70", "1024",
-    " 72", "1", " 73", "0", " 74", "5",
-    "  7", "", " 75", "16", " 76", "0",
-    " 77", "2", " 78", "300", "147", "1.0",
-    "148", "0.0", "149", "0.0", "100", "AcDbLayout",
-    "  1", "Model", " 70", "1", " 71", "0",
-    " 10", "0.0", " 20", "0.0", " 11", "420.0",
-    " 21", "297.0", " 12", "0.0", " 22", "0.0",
-    " 32", "0.0", " 14", "1e+20", " 24", "1e+20",
-    " 34", "1e+20", " 15", "-1e+20", " 25", "-1e+20",
-    " 35", "-1e+20", "146", "0.0", " 13", "0.0",
-    " 23", "0.0", " 33", "0.0", " 16", "1.0",
-    " 26", "0.0", " 36", "0.0", " 17", "0.0",
-    " 27", "1.0", " 37", "0.0", " 76", "1",
-    "330", "17", "  0", "LAYOUT", "  5", "1E",
-    "330", "D", "100", "AcDbPlotSettings", "  1", "",
-    "  4", "A3", "  6", "", " 40", "7.5",
-    " 41", "20.0", " 42", "7.5", " 43", "20.0",
-    " 44", "420.0", " 45", "297.0", " 46", "0.0",
-    " 47", "0.0", " 48", "0.0", " 49", "0.0",
-    "140", "0.0", "141", "0.0", "142", "1.0",
-    "143", "1.0", " 70", "0", " 72", "1",
-    " 73", "0", " 74", "5", "  7", "",
-    " 75", "16", " 76", "0", " 77", "2",
-    " 78", "300", "147", "1.0", "148", "0.0",
-    "149", "0.0", "100", "AcDbLayout", "  1", "Layout1",
-    " 70", "1", " 71", "1", " 10", "0.0",
-    " 20", "0.0", " 11", "420.0", " 21", "297.0",
-    " 12", "0.0", " 22", "0.0", " 32", "0.0",
-    " 14", "1e+20", " 24", "1e+20", " 34", "1e+20",
-    " 15", "-1e+20", " 25", "-1e+20", " 35", "-1e+20",
-    "146", "0.0", " 13", "0.0", " 23", "0.0",
-    " 33", "0.0", " 16", "1.0", " 26", "0.0",
-    " 36", "0.0", " 17", "0.0", " 27", "1.0",
-    " 37", "0.0", " 76", "1", "330", "1B",
-    "  0", "MATERIAL", "  5", "1F", "102", "{ACAD_REACTORS",
-    "330", "E", "102", "}", "330", "E",
-    "100", "AcDbMaterial", "  1", "ByBlock", "  2", "",
-    " 70", "0", " 40", "1.0", " 71", "1",
-    " 41", "1.0", " 91", "-1023410177", " 42", "1.0",
-    " 72", "1", "  3", "", " 73", "1",
-    " 74", "1", " 75", "1", " 44", "0.5",
-    " 73", "0", " 45", "1.0", " 46", "1.0",
-    " 77", "1", "  4", "", " 78", "1",
-    " 79", "1", "170", "1", " 48", "1.0",
-    "171", "1", "  6", "", "172", "1",
-    "173", "1", "174", "1", "140", "1.0",
-    "141", "1.0", "175", "1", "  7", "",
-    "176", "1", "177", "1", "178", "1",
-    "143", "1.0", "179", "1", "  8", "",
-    "270", "1", "271", "1", "272", "1",
-    "145", "1.0", "146", "1.0", "273", "1",
-    "  9", "", "274", "1", "275", "1",
-    "276", "1", " 42", "1.0", " 72", "1",
-    "  3", "", " 73", "1", " 74", "1",
-    " 75", "1", " 94", "63", "  0", "MATERIAL",
-    "  5", "20", "102", "{ACAD_REACTORS", "330", "E",
-    "102", "}", "330", "E", "100", "AcDbMaterial",
-    "  1", "ByLayer", "  2", "", " 70", "0",
-    " 40", "1.0", " 71", "1", " 41", "1.0",
-    " 91", "-1023410177", " 42", "1.0", " 72", "1",
-    "  3", "", " 73", "1", " 74", "1",
-    " 75", "1", " 44", "0.5", " 73", "0",
-    " 45", "1.0", " 46", "1.0", " 77", "1",
-    "  4", "", " 78", "1", " 79", "1",
-    "170", "1", " 48", "1.0", "171", "1",
-    "  6", "", "172", "1", "173", "1",
-    "174", "1", "140", "1.0", "141", "1.0",
-    "175", "1", "  7", "", "176", "1",
-    "177", "1", "178", "1", "143", "1.0",
-    "179", "1", "  8", "", "270", "1",
-    "271", "1", "272", "1", "145", "1.0",
-    "146", "1.0", "273", "1", "  9", "",
-    "274", "1", "275", "1", "276", "1",
-    " 42", "1.0", " 72", "1", "  3", "",
-    " 73", "1", " 74", "1", " 75", "1",
-    " 94", "63", "  0", "MATERIAL", "  5", "21",
-    "102", "{ACAD_REACTORS", "330", "E", "102", "}",
-    "330", "E", "100", "AcDbMaterial", "  1", "Global",
-    "  2", "", " 70", "0", " 40", "1.0",
-    " 71", "1", " 41", "1.0", " 91", "-1023410177",
-    " 42", "1.0", " 72", "1", "  3", "",
-    " 73", "1", " 74", "1", " 75", "1",
-    " 44", "0.5", " 73", "0", " 45", "1.0",
-    " 46", "1.0", " 77", "1", "  4", "",
-    " 78", "1", " 79", "1", "170", "1",
-    " 48", "1.0", "171", "1", "  6", "",
-    "172", "1", "173", "1", "174", "1",
-    "140", "1.0", "141", "1.0", "175", "1",
-    "  7", "", "176", "1", "177", "1",
-    "178", "1", "143", "1.0", "179", "1",
-    "  8", "", "270", "1", "271", "1",
-    "272", "1", "145", "1.0", "146", "1.0",
-    "273", "1", "  9", "", "274", "1",
-    "275", "1", "276", "1", " 42", "1.0",
-    " 72", "1", "  3", "", " 73", "1",
-    " 74", "1", " 75", "1", " 94", "63",
-    "  0", "MLINESTYLE", "  5", "22", "102", "{ACAD_REACTORS",
-    "330", "10", "102", "}", "330", "10",
-    "100", "AcDbMlineStyle", "  2", "Standard", " 70", "0",
-    "  3", "", " 62", "256", " 51", "90.0",
-    " 52", "90.0", " 71", "2", " 49", "0.5",
-    " 62", "256", "  6", "BYLAYER", " 49", "-0.5",
-    " 62", "256", "  6", "BYLAYER", "  0", "MLEADERSTYLE",
-    "  5", "2C", "102", "{ACAD_REACTORS", "330", "F",
-    "102", "}", "330", "F", "100", "AcDbMLeaderStyle",
-    "179", "2", "170", "2", "171", "1",
-    "172", "0", " 90", "2", " 40", "0.0",
-    " 41", "0.0", "173", "1", " 91", "-1056964608",
-    " 92", "-2", "290", "1", " 42", "2.0",
-    "291", "1", " 43", "8.0", "  3", "Standard",
-    " 44", "4.0", "300", "", "342", "29",
-    "174", "1", "175", "1", "176", "0",
-    "178", "1", " 93", "-1056964608", " 45", "4.0",
-    "292", "0", "297", "0", " 46", "4.0",
-    " 94", "-1056964608", " 47", "1.0", " 49", "1.0",
-    "140", "1.0", "294", "1", "141", "0.0",
-    "177", "0", "142", "1.0", "295", "0",
-    "296", "0", "143", "3.75", "271", "0",
-    "272", "9", "273", "9", "  0", "DICTIONARY",
-    "  5", "2D", "330", "A", "100", "AcDbDictionary",
-    "280", "1", "281", "1", "  3", "CREATED_BY_EZDXF",
-    "350", "2E", "  3", "WRITTEN_BY_EZDXF", "350", "31",
-    "  0", "DICTIONARYVAR", "  5", "2E", "330", "2D",
-    "100", "DictionaryVariables", "280", "0", "  1", "1.4.3 @ 2026-08-12T10:02:26.972595+00:00",
-    "  0", "DICTIONARYVAR", "  5", "31", "330", "2D",
-    "100", "DictionaryVariables", "280", "0", "  1", "1.4.3 @ 2026-08-12T10:02:26.973142+00:00",
-    "  0", "ENDSEC", "  0", "EOF",
-};
+static const std::vector<std::string> kObjectsStatic = [] {
+  std::vector<std::string> v;
+  v.push_back("  0");
+  v.push_back("SECTION");
+  v.push_back("  2");
+  v.push_back("OBJECTS");
+  v.push_back("  0");
+  v.push_back("DICTIONARY");
+  v.push_back("  5");
+  v.push_back("A");
+  v.push_back("330");
+  v.push_back("0");
+  v.push_back("100");
+  v.push_back("AcDbDictionary");
+  v.push_back("281");
+  v.push_back("1");
+  v.push_back("  3");
+  v.push_back("ACAD_COLOR");
+  v.push_back("350");
+  v.push_back("B");
+  v.push_back("  3");
+  v.push_back("ACAD_GROUP");
+  v.push_back("350");
+  v.push_back("C");
+  v.push_back("  3");
+  v.push_back("ACAD_LAYOUT");
+  v.push_back("350");
+  v.push_back("D");
+  v.push_back("  3");
+  v.push_back("ACAD_MATERIAL");
+  v.push_back("350");
+  v.push_back("E");
+  v.push_back("  3");
+  v.push_back("ACAD_MLEADERSTYLE");
+  v.push_back("350");
+  v.push_back("F");
+  v.push_back("  3");
+  v.push_back("ACAD_MLINESTYLE");
+  v.push_back("350");
+  v.push_back("10");
+  v.push_back("  3");
+  v.push_back("ACAD_PLOTSETTINGS");
+  v.push_back("350");
+  v.push_back("11");
+  v.push_back("  3");
+  v.push_back("ACAD_PLOTSTYLENAME");
+  v.push_back("350");
+  v.push_back("12");
+  v.push_back("  3");
+  v.push_back("ACAD_SCALELIST");
+  v.push_back("350");
+  v.push_back("14");
+  v.push_back("  3");
+  v.push_back("ACAD_TABLESTYLE");
+  v.push_back("350");
+  v.push_back("15");
+  v.push_back("  3");
+  v.push_back("ACAD_VISUALSTYLE");
+  v.push_back("350");
+  v.push_back("16");
+  v.push_back("  3");
+  v.push_back("EZDXF_META");
+  v.push_back("350");
+  v.push_back("2D");
+  v.push_back("  0");
+  v.push_back("DICTIONARY");
+  v.push_back("  5");
+  v.push_back("B");
+  v.push_back("330");
+  v.push_back("A");
+  v.push_back("100");
+  v.push_back("AcDbDictionary");
+  v.push_back("281");
+  v.push_back("1");
+  v.push_back("  0");
+  v.push_back("DICTIONARY");
+  v.push_back("  5");
+  v.push_back("C");
+  v.push_back("330");
+  v.push_back("A");
+  v.push_back("100");
+  v.push_back("AcDbDictionary");
+  v.push_back("281");
+  v.push_back("1");
+  v.push_back("  0");
+  v.push_back("DICTIONARY");
+  v.push_back("  5");
+  v.push_back("D");
+  v.push_back("330");
+  v.push_back("A");
+  v.push_back("100");
+  v.push_back("AcDbDictionary");
+  v.push_back("281");
+  v.push_back("1");
+  v.push_back("  3");
+  v.push_back("Model");
+  v.push_back("350");
+  v.push_back("1A");
+  v.push_back("  3");
+  v.push_back("Layout1");
+  v.push_back("350");
+  v.push_back("1E");
+  v.push_back("  0");
+  v.push_back("DICTIONARY");
+  v.push_back("  5");
+  v.push_back("E");
+  v.push_back("330");
+  v.push_back("A");
+  v.push_back("100");
+  v.push_back("AcDbDictionary");
+  v.push_back("281");
+  v.push_back("1");
+  v.push_back("  3");
+  v.push_back("ByBlock");
+  v.push_back("350");
+  v.push_back("1F");
+  v.push_back("  3");
+  v.push_back("ByLayer");
+  v.push_back("350");
+  v.push_back("20");
+  v.push_back("  3");
+  v.push_back("Global");
+  v.push_back("350");
+  v.push_back("21");
+  v.push_back("  0");
+  v.push_back("DICTIONARY");
+  v.push_back("  5");
+  v.push_back("F");
+  v.push_back("330");
+  v.push_back("A");
+  v.push_back("100");
+  v.push_back("AcDbDictionary");
+  v.push_back("281");
+  v.push_back("1");
+  v.push_back("  3");
+  v.push_back("Standard");
+  v.push_back("350");
+  v.push_back("2C");
+  v.push_back("  0");
+  v.push_back("DICTIONARY");
+  v.push_back("  5");
+  v.push_back("10");
+  v.push_back("330");
+  v.push_back("A");
+  v.push_back("100");
+  v.push_back("AcDbDictionary");
+  v.push_back("281");
+  v.push_back("1");
+  v.push_back("  3");
+  v.push_back("Standard");
+  v.push_back("350");
+  v.push_back("22");
+  v.push_back("  0");
+  v.push_back("DICTIONARY");
+  v.push_back("  5");
+  v.push_back("11");
+  v.push_back("330");
+  v.push_back("A");
+  v.push_back("100");
+  v.push_back("AcDbDictionary");
+  v.push_back("281");
+  v.push_back("1");
+  v.push_back("  0");
+  v.push_back("ACDBDICTIONARYWDFLT");
+  v.push_back("  5");
+  v.push_back("12");
+  v.push_back("330");
+  v.push_back("A");
+  v.push_back("100");
+  v.push_back("AcDbDictionary");
+  v.push_back("281");
+  v.push_back("1");
+  v.push_back("  3");
+  v.push_back("Normal");
+  v.push_back("350");
+  v.push_back("13");
+  v.push_back("100");
+  v.push_back("AcDbDictionaryWithDefault");
+  v.push_back("340");
+  v.push_back("13");
+  v.push_back("  0");
+  v.push_back("ACDBPLACEHOLDER");
+  v.push_back("  5");
+  v.push_back("13");
+  v.push_back("330");
+  v.push_back("12");
+  v.push_back("  0");
+  v.push_back("DICTIONARY");
+  v.push_back("  5");
+  v.push_back("14");
+  v.push_back("330");
+  v.push_back("A");
+  v.push_back("100");
+  v.push_back("AcDbDictionary");
+  v.push_back("281");
+  v.push_back("1");
+  v.push_back("  0");
+  v.push_back("DICTIONARY");
+  v.push_back("  5");
+  v.push_back("15");
+  v.push_back("330");
+  v.push_back("A");
+  v.push_back("100");
+  v.push_back("AcDbDictionary");
+  v.push_back("281");
+  v.push_back("1");
+  v.push_back("  0");
+  v.push_back("DICTIONARY");
+  v.push_back("  5");
+  v.push_back("16");
+  v.push_back("330");
+  v.push_back("A");
+  v.push_back("100");
+  v.push_back("AcDbDictionary");
+  v.push_back("281");
+  v.push_back("1");
+  v.push_back("  0");
+  v.push_back("LAYOUT");
+  v.push_back("  5");
+  v.push_back("1A");
+  v.push_back("330");
+  v.push_back("D");
+  v.push_back("100");
+  v.push_back("AcDbPlotSettings");
+  v.push_back("  1");
+  v.push_back("");
+  v.push_back("  4");
+  v.push_back("A3");
+  v.push_back("  6");
+  v.push_back("");
+  v.push_back(" 40");
+  v.push_back("7.5");
+  v.push_back(" 41");
+  v.push_back("20.0");
+  v.push_back(" 42");
+  v.push_back("7.5");
+  v.push_back(" 43");
+  v.push_back("20.0");
+  v.push_back(" 44");
+  v.push_back("420.0");
+  v.push_back(" 45");
+  v.push_back("297.0");
+  v.push_back(" 46");
+  v.push_back("0.0");
+  v.push_back(" 47");
+  v.push_back("0.0");
+  v.push_back(" 48");
+  v.push_back("0.0");
+  v.push_back(" 49");
+  v.push_back("0.0");
+  v.push_back("140");
+  v.push_back("0.0");
+  v.push_back("141");
+  v.push_back("0.0");
+  v.push_back("142");
+  v.push_back("1.0");
+  v.push_back("143");
+  v.push_back("1.0");
+  v.push_back(" 70");
+  v.push_back("1024");
+  v.push_back(" 72");
+  v.push_back("1");
+  v.push_back(" 73");
+  v.push_back("0");
+  v.push_back(" 74");
+  v.push_back("5");
+  v.push_back("  7");
+  v.push_back("");
+  v.push_back(" 75");
+  v.push_back("16");
+  v.push_back(" 76");
+  v.push_back("0");
+  v.push_back(" 77");
+  v.push_back("2");
+  v.push_back(" 78");
+  v.push_back("300");
+  v.push_back("147");
+  v.push_back("1.0");
+  v.push_back("148");
+  v.push_back("0.0");
+  v.push_back("149");
+  v.push_back("0.0");
+  v.push_back("100");
+  v.push_back("AcDbLayout");
+  v.push_back("  1");
+  v.push_back("Model");
+  v.push_back(" 70");
+  v.push_back("1");
+  v.push_back(" 71");
+  v.push_back("0");
+  v.push_back(" 10");
+  v.push_back("0.0");
+  v.push_back(" 20");
+  v.push_back("0.0");
+  v.push_back(" 11");
+  v.push_back("420.0");
+  v.push_back(" 21");
+  v.push_back("297.0");
+  v.push_back(" 12");
+  v.push_back("0.0");
+  v.push_back(" 22");
+  v.push_back("0.0");
+  v.push_back(" 32");
+  v.push_back("0.0");
+  v.push_back(" 14");
+  v.push_back("1e+20");
+  v.push_back(" 24");
+  v.push_back("1e+20");
+  v.push_back(" 34");
+  v.push_back("1e+20");
+  v.push_back(" 15");
+  v.push_back("-1e+20");
+  v.push_back(" 25");
+  v.push_back("-1e+20");
+  v.push_back(" 35");
+  v.push_back("-1e+20");
+  v.push_back("146");
+  v.push_back("0.0");
+  v.push_back(" 13");
+  v.push_back("0.0");
+  v.push_back(" 23");
+  v.push_back("0.0");
+  v.push_back(" 33");
+  v.push_back("0.0");
+  v.push_back(" 16");
+  v.push_back("1.0");
+  v.push_back(" 26");
+  v.push_back("0.0");
+  v.push_back(" 36");
+  v.push_back("0.0");
+  v.push_back(" 17");
+  v.push_back("0.0");
+  v.push_back(" 27");
+  v.push_back("1.0");
+  v.push_back(" 37");
+  v.push_back("0.0");
+  v.push_back(" 76");
+  v.push_back("1");
+  v.push_back("330");
+  v.push_back("17");
+  v.push_back("  0");
+  v.push_back("LAYOUT");
+  v.push_back("  5");
+  v.push_back("1E");
+  v.push_back("330");
+  v.push_back("D");
+  v.push_back("100");
+  v.push_back("AcDbPlotSettings");
+  v.push_back("  1");
+  v.push_back("");
+  v.push_back("  4");
+  v.push_back("A3");
+  v.push_back("  6");
+  v.push_back("");
+  v.push_back(" 40");
+  v.push_back("7.5");
+  v.push_back(" 41");
+  v.push_back("20.0");
+  v.push_back(" 42");
+  v.push_back("7.5");
+  v.push_back(" 43");
+  v.push_back("20.0");
+  v.push_back(" 44");
+  v.push_back("420.0");
+  v.push_back(" 45");
+  v.push_back("297.0");
+  v.push_back(" 46");
+  v.push_back("0.0");
+  v.push_back(" 47");
+  v.push_back("0.0");
+  v.push_back(" 48");
+  v.push_back("0.0");
+  v.push_back(" 49");
+  v.push_back("0.0");
+  v.push_back("140");
+  v.push_back("0.0");
+  v.push_back("141");
+  v.push_back("0.0");
+  v.push_back("142");
+  v.push_back("1.0");
+  v.push_back("143");
+  v.push_back("1.0");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back(" 72");
+  v.push_back("1");
+  v.push_back(" 73");
+  v.push_back("0");
+  v.push_back(" 74");
+  v.push_back("5");
+  v.push_back("  7");
+  v.push_back("");
+  v.push_back(" 75");
+  v.push_back("16");
+  v.push_back(" 76");
+  v.push_back("0");
+  v.push_back(" 77");
+  v.push_back("2");
+  v.push_back(" 78");
+  v.push_back("300");
+  v.push_back("147");
+  v.push_back("1.0");
+  v.push_back("148");
+  v.push_back("0.0");
+  v.push_back("149");
+  v.push_back("0.0");
+  v.push_back("100");
+  v.push_back("AcDbLayout");
+  v.push_back("  1");
+  v.push_back("Layout1");
+  v.push_back(" 70");
+  v.push_back("1");
+  v.push_back(" 71");
+  v.push_back("1");
+  v.push_back(" 10");
+  v.push_back("0.0");
+  v.push_back(" 20");
+  v.push_back("0.0");
+  v.push_back(" 11");
+  v.push_back("420.0");
+  v.push_back(" 21");
+  v.push_back("297.0");
+  v.push_back(" 12");
+  v.push_back("0.0");
+  v.push_back(" 22");
+  v.push_back("0.0");
+  v.push_back(" 32");
+  v.push_back("0.0");
+  v.push_back(" 14");
+  v.push_back("1e+20");
+  v.push_back(" 24");
+  v.push_back("1e+20");
+  v.push_back(" 34");
+  v.push_back("1e+20");
+  v.push_back(" 15");
+  v.push_back("-1e+20");
+  v.push_back(" 25");
+  v.push_back("-1e+20");
+  v.push_back(" 35");
+  v.push_back("-1e+20");
+  v.push_back("146");
+  v.push_back("0.0");
+  v.push_back(" 13");
+  v.push_back("0.0");
+  v.push_back(" 23");
+  v.push_back("0.0");
+  v.push_back(" 33");
+  v.push_back("0.0");
+  v.push_back(" 16");
+  v.push_back("1.0");
+  v.push_back(" 26");
+  v.push_back("0.0");
+  v.push_back(" 36");
+  v.push_back("0.0");
+  v.push_back(" 17");
+  v.push_back("0.0");
+  v.push_back(" 27");
+  v.push_back("1.0");
+  v.push_back(" 37");
+  v.push_back("0.0");
+  v.push_back(" 76");
+  v.push_back("1");
+  v.push_back("330");
+  v.push_back("1B");
+  v.push_back("  0");
+  v.push_back("MATERIAL");
+  v.push_back("  5");
+  v.push_back("1F");
+  v.push_back("102");
+  v.push_back("{ACAD_REACTORS");
+  v.push_back("330");
+  v.push_back("E");
+  v.push_back("102");
+  v.push_back("}");
+  v.push_back("330");
+  v.push_back("E");
+  v.push_back("100");
+  v.push_back("AcDbMaterial");
+  v.push_back("  1");
+  v.push_back("ByBlock");
+  v.push_back("  2");
+  v.push_back("");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back(" 40");
+  v.push_back("1.0");
+  v.push_back(" 71");
+  v.push_back("1");
+  v.push_back(" 41");
+  v.push_back("1.0");
+  v.push_back(" 91");
+  v.push_back("-1023410177");
+  v.push_back(" 42");
+  v.push_back("1.0");
+  v.push_back(" 72");
+  v.push_back("1");
+  v.push_back("  3");
+  v.push_back("");
+  v.push_back(" 73");
+  v.push_back("1");
+  v.push_back(" 74");
+  v.push_back("1");
+  v.push_back(" 75");
+  v.push_back("1");
+  v.push_back(" 44");
+  v.push_back("0.5");
+  v.push_back(" 73");
+  v.push_back("0");
+  v.push_back(" 45");
+  v.push_back("1.0");
+  v.push_back(" 46");
+  v.push_back("1.0");
+  v.push_back(" 77");
+  v.push_back("1");
+  v.push_back("  4");
+  v.push_back("");
+  v.push_back(" 78");
+  v.push_back("1");
+  v.push_back(" 79");
+  v.push_back("1");
+  v.push_back("170");
+  v.push_back("1");
+  v.push_back(" 48");
+  v.push_back("1.0");
+  v.push_back("171");
+  v.push_back("1");
+  v.push_back("  6");
+  v.push_back("");
+  v.push_back("172");
+  v.push_back("1");
+  v.push_back("173");
+  v.push_back("1");
+  v.push_back("174");
+  v.push_back("1");
+  v.push_back("140");
+  v.push_back("1.0");
+  v.push_back("141");
+  v.push_back("1.0");
+  v.push_back("175");
+  v.push_back("1");
+  v.push_back("  7");
+  v.push_back("");
+  v.push_back("176");
+  v.push_back("1");
+  v.push_back("177");
+  v.push_back("1");
+  v.push_back("178");
+  v.push_back("1");
+  v.push_back("143");
+  v.push_back("1.0");
+  v.push_back("179");
+  v.push_back("1");
+  v.push_back("  8");
+  v.push_back("");
+  v.push_back("270");
+  v.push_back("1");
+  v.push_back("271");
+  v.push_back("1");
+  v.push_back("272");
+  v.push_back("1");
+  v.push_back("145");
+  v.push_back("1.0");
+  v.push_back("146");
+  v.push_back("1.0");
+  v.push_back("273");
+  v.push_back("1");
+  v.push_back("  9");
+  v.push_back("");
+  v.push_back("274");
+  v.push_back("1");
+  v.push_back("275");
+  v.push_back("1");
+  v.push_back("276");
+  v.push_back("1");
+  v.push_back(" 42");
+  v.push_back("1.0");
+  v.push_back(" 72");
+  v.push_back("1");
+  v.push_back("  3");
+  v.push_back("");
+  v.push_back(" 73");
+  v.push_back("1");
+  v.push_back(" 74");
+  v.push_back("1");
+  v.push_back(" 75");
+  v.push_back("1");
+  v.push_back(" 94");
+  v.push_back("63");
+  v.push_back("  0");
+  v.push_back("MATERIAL");
+  v.push_back("  5");
+  v.push_back("20");
+  v.push_back("102");
+  v.push_back("{ACAD_REACTORS");
+  v.push_back("330");
+  v.push_back("E");
+  v.push_back("102");
+  v.push_back("}");
+  v.push_back("330");
+  v.push_back("E");
+  v.push_back("100");
+  v.push_back("AcDbMaterial");
+  v.push_back("  1");
+  v.push_back("ByLayer");
+  v.push_back("  2");
+  v.push_back("");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back(" 40");
+  v.push_back("1.0");
+  v.push_back(" 71");
+  v.push_back("1");
+  v.push_back(" 41");
+  v.push_back("1.0");
+  v.push_back(" 91");
+  v.push_back("-1023410177");
+  v.push_back(" 42");
+  v.push_back("1.0");
+  v.push_back(" 72");
+  v.push_back("1");
+  v.push_back("  3");
+  v.push_back("");
+  v.push_back(" 73");
+  v.push_back("1");
+  v.push_back(" 74");
+  v.push_back("1");
+  v.push_back(" 75");
+  v.push_back("1");
+  v.push_back(" 44");
+  v.push_back("0.5");
+  v.push_back(" 73");
+  v.push_back("0");
+  v.push_back(" 45");
+  v.push_back("1.0");
+  v.push_back(" 46");
+  v.push_back("1.0");
+  v.push_back(" 77");
+  v.push_back("1");
+  v.push_back("  4");
+  v.push_back("");
+  v.push_back(" 78");
+  v.push_back("1");
+  v.push_back(" 79");
+  v.push_back("1");
+  v.push_back("170");
+  v.push_back("1");
+  v.push_back(" 48");
+  v.push_back("1.0");
+  v.push_back("171");
+  v.push_back("1");
+  v.push_back("  6");
+  v.push_back("");
+  v.push_back("172");
+  v.push_back("1");
+  v.push_back("173");
+  v.push_back("1");
+  v.push_back("174");
+  v.push_back("1");
+  v.push_back("140");
+  v.push_back("1.0");
+  v.push_back("141");
+  v.push_back("1.0");
+  v.push_back("175");
+  v.push_back("1");
+  v.push_back("  7");
+  v.push_back("");
+  v.push_back("176");
+  v.push_back("1");
+  v.push_back("177");
+  v.push_back("1");
+  v.push_back("178");
+  v.push_back("1");
+  v.push_back("143");
+  v.push_back("1.0");
+  v.push_back("179");
+  v.push_back("1");
+  v.push_back("  8");
+  v.push_back("");
+  v.push_back("270");
+  v.push_back("1");
+  v.push_back("271");
+  v.push_back("1");
+  v.push_back("272");
+  v.push_back("1");
+  v.push_back("145");
+  v.push_back("1.0");
+  v.push_back("146");
+  v.push_back("1.0");
+  v.push_back("273");
+  v.push_back("1");
+  v.push_back("  9");
+  v.push_back("");
+  v.push_back("274");
+  v.push_back("1");
+  v.push_back("275");
+  v.push_back("1");
+  v.push_back("276");
+  v.push_back("1");
+  v.push_back(" 42");
+  v.push_back("1.0");
+  v.push_back(" 72");
+  v.push_back("1");
+  v.push_back("  3");
+  v.push_back("");
+  v.push_back(" 73");
+  v.push_back("1");
+  v.push_back(" 74");
+  v.push_back("1");
+  v.push_back(" 75");
+  v.push_back("1");
+  v.push_back(" 94");
+  v.push_back("63");
+  v.push_back("  0");
+  v.push_back("MATERIAL");
+  v.push_back("  5");
+  v.push_back("21");
+  v.push_back("102");
+  v.push_back("{ACAD_REACTORS");
+  v.push_back("330");
+  v.push_back("E");
+  v.push_back("102");
+  v.push_back("}");
+  v.push_back("330");
+  v.push_back("E");
+  v.push_back("100");
+  v.push_back("AcDbMaterial");
+  v.push_back("  1");
+  v.push_back("Global");
+  v.push_back("  2");
+  v.push_back("");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back(" 40");
+  v.push_back("1.0");
+  v.push_back(" 71");
+  v.push_back("1");
+  v.push_back(" 41");
+  v.push_back("1.0");
+  v.push_back(" 91");
+  v.push_back("-1023410177");
+  v.push_back(" 42");
+  v.push_back("1.0");
+  v.push_back(" 72");
+  v.push_back("1");
+  v.push_back("  3");
+  v.push_back("");
+  v.push_back(" 73");
+  v.push_back("1");
+  v.push_back(" 74");
+  v.push_back("1");
+  v.push_back(" 75");
+  v.push_back("1");
+  v.push_back(" 44");
+  v.push_back("0.5");
+  v.push_back(" 73");
+  v.push_back("0");
+  v.push_back(" 45");
+  v.push_back("1.0");
+  v.push_back(" 46");
+  v.push_back("1.0");
+  v.push_back(" 77");
+  v.push_back("1");
+  v.push_back("  4");
+  v.push_back("");
+  v.push_back(" 78");
+  v.push_back("1");
+  v.push_back(" 79");
+  v.push_back("1");
+  v.push_back("170");
+  v.push_back("1");
+  v.push_back(" 48");
+  v.push_back("1.0");
+  v.push_back("171");
+  v.push_back("1");
+  v.push_back("  6");
+  v.push_back("");
+  v.push_back("172");
+  v.push_back("1");
+  v.push_back("173");
+  v.push_back("1");
+  v.push_back("174");
+  v.push_back("1");
+  v.push_back("140");
+  v.push_back("1.0");
+  v.push_back("141");
+  v.push_back("1.0");
+  v.push_back("175");
+  v.push_back("1");
+  v.push_back("  7");
+  v.push_back("");
+  v.push_back("176");
+  v.push_back("1");
+  v.push_back("177");
+  v.push_back("1");
+  v.push_back("178");
+  v.push_back("1");
+  v.push_back("143");
+  v.push_back("1.0");
+  v.push_back("179");
+  v.push_back("1");
+  v.push_back("  8");
+  v.push_back("");
+  v.push_back("270");
+  v.push_back("1");
+  v.push_back("271");
+  v.push_back("1");
+  v.push_back("272");
+  v.push_back("1");
+  v.push_back("145");
+  v.push_back("1.0");
+  v.push_back("146");
+  v.push_back("1.0");
+  v.push_back("273");
+  v.push_back("1");
+  v.push_back("  9");
+  v.push_back("");
+  v.push_back("274");
+  v.push_back("1");
+  v.push_back("275");
+  v.push_back("1");
+  v.push_back("276");
+  v.push_back("1");
+  v.push_back(" 42");
+  v.push_back("1.0");
+  v.push_back(" 72");
+  v.push_back("1");
+  v.push_back("  3");
+  v.push_back("");
+  v.push_back(" 73");
+  v.push_back("1");
+  v.push_back(" 74");
+  v.push_back("1");
+  v.push_back(" 75");
+  v.push_back("1");
+  v.push_back(" 94");
+  v.push_back("63");
+  v.push_back("  0");
+  v.push_back("MLINESTYLE");
+  v.push_back("  5");
+  v.push_back("22");
+  v.push_back("102");
+  v.push_back("{ACAD_REACTORS");
+  v.push_back("330");
+  v.push_back("10");
+  v.push_back("102");
+  v.push_back("}");
+  v.push_back("330");
+  v.push_back("10");
+  v.push_back("100");
+  v.push_back("AcDbMlineStyle");
+  v.push_back("  2");
+  v.push_back("Standard");
+  v.push_back(" 70");
+  v.push_back("0");
+  v.push_back("  3");
+  v.push_back("");
+  v.push_back(" 62");
+  v.push_back("256");
+  v.push_back(" 51");
+  v.push_back("90.0");
+  v.push_back(" 52");
+  v.push_back("90.0");
+  v.push_back(" 71");
+  v.push_back("2");
+  v.push_back(" 49");
+  v.push_back("0.5");
+  v.push_back(" 62");
+  v.push_back("256");
+  v.push_back("  6");
+  v.push_back("BYLAYER");
+  v.push_back(" 49");
+  v.push_back("-0.5");
+  v.push_back(" 62");
+  v.push_back("256");
+  v.push_back("  6");
+  v.push_back("BYLAYER");
+  v.push_back("  0");
+  v.push_back("MLEADERSTYLE");
+  v.push_back("  5");
+  v.push_back("2C");
+  v.push_back("102");
+  v.push_back("{ACAD_REACTORS");
+  v.push_back("330");
+  v.push_back("F");
+  v.push_back("102");
+  v.push_back("}");
+  v.push_back("330");
+  v.push_back("F");
+  v.push_back("100");
+  v.push_back("AcDbMLeaderStyle");
+  v.push_back("179");
+  v.push_back("2");
+  v.push_back("170");
+  v.push_back("2");
+  v.push_back("171");
+  v.push_back("1");
+  v.push_back("172");
+  v.push_back("0");
+  v.push_back(" 90");
+  v.push_back("2");
+  v.push_back(" 40");
+  v.push_back("0.0");
+  v.push_back(" 41");
+  v.push_back("0.0");
+  v.push_back("173");
+  v.push_back("1");
+  v.push_back(" 91");
+  v.push_back("-1056964608");
+  v.push_back(" 92");
+  v.push_back("-2");
+  v.push_back("290");
+  v.push_back("1");
+  v.push_back(" 42");
+  v.push_back("2.0");
+  v.push_back("291");
+  v.push_back("1");
+  v.push_back(" 43");
+  v.push_back("8.0");
+  v.push_back("  3");
+  v.push_back("Standard");
+  v.push_back(" 44");
+  v.push_back("4.0");
+  v.push_back("300");
+  v.push_back("");
+  v.push_back("342");
+  v.push_back("29");
+  v.push_back("174");
+  v.push_back("1");
+  v.push_back("175");
+  v.push_back("1");
+  v.push_back("176");
+  v.push_back("0");
+  v.push_back("178");
+  v.push_back("1");
+  v.push_back(" 93");
+  v.push_back("-1056964608");
+  v.push_back(" 45");
+  v.push_back("4.0");
+  v.push_back("292");
+  v.push_back("0");
+  v.push_back("297");
+  v.push_back("0");
+  v.push_back(" 46");
+  v.push_back("4.0");
+  v.push_back(" 94");
+  v.push_back("-1056964608");
+  v.push_back(" 47");
+  v.push_back("1.0");
+  v.push_back(" 49");
+  v.push_back("1.0");
+  v.push_back("140");
+  v.push_back("1.0");
+  v.push_back("294");
+  v.push_back("1");
+  v.push_back("141");
+  v.push_back("0.0");
+  v.push_back("177");
+  v.push_back("0");
+  v.push_back("142");
+  v.push_back("1.0");
+  v.push_back("295");
+  v.push_back("0");
+  v.push_back("296");
+  v.push_back("0");
+  v.push_back("143");
+  v.push_back("3.75");
+  v.push_back("271");
+  v.push_back("0");
+  v.push_back("272");
+  v.push_back("9");
+  v.push_back("273");
+  v.push_back("9");
+  v.push_back("  0");
+  v.push_back("DICTIONARY");
+  v.push_back("  5");
+  v.push_back("2D");
+  v.push_back("330");
+  v.push_back("A");
+  v.push_back("100");
+  v.push_back("AcDbDictionary");
+  v.push_back("280");
+  v.push_back("1");
+  v.push_back("281");
+  v.push_back("1");
+  v.push_back("  3");
+  v.push_back("CREATED_BY_EZDXF");
+  v.push_back("350");
+  v.push_back("2E");
+  v.push_back("  3");
+  v.push_back("WRITTEN_BY_EZDXF");
+  v.push_back("350");
+  v.push_back("31");
+  v.push_back("  0");
+  v.push_back("DICTIONARYVAR");
+  v.push_back("  5");
+  v.push_back("2E");
+  v.push_back("330");
+  v.push_back("2D");
+  v.push_back("100");
+  v.push_back("DictionaryVariables");
+  v.push_back("280");
+  v.push_back("0");
+  v.push_back("  1");
+  v.push_back("1.4.3 @ 2026-08-12T10:02:26.972595+00:00");
+  v.push_back("  0");
+  v.push_back("DICTIONARYVAR");
+  v.push_back("  5");
+  v.push_back("31");
+  v.push_back("330");
+  v.push_back("2D");
+  v.push_back("100");
+  v.push_back("DictionaryVariables");
+  v.push_back("280");
+  v.push_back("0");
+  v.push_back("  1");
+  v.push_back("1.4.3 @ 2026-08-12T10:02:26.973142+00:00");
+  v.push_back("  0");
+  v.push_back("ENDSEC");
+  v.push_back("  0");
+  v.push_back("EOF");
+  return v;
+}();
 
 std::string to_dxf(const Scene& scene, double scale, const std::string& mode) {
   std::map<std::string, std::tuple<int, int, int>> layer_colors;
