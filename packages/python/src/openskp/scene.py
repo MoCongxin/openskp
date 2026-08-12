@@ -273,94 +273,13 @@ def build_scene(parsed: Dict[str, Any]) -> Scene:
             # onto (or the back vanishing from) the far side.
             face_groups: Dict[Tuple[Tuple[int, int, int], bool], Dict[str, Any]] = {}
 
-            def resolve_material(mat_id: Optional[int]) -> Optional[Dict[str, Any]]:
-                if mat_id is None:
-                    return None
-                mat_name = material_id_to_name.get(mat_id)
-                return materials.get(mat_name) or materials_by_folder.get(mat_name)
-
-            def resolve_color(mat: Optional[Dict[str, Any]]) -> Optional[Tuple[int, int, int]]:
-                if mat is None:
-                    return None
-                c = mat["color"]
-                return (c["r"], c["g"], c["b"])
-
-            def add_side(
-                triangles,
-                fn: Tuple[float, float, float],
-                color: Tuple[int, int, int],
-                double_sided: bool,
-                reverse: bool,
-                mat: Optional[Dict[str, Any]],
-                uv_transform: Optional[Tuple[float, ...]],
-                xr: Tuple[float, float, float],
-                yr: Tuple[float, float, float],
-            ) -> None:
-                key = (color, double_sided)
-                group = face_groups.get(key)
-                if group is None:
-                    group = {
-                        "color": color,
-                        "double_sided": double_sided,
-                        "local_verts": [],
-                        "local_uvs": [],
-                        "normals_accum": [],
-                        "local_faces": [],
-                        "local_v_map": {},
-                    }
-                    face_groups[key] = group
-
-                tex = mat.get("texture") if mat else None
-                tile_w = tex.get("x_scale") if tex else None
-                tile_h = tex.get("y_scale") if tex else None
-                tile_w = tile_w if tile_w and tile_w > 1e-9 else 1.0
-                tile_h = tile_h if tile_h and tile_h > 1e-9 else 1.0
-
-                side_normal = (-fn[0], -fn[1], -fn[2]) if reverse else fn
-
-                # Vertices are deduped per (v_id, uv) rather than just
-                # v_id: UVs are inherently per-face, so a vertex position
-                # shared by two faces that disagree on texture mapping
-                # must become two distinct output vertices (glTF requires
-                # position/normal/uv aligned per index).
-                face_local_map: Dict[int, int] = {}
-                for tri in triangles:
-                    tri_ids = list(tri)
-                    if reverse:
-                        tri_ids[1], tri_ids[2] = tri_ids[2], tri_ids[1]
-                    face_indices = []
-                    for v_id in tri_ids:
-                        if v_id not in builder.vertices:
-                            continue
-                        idx = face_local_map.get(v_id)
-                        if idx is None:
-                            p = builder.vertices[v_id]
-                            u, v = _compute_face_uv(p, xr, yr, uv_transform, tile_w, tile_h)
-                            vkey = (v_id, u, v)
-                            idx = group["local_v_map"].get(vkey)
-                            if idx is None:
-                                group["local_verts"].append(p)
-                                group["local_uvs"].append((u, v))
-                                group["normals_accum"].append([side_normal[0], side_normal[1], side_normal[2]])
-                                idx = len(group["local_verts"]) - 1
-                                group["local_v_map"][vkey] = idx
-                            else:
-                                accum = group["normals_accum"][idx]
-                                accum[0] += side_normal[0]
-                                accum[1] += side_normal[1]
-                                accum[2] += side_normal[2]
-                            face_local_map[v_id] = idx
-                        face_indices.append(idx)
-                    if len(face_indices) == 3:
-                        group["local_faces"].append(face_indices)
-
             for f_id, f_data in builder.faces.items():
                 fallback_color = inherited_color if inherited_color is not None else get_layer_color(parent_layer)
 
-                front_mat = resolve_material(f_data.get("material_id"))
-                back_mat = resolve_material(f_data.get("back_material_id"))
-                front_color = resolve_color(front_mat) or fallback_color
-                back_color = resolve_color(back_mat) or fallback_color
+                front_mat = _resolve_material(f_data.get("material_id"), material_id_to_name, materials, materials_by_folder)
+                back_mat = _resolve_material(f_data.get("back_material_id"), material_id_to_name, materials, materials_by_folder)
+                front_color = _resolve_color(front_mat) or fallback_color
+                back_color = _resolve_color(back_mat) or fallback_color
 
                 loops = []
                 for loop in f_data["loops"]:
@@ -382,13 +301,13 @@ def build_scene(parsed: Dict[str, Any]) -> Scene:
                 xr, yr = _face_uv_basis(fn)
 
                 if front_color == back_color:
-                    add_side(triangles, fn, front_color, True, False, front_mat,
-                              f_data.get("uv_transform"), xr, yr)
+                    _add_face_side(face_groups, builder, triangles, fn, front_color, True, False, front_mat,
+                                   f_data.get("uv_transform"), xr, yr)
                 else:
-                    add_side(triangles, fn, front_color, False, False, front_mat,
-                              f_data.get("uv_transform"), xr, yr)
-                    add_side(triangles, fn, back_color, False, True, back_mat,
-                              f_data.get("uv_transform_back"), xr, yr)
+                    _add_face_side(face_groups, builder, triangles, fn, front_color, False, False, front_mat,
+                                   f_data.get("uv_transform"), xr, yr)
+                    _add_face_side(face_groups, builder, triangles, fn, back_color, False, True, back_mat,
+                                   f_data.get("uv_transform_back"), xr, yr)
 
             for (face_color, double_sided), group in face_groups.items():
                 local_faces = group["local_faces"]
@@ -580,3 +499,89 @@ def build_scene(parsed: Dict[str, Any]) -> Scene:
         glb_primitives=glb_primitives,
         gltf_materials=gltf_materials,
     )
+
+
+def _resolve_material(
+    mat_id: Optional[int],
+    material_id_to_name: Dict[int, str],
+    materials: Dict[str, Any],
+    materials_by_folder: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    if mat_id is None:
+        return None
+    mat_name = material_id_to_name.get(mat_id)
+    return materials.get(mat_name) or materials_by_folder.get(mat_name)
+
+
+def _resolve_color(mat: Optional[Dict[str, Any]]) -> Optional[Tuple[int, int, int]]:
+    if mat is None:
+        return None
+    c = mat["color"]
+    return (c["r"], c["g"], c["b"])
+
+
+def _add_face_side(
+    face_groups: Dict[Tuple[Tuple[int, int, int], bool], Dict[str, Any]],
+    builder: Any,
+    triangles: List[List[int]],
+    fn: Tuple[float, float, float],
+    color: Tuple[int, int, int],
+    double_sided: bool,
+    reverse: bool,
+    mat: Optional[Dict[str, Any]],
+    uv_transform: Optional[Tuple[float, ...]],
+    xr: Tuple[float, float, float],
+    yr: Tuple[float, float, float],
+) -> None:
+    key = (color, double_sided)
+    group = face_groups.get(key)
+    if group is None:
+        group = {
+            "color": color,
+            "double_sided": double_sided,
+            "local_verts": [],
+            "local_uvs": [],
+            "normals_accum": [],
+            "local_faces": [],
+            "local_v_map": {},
+        }
+        face_groups[key] = group
+
+    tex = mat.get("texture") if mat else None
+    tile_w = tex.get("x_scale") if tex else None
+    tile_h = tex.get("y_scale") if tex else None
+    tile_w = tile_w if tile_w and tile_w > 1e-9 else 1.0
+    tile_h = tile_h if tile_h and tile_h > 1e-9 else 1.0
+
+    side_normal = (-fn[0], -fn[1], -fn[2]) if reverse else fn
+
+    face_local_map: Dict[int, int] = {}
+    for tri in triangles:
+        tri_ids = list(tri)
+        if reverse:
+            tri_ids[1], tri_ids[2] = tri_ids[2], tri_ids[1]
+        face_indices = []
+        for v_id in tri_ids:
+            if v_id not in builder.vertices:
+                continue
+            idx = face_local_map.get(v_id)
+            if idx is None:
+                p = builder.vertices[v_id]
+                u, v = _compute_face_uv(p, xr, yr, uv_transform, tile_w, tile_h)
+                vkey = (v_id, u, v)
+                idx = group["local_v_map"].get(vkey)
+                if idx is None:
+                    group["local_verts"].append(p)
+                    group["local_uvs"].append((u, v))
+                    group["normals_accum"].append([side_normal[0], side_normal[1], side_normal[2]])
+                    idx = len(group["local_verts"]) - 1
+                    group["local_v_map"][vkey] = idx
+                else:
+                    accum = group["normals_accum"][idx]
+                    accum[0] += side_normal[0]
+                    accum[1] += side_normal[1]
+                    accum[2] += side_normal[2]
+                face_local_map[v_id] = idx
+            face_indices.append(idx)
+        if len(face_indices) == 3:
+            group["local_faces"].append(face_indices)

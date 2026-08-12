@@ -267,12 +267,8 @@ class SceneBuilder {
         // vanishing from) the far side.
         final faceGroups = <((int, int, int), bool), _FaceGroup>{};
 
-        RawMaterial? resolveMaterial(int? matId) {
-          if (matId == null) return null;
-          final matName = materialIdToName[matId];
-          if (matName == null) return null;
-          return materials[matName] ?? materialsByFolder[matName];
-        }
+        RawMaterial? resolveMaterial(int? matId) =>
+            _resolveMaterial(matId, materialIdToName, materials, materialsByFolder);
 
         void addSide(
           List<List<int>> triangles,
@@ -602,6 +598,18 @@ class SceneBuilder {
 
   static double _round2(double v) => (v * 100).round() / 100;
   static double _len3(double x, double y, double z) => sqrt(x * x + y * y + z * z);
+
+  static RawMaterial? _resolveMaterial(
+    int? matId,
+    Map<int, String> materialIdToName,
+    Map<String, RawMaterial> materials,
+    Map<String, RawMaterial> materialsByFolder,
+  ) {
+    if (matId == null) return null;
+    final matName = materialIdToName[matId];
+    if (matName == null) return null;
+    return materials[matName] ?? materialsByFolder[matName];
+  }
 }
 
 extension _FirstOrNullExt<T> on Iterable<T> {

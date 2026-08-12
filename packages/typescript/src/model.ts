@@ -502,12 +502,8 @@ export function buildSceneFromParsed(parsed: ParsedRawData, options?: ParseOptio
       };
       const faceGroups = new Map<string, FaceGroup>();
 
-      const resolveMaterial = (matId: number | null | undefined): Material | undefined => {
-        if (matId === undefined || matId === null) return undefined;
-        const matName = materialIdToName.get(matId);
-        if (!matName) return undefined;
-        return materialsMap.get(matName) || materialsByFolder.get(matName);
-      };
+      const resolveMaterial = (matId: number | null | undefined): Material | undefined =>
+        resolveMaterialFromMaps(matId, materialIdToName, materialsMap, materialsByFolder);
 
       const addSide = (
         triangles: number[][],
@@ -839,4 +835,16 @@ export function buildSceneFromParsed(parsed: ParsedRawData, options?: ParseOptio
   );
 
   return { sceneHierarchy, meshIndex, glbPrimitives, gltfMaterials };
+}
+
+export function resolveMaterialFromMaps(
+  matId: number | null | undefined,
+  materialIdToName: Map<number, string>,
+  materialsMap: Map<string, Material>,
+  materialsByFolder: Map<string, Material>
+): Material | undefined {
+  if (matId === undefined || matId === null) return undefined;
+  const matName = materialIdToName.get(matId);
+  if (!matName) return undefined;
+  return materialsMap.get(matName) || materialsByFolder.get(matName);
 }
