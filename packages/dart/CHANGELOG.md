@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0
+
+- Added `buildScene()` scene-baking API (`Scene`, `MeshIndex`, `GlbPrimitive`) for world-space, triangulated mesh outputs.
+- Added binary glTF 2.0 (GLB) export functions (`toGlb`, `exportGlb`, `toGlbBytes`).
+- Added canonical JSON export (`toJson`) matching cross-platform schema.
+- Added `meta/meta.dat` units parsing (`model.units`).
+- Added face UV transforms (`uvTransform`, `uvTransformBack`) and back-face material handling.
+- Added layer, face, and instance hidden visibility flags (`hidden`).
+- Added ZIP decompression-bomb size cap and recursion/cycle guard in scene baking.
+- Routed internal debug/warning logs through `ParseOptions.onLog` callback.
+
 ## 0.2.0
 
 - SketchUp 2025 support.

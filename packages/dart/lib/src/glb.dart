@@ -15,10 +15,8 @@ const int _glbSizeLimit = 0xFFFFFFFF;
 /// project has stayed dependency-light everywhere except C++'s bundled
 /// TinyGLTF - `dart:convert`'s built-in [jsonEncode] covers the JSON
 /// chunk directly, no custom serializer needed. Structurally ported from
-/// the TypeScript reference implementation's `toGLB()`, with one
-/// correction: TS's own `toGLB()` doesn't write `TEXCOORD_0` despite
-/// `GlbPrimitive.uvs` existing there too (tracked as a separate
-/// follow-up) - this writer includes it from the start.
+/// the TypeScript reference implementation's `toGLB()`, with full
+/// TEXCOORD_0 UV support.
 Uint8List toGlb(Scene scene) {
   final prims = scene.glbPrimitives;
   final materials = scene.gltfMaterials;

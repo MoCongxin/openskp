@@ -136,10 +136,8 @@ namespace OpenSkp
     /// from-scratch writer with no external dependency, matching how this
     /// project has stayed dependency-light everywhere except C++'s
     /// bundled TinyGLTF. Ported from the TypeScript reference
-    /// implementation's toGLB(), with TEXCOORD_0 support added (the TS
-    /// reference doesn't write it despite GlbPrimitive.uvs existing there
-    /// too - tracked separately) and the same validation rigor as the
-    /// C++ port's glb.cpp.</summary>
+    /// implementation's toGLB(), with full TEXCOORD_0 UV support and the
+    /// same validation rigor as the C++ port's glb.cpp.</summary>
     public static class GlbExport
     {
         // glTF's chunk-length fields are uint32 - a GLB file's total size
