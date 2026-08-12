@@ -4,7 +4,7 @@ declare const process: any;
 declare const require: any;
 
 function sanitizeMaterialName(name: string): string {
-  const clean = name.trim().replace(/[^\w\.-]/g, '_');
+  const clean = name.trim().replace(/[^\w.-]/g, '_');
   return clean || 'default_material';
 }
 

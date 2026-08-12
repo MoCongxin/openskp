@@ -8,7 +8,7 @@ export const METRES_TO_INCHES = 39.37007874015748;
 
 function sanitizeLayerName(name: string): string {
   if (!name) return '0';
-  const illegal = /[\<\>\/\\\"~\:;\?\*\=`\|]/g;
+  const illegal = /[<>/\\"~:;?*=`|]/g;
   const clean = name.replace(illegal, '_').trim();
   return clean || '0';
 }
@@ -72,7 +72,7 @@ function getPrimRgb(scene: SkpScene, prim: any): [number, number, number] {
 export function toDXF(
   scene: SkpScene,
   scale: number = METRES_TO_INCHES,
-  mode: '3dface' | 'polyface' = '3dface'
+  _mode: '3dface' | 'polyface' = '3dface'
 ): string {
   if (!scene || !scene.glbPrimitives) {
     throw new Error('toDXF requires a valid SkpScene instance');
