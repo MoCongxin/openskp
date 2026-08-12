@@ -62,6 +62,14 @@ packages/dart/pubspec.lock
 *.glb
 *.obj
 
+# Handoff and local audit documentation (LOCAL ONLY)
+AUDIT_CHECKLIST.md
+CHECKLIST.md
+HANDOFF_*.md
+AUDIT_REPORT.html
+deep_audit_report.md
+audit_report.md
+
 # C# / .NET
 [Bb]in/
 [Oo]bj/
