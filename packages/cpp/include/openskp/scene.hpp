@@ -54,6 +54,8 @@ struct PbrMetallicRoughness {
 };
 
 struct GltfMaterial {
+  std::string name;
+  std::string texture_path;
   PbrMetallicRoughness pbr_metallic_roughness;
   bool double_sided{};
 };

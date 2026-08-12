@@ -47,19 +47,12 @@ static int rgb_to_aci(int r, int g, int b) {
 
 static std::tuple<int, int, int> get_prim_rgb(const Scene& scene, const GlbPrimitive& prim) {
   int r = 200, g = 200, b = 200;
-  if (prim.material_index >= 0 &&
-      static_cast<size_t>(prim.material_index) < scene.gltf_materials.size()) {
+  if (prim.material_index < scene.gltf_materials.size()) {
     const auto& mat = scene.gltf_materials[prim.material_index];
-    auto pbr_it = mat.find("pbrMetallicRoughness");
-    if (pbr_it != mat.end() && pbr_it->second.is_object()) {
-      const auto& pbr = pbr_it->second;
-      auto color_it = pbr.find("baseColorFactor");
-      if (color_it != pbr.end() && color_it->second.is_array() && color_it->second.size() >= 3) {
-        r = static_cast<int>(std::round(color_it->second[0].get<double>() * 255.0));
-        g = static_cast<int>(std::round(color_it->second[1].get<double>() * 255.0));
-        b = static_cast<int>(std::round(color_it->second[2].get<double>() * 255.0));
-      }
-    }
+    const auto& factor = mat.pbr_metallic_roughness.base_color_factor;
+    r = static_cast<int>(std::round(factor[0] * 255.0));
+    g = static_cast<int>(std::round(factor[1] * 255.0));
+    b = static_cast<int>(std::round(factor[2] * 255.0));
   }
   return {std::max(0, std::min(255, r)), std::max(0, std::min(255, g)),
           std::max(0, std::min(255, b))};
