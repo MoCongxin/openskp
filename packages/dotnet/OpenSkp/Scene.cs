@@ -221,16 +221,8 @@ namespace OpenSkp
                 return idx;
             }
 
-            (Geometry.RawMaterial? Mat, (int R, int G, int B)? Color) ResolveMaterial(long? matId)
-            {
-                if (matId is long id && materialIdToName.TryGetValue(id, out var matName))
-                {
-                    var m = materials.TryGetValue(matName, out var m1) ? m1
-                        : materialsByFolder.TryGetValue(matName, out var m2) ? m2 : null;
-                    if (m != null) return (m, (m.R, m.G, m.B));
-                }
-                return (null, null);
-            }
+            (Geometry.RawMaterial? Mat, (int R, int G, int B)? Color) ResolveMaterial(long? matId) =>
+                ResolveMaterialFromDicts(matId, materialIdToName, materials, materialsByFolder);
 
             List<InstanceNode> Instantiate(
                 long defId, bool isRoot, List<double> currentMatrix,
@@ -640,6 +632,21 @@ namespace OpenSkp
                 loopVerts.RemoveAt(loopVerts.Count - 1);
             }
             return loopVerts;
+        }
+
+        private static (Geometry.RawMaterial? Mat, (int R, int G, int B)? Color) ResolveMaterialFromDicts(
+            long? matId,
+            Dictionary<long, string> materialIdToName,
+            Dictionary<string, Geometry.RawMaterial> materials,
+            Dictionary<string, Geometry.RawMaterial> materialsByFolder)
+        {
+            if (matId is long id && materialIdToName.TryGetValue(id, out var matName))
+            {
+                var m = materials.TryGetValue(matName, out var m1) ? m1
+                    : materialsByFolder.TryGetValue(matName, out var m2) ? m2 : null;
+                if (m != null) return (m, (m.R, m.G, m.B));
+            }
+            return (null, null);
         }
     }
 }
