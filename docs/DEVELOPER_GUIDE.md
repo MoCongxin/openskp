@@ -426,10 +426,25 @@ Dart all have in-memory and disk GLB export but no OBJ/JSON writer yet.
 ### Progress/logging mechanism
 
 Not a bug, but worth restating: Python's progress is DEBUG-level log
-records through the standard `logging` module (no separate numeric
-callback); TypeScript/.NET/Dart/C++ have an explicit progress
-callback distinct from logging. See [OBSERVABILITY.md](OBSERVABILITY.md#per-language-mechanism)
-for the full comparison and why.
+records through the standard `logging` module (`logging.getLogger("openskp")`),
+preserving standard Python library conventions without requiring explicit callback
+delegates; TypeScript/.NET/Dart/C++ have an explicit progress callback delegate
+distinct from logging. See [OBSERVABILITY.md](OBSERVABILITY.md#per-language-mechanism)
+for the full comparison and rationale.
+
+### .NET static `SkpFile` API shape
+
+The .NET port exposes `SkpFile` as a static class with factory methods
+(`SkpFile.Parse`, `SkpFile.BuildScene`, `SkpFile.Open`), rather than requiring an
+instantiated file handle object before invoking `.Parse()`. This is a deliberate
+C# idiom choice that matches standard .NET framework library designs (e.g. `System.IO.File`).
+
+### C++ `materials_by_id()` helper
+
+`SkpModel::materials_by_id()` returns a `std::map<EntityId, Material*>` (or `const Material*`),
+providing an enumerable map of materials keyed by numeric TLV entity ID. This matches the
+enumerable dictionary/map properties exposed by Python (`model.materials_by_id`), TypeScript
+(`model.materialsById`), Dart (`model.materialsById`), and .NET (`model.MaterialsById`).
 
 ## Troubleshooting
 

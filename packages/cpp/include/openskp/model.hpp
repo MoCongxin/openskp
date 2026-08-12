@@ -218,6 +218,11 @@ class OPENSKP_EXPORT SkpModel {
   /// Look up a material by its TLV entity ID (const).
   const Material* material_by_id(EntityId id) const noexcept;
 
+  /// Enumerate all materials keyed by their TLV entity ID.
+  std::map<EntityId, Material*> materials_by_id();
+  /// Enumerate all materials keyed by their TLV entity ID (const).
+  std::map<EntityId, const Material*> materials_by_id() const;
+
  private:
   Definition root_{0, "ROOT", "ROOT_MODEL"};
   std::unordered_map<EntityId, std::size_t> material_indices_;

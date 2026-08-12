@@ -26,6 +26,22 @@ const Material* SkpModel::material_by_id(EntityId id) const noexcept {
   return i == material_indices_.end() ? nullptr : &materials[i->second];
 }
 
+std::map<EntityId, Material*> SkpModel::materials_by_id() {
+  std::map<EntityId, Material*> result;
+  for (auto& entry : material_indices_) {
+    result[entry.first] = &materials[entry.second];
+  }
+  return result;
+}
+
+std::map<EntityId, const Material*> SkpModel::materials_by_id() const {
+  std::map<EntityId, const Material*> result;
+  for (const auto& entry : material_indices_) {
+    result[entry.first] = &materials[entry.second];
+  }
+  return result;
+}
+
 static Definition definition(EntityId id, RawDefinition&& r) {
   Definition d;
   d.id = id;
