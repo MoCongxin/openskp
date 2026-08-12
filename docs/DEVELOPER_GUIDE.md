@@ -36,7 +36,7 @@ others, that's stated plainly rather than smoothed over.
 | Language | Install | Current version |
 |---|---|---|
 | Python | `pip install openskp` | 0.3.0 |
-| TypeScript / JavaScript | `npm install openskp` | 0.3.0 |
+| TypeScript / JavaScript | `npm install openskp` | 0.3.1 |
 | .NET / C# | `dotnet add package OpenSkp` | 0.3.0 |
 | Dart / Flutter | `dart pub add openskp` | 0.3.0 |
 | C++17 / CMake | build/install `packages/cpp`, then `find_package(OpenSkp CONFIG REQUIRED)` | 0.3.0 |
@@ -66,9 +66,9 @@ geometry processing, or anything that doesn't need a renderable mesh.
 
 **`buildScene()`** walks the *entire placed scene graph*: every instance
 of every component, nested arbitrarily deep, each with its transform
-resolved to world space, each face triangulated (via a ported
-[earcut](https://github.com/mapbox/earcut) - the same ear-clipping
-algorithm in all five languages) and grouped by resolved color into
+resolved to world space, each face triangulated (via Ear Clipping - `earcut` in
+TypeScript, Dart, .NET, and C++; Delaunay triangulation in Python) and grouped by resolved color into
+GLB-ready mesh primitives. For a file that reuses a handful of definitions
 GLB-ready mesh primitives. For a file that reuses a handful of definitions
 across many thousands of placements (a park bench repeated 400 times, say),
 this can produce **far more data** than the file's raw, un-instanced
@@ -316,10 +316,10 @@ ships file-writing exporters on top of that data:
 | Language | Scene data (`buildScene()`) | GLB | OBJ | JSON metadata |
 |---|---|---|---|---|
 | Python | ✅ | ✅ `openskp.export.glb` | ✅ `openskp.export.obj` | ✅ `openskp.export.json_export` |
-| TypeScript | ✅ | ✅ `toGLB(scene)` in `index.ts` | ❌ not yet ported | ✅ `toJSON(model, scene?)` in `index.ts` |
-| .NET | ✅ | ✅ `GlbExport.ToGlb(scene)` / `GlbExport.ExportGlb(scene, path)` | ❌ not yet ported | ❌ not yet ported |
-| Dart | ✅ | ✅ `toGlb(scene)` / `exportGlb(scene, path)` | ❌ not yet ported | ❌ not yet ported |
-| C++ | ✅ | ✅ `to_glb(scene)` / `export_glb(scene, path)` | ❌ not included | ❌ not included |
+| TypeScript | ✅ | ✅ `toGLB(scene)` in `index.ts` | 💡 OBJ snippet provided | ✅ `toJSON(model, scene?)` in `index.ts` |
+| .NET | ✅ | ✅ `GlbExport.ToGlb(scene)` / `GlbExport.ExportGlb(scene, path)` | 💡 OBJ snippet provided | ✅ `JsonExport.ToJson(model, scene?)` / `ExportJson(...)` |
+| Dart | ✅ | ✅ `toGlb(scene)` / `exportGlb(scene, path)` | 💡 OBJ snippet provided | ✅ `toJson(model, scene?)` / `exportJson(...)` |
+| C++ | ✅ | ✅ `to_glb(scene)` / `export_glb(scene, path)` | 💡 OBJ snippet provided | ✅ `to_json(model, scene?)` / `export_json(...)` |
 
 Python is the only port with a full set of disk-writing exporters today,
 in `openskp.export`:

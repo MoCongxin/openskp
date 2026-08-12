@@ -64,8 +64,8 @@ openskp::export_glb(scene, "model.glb");
 
 `to_glb()` returns the complete binary asset as a `ByteBuffer`.
 `export_glb()` writes exactly those bytes and accepts any output filename; it
-does not create parent directories. OBJ and metadata JSON export are not yet
-provided by the C++ package.
+does not create parent directories. Metadata JSON export is provided via
+`to_json(model, scene)` and `export_json(model, scene, path)`.
 
 `BUILD_SHARED_LIBS` controls static/shared output (static is the CMake
 default). `OPENSKP_BUILD_TESTS` defaults on only when this directory is the
