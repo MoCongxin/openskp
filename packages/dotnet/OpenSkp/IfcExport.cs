@@ -180,7 +180,7 @@ namespace OpenSkp
 
                 string geomName = SanitizeName(prim.GeomName);
                 string layerName = "Layer0";
-                MeshMetadata meta = null;
+                MeshMetadata? meta = null;
                 if (scene.MeshIndex != null && scene.MeshIndex.TryGetValue(prim.GeomName, out meta) && meta != null)
                 {
                     if (!string.IsNullOrEmpty(meta.Layer))
