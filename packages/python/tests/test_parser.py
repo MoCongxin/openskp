@@ -2296,3 +2296,35 @@ class TestLegacyClassRef:
         from openskp.legacy import _is_class_ref
 
         assert not _is_class_ref(b"\xff\x7f\xb0", 0, 65712)
+
+
+class TestTriangulateFace3dRobustness:
+    """Robustness tests for _core.triangulate_face_3d on complex/invalid face geometry."""
+
+    def test_triangulate_face_3d_handles_invalid_polygon_without_raising(self) -> None:
+        from openskp._core import triangulate_face_3d
+
+        # Self-intersecting bow-tie shape projected to 3D
+        vertices_3d = {
+            1: (0.0, 0.0, 0.0),
+            2: (10.0, 10.0, 0.0),
+            3: (0.0, 10.0, 0.0),
+            4: (10.0, 0.0, 0.0),
+        }
+        loops = [[1, 2, 3, 4]]
+        normal = (0.0, 0.0, 1.0)
+
+        # Must not raise TopologyException or GEOS error
+        triangles = triangulate_face_3d(vertices_3d, loops, normal)
+        assert isinstance(triangles, list)
+        assert len(triangles) > 0
+
+    def test_triangulate_face_3d_handles_insufficient_points(self) -> None:
+        from openskp._core import triangulate_face_3d
+
+        vertices_3d = {1: (0.0, 0.0, 0.0), 2: (1.0, 1.0, 0.0)}
+        loops = [[1, 2]]
+        normal = (0.0, 0.0, 1.0)
+
+        triangles = triangulate_face_3d(vertices_3d, loops, normal)
+        assert triangles == []
