@@ -5,6 +5,7 @@
 #include <string>
 
 #include "model.hpp"
+#include "scene.hpp"
 
 namespace openskp {
 
@@ -17,7 +18,7 @@ constexpr double METRES_TO_INCHES = 39.37007874015748;
  *
  * @param scene The baked scene returned by SkpFile::build_scene()
  * @param scale Scale factor for vertex coordinates (default: METRES_TO_INCHES)
- * @param mode Export mode ("polyface" or "3dface", default: "polyface")
+ * @param mode Export mode ("3dface" or "polyface", default: "3dface")
  * @return Formatted ASCII DXF text string.
  */
 std::string to_dxf(const Scene& scene, double scale = METRES_TO_INCHES,

@@ -47,26 +47,18 @@ static int rgb_to_aci(int r, int g, int b) {
 
 static std::tuple<int, int, int> get_prim_rgb(const Scene& scene, const GlbPrimitive& prim) {
   int r = 200, g = 200, b = 200;
-  if (prim.material_index >= 0 &&
-      static_cast<size_t>(prim.material_index) < scene.gltf_materials.size()) {
+  if (prim.material_index < scene.gltf_materials.size()) {
     const auto& mat = scene.gltf_materials[prim.material_index];
-    auto pbr_it = mat.find("pbrMetallicRoughness");
-    if (pbr_it != mat.end() && pbr_it->second.is_object()) {
-      const auto& pbr = pbr_it->second;
-      auto color_it = pbr.find("baseColorFactor");
-      if (color_it != pbr.end() && color_it->second.is_array() && color_it->second.size() >= 3) {
-        r = static_cast<int>(std::round(color_it->second[0].get<double>() * 255.0));
-        g = static_cast<int>(std::round(color_it->second[1].get<double>() * 255.0));
-        b = static_cast<int>(std::round(color_it->second[2].get<double>() * 255.0));
-      }
-    }
+    const auto& factor = mat.pbr_metallic_roughness.base_color_factor;
+    r = static_cast<int>(std::round(factor[0] * 255.0));
+    g = static_cast<int>(std::round(factor[1] * 255.0));
+    b = static_cast<int>(std::round(factor[2] * 255.0));
   }
   return {std::max(0, std::min(255, r)), std::max(0, std::min(255, g)),
           std::max(0, std::min(255, b))};
 }
 
 std::string to_dxf(const Scene& scene, double scale, const std::string& mode) {
-  (void)mode;
   std::map<std::string, std::tuple<int, int, int>> layer_colors;
   for (const auto& prim : scene.glb_primitives) {
     std::string l_name = sanitize_layer_name(prim.geom_name);
@@ -121,33 +113,31 @@ std::string to_dxf(const Scene& scene, double scale, const std::string& mode) {
      << "  9\r\n$INSUNITS\r\n 70\r\n1\r\n"
      << "  0\r\nENDSEC\r\n"
      << "  0\r\nSECTION\r\n  2\r\nCLASSES\r\n"
-     << "  0\r\nCLASS\r\n  1\r\nACDBDICTIONARYWDFLT\r\n "
-        " " 2\r\nAcDbDictionaryWithDefault\r\n 3\r\nObjectDBX Classes\r\n "
-      90\r\n0\r\n 91\r\n0\r\n280\r\n0\r\n281\r\n0\r\n "
+     << "  0\r\nCLASS\r\n  1\r\nACDBDICTIONARYWDFLT\r\n  2\r\nAcDbDictionaryWithDefault\r\n  "
+        "3\r\nObjectDBX Classes\r\n 90\r\n0\r\n 91\r\n0\r\n280\r\n0\r\n281\r\n0\r\n"
      << "  0\r\nENDSEC\r\n"
      << "  0\r\nSECTION\r\n  2\r\nTABLES\r\n"
-     << "  0\r\nTABLE\r\n  2\r\nVPORT\r\n  5\r\n1F\r\n100\r\nAcDbSymbolTable"
-        "\r\n 70\r\n0\r\n  0\r\nENDTAB\r\n"
-     << "  0\r\nTABLE\r\n  2\r\nLTYPE\r\n  5\r\n20\r\n100\r\nAcDbSymbolTable"
-        "\r\n 70\r\n1\r\n"
-     << "  0\r\nLTYPE\r\n  5\r\n21\r\n100\r\nAcDbSymbolTableRecord\r\n100\r"
-        "\nAcDbLinetypeTableRecord\r\n  2\r\nBYBLOCK\r\n 70\r\n0\r\n "
-        " " 3\r\n\r\n 72\r\n65\r\n 73\r\n0\r\n 40\r\n0 .0\r\n "
-     << "  0\r\nLTYPE\r\n  5\r\n22\r\n100\r\nAcDbSymbolTableRecord\r\n100\r"
-        "\nAcDbLinetypeTableRecord\r\n  2\r\nBYLAYER\r\n 70\r\n0\r\n "
-        " " 3\r\n\r\n 72\r\n65\r\n 73\r\n0\r\n 40\r\n0 .0\r\n "
-     << "  0\r\nLTYPE\r\n  5\r\n23\r\n100\r\nAcDbSymbolTableRecord\r\n100\r"
-        "\nAcDbLinetypeTableRecord\r\n  2\r\nCONTINUOUS\r\n 70\r\n0\r\n  " 3\r\nSolid
-            line \r\n 72\r\n65\r\n 73\r\n0\r\n 40\r\n0 .0\r\n "
+     << "  0\r\nTABLE\r\n  2\r\nVPORT\r\n  5\r\n1F\r\n100\r\nAcDbSymbolTable\r\n 70\r\n0\r\n  "
+        "0\r\nENDTAB\r\n"
+     << "  0\r\nTABLE\r\n  2\r\nLTYPE\r\n  5\r\n20\r\n100\r\nAcDbSymbolTable\r\n 70\r\n1\r\n"
+     << "  0\r\nLTYPE\r\n  "
+        "5\r\n21\r\n100\r\nAcDbSymbolTableRecord\r\n100\r\nAcDbLinetypeTableRecord\r\n  "
+        "2\r\nBYBLOCK\r\n 70\r\n0\r\n  3\r\n\r\n 72\r\n65\r\n 73\r\n0\r\n 40\r\n0.0\r\n"
+     << "  0\r\nLTYPE\r\n  "
+        "5\r\n22\r\n100\r\nAcDbSymbolTableRecord\r\n100\r\nAcDbLinetypeTableRecord\r\n  "
+        "2\r\nBYLAYER\r\n 70\r\n0\r\n  3\r\n\r\n 72\r\n65\r\n 73\r\n0\r\n 40\r\n0.0\r\n"
+     << "  0\r\nLTYPE\r\n  "
+        "5\r\n23\r\n100\r\nAcDbSymbolTableRecord\r\n100\r\nAcDbLinetypeTableRecord\r\n  "
+        "2\r\nCONTINUOUS\r\n 70\r\n0\r\n  3\r\nSolid line\r\n 72\r\n65\r\n 73\r\n0\r\n "
+        "40\r\n0.0\r\n"
      << "  0\r\nENDTAB\r\n"
-     << "  0\r\nTABLE\r\n  2\r\nLAYER\r\n  5\r\n4\r\n100\r"
-        "\nAcDbSymbolTable\r\n 70\r\n"
+     << "  0\r\nTABLE\r\n  2\r\nLAYER\r\n  5\r\n4\r\n100\r\nAcDbSymbolTable\r\n 70\r\n"
      << (layer_colors.size() + 1) << "\r\n"
-     << "  0\r\nLAYER\r\n  5\r\n27\r\n330\r\n4\r\n100\r\nAcDbSymbolTableRec"
-        "ord\r\n100\r\nAcDbLayerTableRecord\r\n  2\r\n0\r\n "
-        "70\r\n0\r\n " 62\r\n7\r\n 6\r\nContinuous\r\n "
-     << "  0\r\nLAYER\r\n  5\r\n28\r\n330\r\n4\r\n100\r\nAcDbSymbolTableRec"
-        "ord\r\n100\r\nAcDbLayerTableRecord\r\n  "
+     << "  0\r\nLAYER\r\n  "
+        "5\r\n27\r\n330\r\n4\r\n100\r\nAcDbSymbolTableRecord\r\n100\r\nAcDbLayerTableRecord\r\n  "
+        "2\r\n0\r\n 70\r\n0\r\n 62\r\n7\r\n  6\r\nContinuous\r\n"
+     << "  0\r\nLAYER\r\n  "
+        "5\r\n28\r\n330\r\n4\r\n100\r\nAcDbSymbolTableRecord\r\n100\r\nAcDbLayerTableRecord\r\n  "
         "2\r\nDefpoints\r\n 70\r\n0\r\n 62\r\n7\r\n  6\r\nContinuous\r\n";
 
   for (const auto& [l_name, rgb] : layer_colors) {
@@ -156,53 +146,45 @@ std::string to_dxf(const Scene& scene, double scale, const std::string& mode) {
     int true_color = (lr << 16) | (lg << 8) | lb;
     ss << "  0\r\nLAYER\r\n  5\r\n"
        << layer_handles[l_name]
-       << "\r\n330\r\n4\r\n100\r\nAcDbSymbolTableRecord\r\n100\r\nAcDbLayer"
-          "TableRecord\r\n  2\r\n"
+       << "\r\n330\r\n4\r\n100\r\nAcDbSymbolTableRecord\r\n100\r\nAcDbLayerTableRecord\r\n  2\r\n"
        << l_name << "\r\n 70\r\n0\r\n 62\r\n"
        << aci << "\r\n420\r\n"
        << true_color << "\r\n  6\r\nContinuous\r\n";
   }
 
   ss << "  0\r\nENDTAB\r\n"
-     << "  0\r\nTABLE\r\n  2\r\nSTYLE\r\n  5\r\n25\r\n100\r\nAcDbSymbolTable"
-        "\r\n 70\r\n0\r\n  0\r\nENDTAB\r\n"
-     << "  0\r\nTABLE\r\n  2\r\nVIEW\r\n  5\r\n26\r\n100\r\nAcDbSymbolTable"
-        "\r\n 70\r\n0\r\n  0\r\nENDTAB\r\n"
-     << "  0\r\nTABLE\r\n  2\r\nUCS\r\n  5\r\n27\r\n100\r\nAcDbSymbolTable"
-        "\r\n 70\r\n0\r\n  0\r\nENDTAB\r\n"
-     << "  0\r\nTABLE\r\n  2\r\nAPPID\r\n  5\r\n28\r\n100\r\nAcDbSymbolTable"
-        "\r\n 70\r\n1\r\n"
-     << "  0\r\nAPPID\r\n  5\r\n29\r\n100\r\nAcDbSymbolTableRecord\r\n100\r"
-        "\nAcDbRegAppTableRecord\r\n  2\r\nACAD\r\n 70\r\n0\r\n"
+     << "  0\r\nTABLE\r\n  2\r\nSTYLE\r\n  5\r\n25\r\n100\r\nAcDbSymbolTable\r\n 70\r\n0\r\n  "
+        "0\r\nENDTAB\r\n"
+     << "  0\r\nTABLE\r\n  2\r\nVIEW\r\n  5\r\n26\r\n100\r\nAcDbSymbolTable\r\n 70\r\n0\r\n  "
+        "0\r\nENDTAB\r\n"
+     << "  0\r\nTABLE\r\n  2\r\nUCS\r\n  5\r\n27\r\n100\r\nAcDbSymbolTable\r\n 70\r\n0\r\n  "
+        "0\r\nENDTAB\r\n"
+     << "  0\r\nTABLE\r\n  2\r\nAPPID\r\n  5\r\n28\r\n100\r\nAcDbSymbolTable\r\n 70\r\n1\r\n"
+     << "  0\r\nAPPID\r\n  "
+        "5\r\n29\r\n100\r\nAcDbSymbolTableRecord\r\n100\r\nAcDbRegAppTableRecord\r\n  "
+        "2\r\nACAD\r\n 70\r\n0\r\n"
      << "  0\r\nENDTAB\r\n"
-     << "  0\r\nTABLE\r\n  2\r\nDIMSTYLE\r\n  5\r\n2A\r\n100\r"
-        "\nAcDbSymbolTable\r\n 70\r\n0\r\n  0\r\nENDTAB\r\n"
-     << "  0\r\nTABLE\r\n  2\r\nBLOCK_RECORD\r\n  5\r\n2B\r\n100\r"
-        "\nAcDbSymbolTable\r\n 70\r\n2\r\n"
-     << "  0\r\nBLOCK_RECORD\r\n  5\r\n17\r\n330\r\n2B\r\n100\r"
-        "\nAcDbSymbolTableRecord\r\n100\r\nAcDbBlockTableRecord\r\n  " 2\r\n *
-            Model_Space\r\n "
-     << "  0\r\nBLOCK_RECORD\r\n  5\r\n1B\r\n330\r\n2B\r\n100\r"
-        "\nAcDbSymbolTableRecord\r\n100\r\nAcDbBlockTableRecord\r\n  " 2\r\n *
-            Paper_Space\r\n "
+     << "  0\r\nTABLE\r\n  2\r\nDIMSTYLE\r\n  5\r\n2A\r\n100\r\nAcDbSymbolTable\r\n 70\r\n0\r\n  "
+        "0\r\nENDTAB\r\n"
+     << "  0\r\nTABLE\r\n  2\r\nBLOCK_RECORD\r\n  5\r\n2B\r\n100\r\nAcDbSymbolTable\r\n 70\r\n2\r\n"
+     << "  0\r\nBLOCK_RECORD\r\n  "
+        "5\r\n17\r\n330\r\n2B\r\n100\r\nAcDbSymbolTableRecord\r\n100\r\nAcDbBlockTableRecord\r\n  "
+        "2\r\n*Model_Space\r\n"
+     << "  0\r\nBLOCK_RECORD\r\n  "
+        "5\r\n1B\r\n330\r\n2B\r\n100\r\nAcDbSymbolTableRecord\r\n100\r\nAcDbBlockTableRecord\r\n  "
+        "2\r\n*Paper_Space\r\n"
      << "  0\r\nENDTAB\r\n  0\r\nENDSEC\r\n"
      << "  0\r\nSECTION\r\n  2\r\nBLOCKS\r\n"
-     << "  0\r\nBLOCK\r\n  5\r\n18\r\n330\r\n17\r\n100\r\nAcDbEntity\r\n "
-        " " 8\r\n0\r\n100\r\nAcDbBlockBegin\r\n 2\r\n *
-            Model_Space\r\n 70\r\n0
-            "
-            "\r\n 10\r\n0.0\r\n 20\r\n0.0\r\n 30\r\n0.0\r\n  3\r\n*Model_Space"
-            "\r\n  1\r\n\r\n"
-     << "  0\r\nENDBLK\r\n  5\r\n19\r\n330\r\n17\r\n100\r\nAcDbEntity\r\n "
-        " " 8\r\n0\r\n100\r\nAcDbBlockEnd\r\n "
-     << "  0\r\nBLOCK\r\n  5\r\n1C\r\n330\r\n1B\r\n100\r\nAcDbEntity\r\n "
-        " " 8\r\n0\r\n100\r\nAcDbBlockBegin\r\n 2\r\n *
-            Paper_Space\r\n 70\r\n0
-            "
-            "\r\n 10\r\n0.0\r\n 20\r\n0.0\r\n 30\r\n0.0\r\n  3\r\n*Paper_Space"
-            "\r\n  1\r\n\r\n"
-     << "  0\r\nENDBLK\r\n  5\r\n1D\r\n330\r\n1B\r\n100\r\nAcDbEntity\r\n "
-        " " 8\r\n0\r\n100\r\nAcDbBlockEnd\r\n "
+     << "  0\r\nBLOCK\r\n  5\r\n18\r\n330\r\n17\r\n100\r\nAcDbEntity\r\n  "
+        "8\r\n0\r\n100\r\nAcDbBlockBegin\r\n  2\r\n*Model_Space\r\n 70\r\n0\r\n 10\r\n0.0\r\n "
+        "20\r\n0.0\r\n 30\r\n0.0\r\n  3\r\n*Model_Space\r\n  1\r\n\r\n"
+     << "  0\r\nENDBLK\r\n  5\r\n19\r\n330\r\n17\r\n100\r\nAcDbEntity\r\n  "
+        "8\r\n0\r\n100\r\nAcDbBlockEnd\r\n"
+     << "  0\r\nBLOCK\r\n  5\r\n1C\r\n330\r\n1B\r\n100\r\nAcDbEntity\r\n  "
+        "8\r\n0\r\n100\r\nAcDbBlockBegin\r\n  2\r\n*Paper_Space\r\n 70\r\n0\r\n 10\r\n0.0\r\n "
+        "20\r\n0.0\r\n 30\r\n0.0\r\n  3\r\n*Paper_Space\r\n  1\r\n\r\n"
+     << "  0\r\nENDBLK\r\n  5\r\n1D\r\n330\r\n1B\r\n100\r\nAcDbEntity\r\n  "
+        "8\r\n0\r\n100\r\nAcDbBlockEnd\r\n"
      << "  0\r\nENDSEC\r\n"
      << "  0\r\nSECTION\r\n  2\r\nENTITIES\r\n";
 
@@ -214,6 +196,74 @@ std::string to_dxf(const Scene& scene, double scale, const std::string& mode) {
 
     auto [pr, pg, pb] = get_prim_rgb(scene, prim);
     int aci = rgb_to_aci(pr, pg, pb);
+
+    if (mode == "polyface") {
+      // AutoCAD Polyface Mesh: a POLYLINE header (flag 70=64) naming the
+      // vertex/face counts, one AcDbPolyFaceMeshVertex VERTEX per point
+      // (flag 70=192), one AcDbFaceRecord VERTEX per triangle giving
+      // 1-based indices into the preceding vertex list (flag 70=128), and
+      // a closing SEQEND - see DXF Reference "POLYLINE (DXF)"/"VERTEX
+      // (DXF)" for the polyface mesh variant of these entities.
+      std::size_t vert_count = prim.positions.size() / 3;
+
+      ss << "  0\r\nPOLYLINE\r\n  5\r\n";
+      ss << next_handle();
+      ss << "\r\n330\r\n17\r\n100\r\nAcDbEntity\r\n  8\r\n";
+      ss << l_name;
+      ss << "\r\n 62\r\n";
+      ss << aci;
+      ss << "\r\n100\r\nAcDbPolyFaceMesh\r\n";
+      ss << " 66\r\n1\r\n";
+      ss << " 10\r\n0.0\r\n 20\r\n0.0\r\n 30\r\n0.0\r\n";
+      ss << " 70\r\n64\r\n";
+      ss << " 71\r\n";
+      ss << vert_count;
+      ss << "\r\n";
+      ss << " 72\r\n";
+      ss << tri_count;
+      ss << "\r\n";
+
+      for (std::size_t i = 0; i < vert_count; ++i) {
+        double vx = prim.positions[i * 3] * scale;
+        double vy = prim.positions[i * 3 + 1] * scale;
+        double vz = prim.positions[i * 3 + 2] * scale;
+        ss << "  0\r\nVERTEX\r\n  5\r\n";
+        ss << next_handle();
+        ss << "\r\n330\r\n17\r\n100\r\nAcDbEntity\r\n  8\r\n";
+        ss << l_name;
+        ss << "\r\n100\r\nAcDbVertex\r\n100\r\nAcDbPolyFaceMeshVertex\r\n";
+        ss << " 10\r\n";
+        ss << vx;
+        ss << "\r\n 20\r\n";
+        ss << vy;
+        ss << "\r\n 30\r\n";
+        ss << vz;
+        ss << "\r\n 70\r\n192\r\n";
+      }
+
+      for (std::size_t i = 0; i < tri_count; ++i) {
+        ss << "  0\r\nVERTEX\r\n  5\r\n";
+        ss << next_handle();
+        ss << "\r\n330\r\n17\r\n100\r\nAcDbEntity\r\n  8\r\n";
+        ss << l_name;
+        ss << "\r\n100\r\nAcDbVertex\r\n100\r\nAcDbFaceRecord\r\n";
+        ss << " 70\r\n128\r\n";
+        ss << " 71\r\n";
+        ss << (prim.indices[i * 3] + 1);
+        ss << "\r\n 72\r\n";
+        ss << (prim.indices[i * 3 + 1] + 1);
+        ss << "\r\n 73\r\n";
+        ss << (prim.indices[i * 3 + 2] + 1);
+        ss << "\r\n";
+      }
+
+      ss << "  0\r\nSEQEND\r\n  5\r\n";
+      ss << next_handle();
+      ss << "\r\n330\r\n17\r\n100\r\nAcDbEntity\r\n  8\r\n";
+      ss << l_name;
+      ss << "\r\n";
+      continue;
+    }
 
     for (size_t i = 0; i < tri_count; ++i) {
       uint32_t i0 = prim.indices[i * 3];
