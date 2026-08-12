@@ -17,6 +17,11 @@ namespace OpenSkp
     {
         public static SkpModel Parse(byte[] buffer, SkpParseOptions? options = null)
         {
+            if (buffer == null)
+            {
+                throw new ArgumentNullException(nameof(buffer), "Buffer cannot be null.");
+            }
+
             var parsed = Core.FullParse(buffer, options);
 
             var model = new SkpModel { Version = parsed.Version, Units = parsed.Units };
@@ -173,6 +178,11 @@ namespace OpenSkp
         /// isn't part of Parse().</summary>
         public static Scene BuildScene(byte[] buffer, SkpParseOptions? options = null)
         {
+            if (buffer == null)
+            {
+                throw new ArgumentNullException(nameof(buffer), "Buffer cannot be null.");
+            }
+
             var parsed = Core.FullParse(buffer, options);
             return SceneBuilder.Build(parsed, options);
         }

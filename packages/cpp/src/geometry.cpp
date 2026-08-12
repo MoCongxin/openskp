@@ -95,6 +95,9 @@ static std::pair<std::optional<std::array<double, 9>>, std::optional<std::array<
   return {side("1127"), side("1227")};
 }
 
+// Extract Dynamic Component key/value pairs from a DC05 payload.
+// B636 = property key string tag; AD38 = property value string tag;
+// DD05, B536, B136, B236, B336, B036, A438 = property container tags.
 static void scan_properties(const ByteBuffer& p, std::map<std::string, std::string>& out) {
   std::string key;
   std::function<void(size_t, size_t)> walk = [&](size_t a, size_t z) {
@@ -108,12 +111,15 @@ static void scan_properties(const ByteBuffer& p, std::map<std::string, std::stri
       t += h[p[a + 1] >> 4];
       t += h[p[a + 1] & 15];
       if (t == "B636")
+        // Property key name (UTF-8 string)
         key = std::string(reinterpret_cast<const char*>(p.data() + a + 6), n);
       else if (t == "AD38" && !key.empty()) {
+        // Property value (UTF-8 string) matching preceding key
         out[key] = std::string(reinterpret_cast<const char*>(p.data() + a + 6), n);
         key.clear();
       } else if (t == "DD05" || t == "B536" || t == "B136" || t == "B236" || t == "B336" ||
                  t == "B036" || t == "A438")
+        // Recurse into property sub-container tag
         walk(a + 6, a + 6 + n);
       a += 6 + n;
     }

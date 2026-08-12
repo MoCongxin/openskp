@@ -169,5 +169,13 @@ namespace OpenSkp.Tests
             Assert.Single(scene.MeshIndex);
             Assert.Equal("ROOT_MODEL", scene.MeshIndex.Values.First().DefinitionName);
         }
+
+        [Fact]
+        public void NullBufferThrowsArgumentNullException()
+        {
+            byte[] nullBuffer = null!;
+            Assert.Throws<ArgumentNullException>(() => SkpFile.Parse(nullBuffer));
+            Assert.Throws<ArgumentNullException>(() => SkpFile.BuildScene(nullBuffer));
+        }
     }
 }

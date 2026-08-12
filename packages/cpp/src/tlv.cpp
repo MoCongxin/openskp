@@ -52,6 +52,10 @@ static std::string tag_at(const ByteBuffer& d, std::size_t o) {
   return s;
 }
 
+// VFF (2021+) model.dat binary structure uses Type-Length-Value (TLV) records.
+// Most TLV tags carry raw leaf binary/string payloads, but container tags contain
+// nested sub-TLV nodes (e.g. definitions, drawing elements, component instances).
+// containers lists every tag hex ID that the TLV parser must recursively traverse.
 static const std::set<std::string> containers = {
     "F401", "F701", "D430", "D530", "C832", "7C15", "8813", "8913", "8A13", "8B13", "8C13", "8D13",
     "4C1D", "6419", "F901", "7017", "7117", "D007", "C409", "9411", "9511", "0F01", "384A", "B80B",

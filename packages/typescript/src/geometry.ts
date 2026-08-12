@@ -447,6 +447,7 @@ export function collectDefs(
           while (pos <= pl.length - 6) {
             const subSize = readU32(pl, pos + 2);
             if (pos + 6 + subSize > pl.length) break;
+            // Tag 0x5d 0x1b contains component definition flags (1 = always faces camera)
             if (pl[pos] === 0x5d && pl[pos + 1] === 0x1b && subSize >= 1) {
               facesCamera = parseVarInt(pl, pos + 6, subSize) === 1;
             }
@@ -474,11 +475,20 @@ export function collectDefs(
   return defsDict;
 }
 
+/**
+ * Extract Dynamic Component attribute key-value pairs from a D007 container node.
+ *
+ * Dynamic properties are stored in a nested TLV hierarchy under the DC05 tag:
+ * - Container tags (DD05, B536, B136, B236, B336, B036, A438) wrap property sub-trees.
+ * - Tag B636 contains the attribute key name (UTF-8 string).
+ * - Tag AD38 contains the attribute value (UTF-8 string).
+ */
 export function extractDynamicProperties(d007: TlvNode, options?: ParseOptions): Record<string, string> {
   const dc05 = d007.children.find((c) => c.tag === 'DC05');
   if (!dc05) {
     return {};
   }
+  // TLV container tags nesting the dynamic property key/value nodes
   const propContainerTags = new Set<string>([
     'DD05',
     'B536',
@@ -501,6 +511,7 @@ export function extractDynamicProperties(d007: TlvNode, options?: ParseOptions):
     for (const n of nodes) {
       const tag = n.tag;
       if (tag === 'B636') {
+        // Property key name (UTF-8 string)
         try {
           const decoder = new TextDecoder('utf-8');
           currentKey = decoder.decode(n.payload).replace(/\0/g, '').trim();
@@ -509,6 +520,7 @@ export function extractDynamicProperties(d007: TlvNode, options?: ParseOptions):
           emitLog(options, 'debug', `Failed to decode dynamic property key: ${(e as Error).message}`);
         }
       } else if (tag === 'AD38' && currentKey) {
+        // Property value (UTF-8 string) matching preceding key
         try {
           const decoder = new TextDecoder('utf-8');
           const val = decoder.decode(n.payload).replace(/\0/g, '').trim();

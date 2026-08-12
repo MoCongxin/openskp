@@ -148,7 +148,7 @@ def export(
 
     from .. import scene as _scene_mod
 
-    if not hasattr(skp_file, '_parsed') or skp_file._parsed is None:
+    if skp_file._parsed is None:
         raise RuntimeError(
             "SkpFile must be parsed before exporting. Call skp_file.parse() first."
         )
