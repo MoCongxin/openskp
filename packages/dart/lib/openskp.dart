@@ -10,5 +10,6 @@ export 'src/json_export.dart' show toJson;
 export 'src/obj_export.dart' show toObj, exportObj;
 export 'src/stl_export.dart' show toStlAscii, toStlBinary, exportStl;
 export 'src/ply_export.dart' show toPlyAscii, toPlyBinary, exportPly;
+export 'src/dxf_export.dart' show toDxf, exportDxf, metresToInches;
 export 'src/errors.dart' show SkpParseException;
 export 'src/observability.dart' show SkpLogLevel, ParseProgress, ParseOptions;

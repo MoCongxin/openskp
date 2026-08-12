@@ -43,13 +43,22 @@ for inst in scene.scene_hierarchy.children:
 ## Exporting
 
 ```python
-from openskp.export import glb, obj, json_export
+from openskp.export import glb, obj, stl, ply, dxf, json_export
 
 # Export to GLB (glTF 2.0 binary) - takes the SkpFile itself
 glb.export(skp, "output.glb")
 
-# Export to Wavefront OBJ - takes a built Scene, not the raw model
+# Export to Wavefront OBJ - takes a built Scene
 obj.export(scene, "output.obj")
+
+# Export to STL (3D Printing ASCII/Binary)
+stl.export(scene, "output.stl", binary=True)
+
+# Export to PLY (Stanford 3D Triangle Mesh)
+ply.export(scene, "output.ply", binary=True)
+
+# Export to AutoCAD 3D DXF (AutoCAD R2000 compliant)
+dxf.export(scene, "output.dxf")
 
 # Export metadata as JSON - pass scene= to include the resolved hierarchy
 meta = json_export.to_dict(model, scene=scene)
@@ -68,7 +77,7 @@ json_export.export(model, "output.json", scene=scene)
 | `openskp.materials` | Material and layer XML parsing |
 | `openskp.metadata` | Dynamic properties and scene hierarchy |
 | `openskp.transforms` | 3D matrix transforms and coordinate conversion |
-| `openskp.export` | GLB, OBJ, and JSON exporters |
+| `openskp.export` | GLB, OBJ, STL, PLY, DXF, and JSON exporters |
 
 ## Requirements
 

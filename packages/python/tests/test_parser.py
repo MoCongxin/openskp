@@ -1408,6 +1408,36 @@ class TestPlyExporter:
         assert b"element face 1" in data
 
 
+class TestDxfExporter:
+    """DXF 3D exporter tests."""
+
+    def test_to_dxf(self) -> None:
+        from array import array
+        from openskp.scene import Scene, GlbPrimitive
+        from openskp.export.dxf import to_dxf
+
+        prim = GlbPrimitive(
+            geom_name="Walls",
+            material_index=0,
+            positions=array("f", [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0]),
+            normals=array("f", [0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0]),
+            uvs=array("f", [0.0, 0.0, 1.0, 0.0, 0.0, 1.0]),
+            indices=array("I", [0, 1, 2]),
+        )
+        scene = Scene(glb_primitives=[prim])
+        dxf_text = to_dxf(scene, mode="polyface")
+        assert "$ACADVER" in dxf_text
+        assert "AC1015" in dxf_text
+        assert "POLYLINE" in dxf_text
+        assert "AcDbPolyFaceMesh" in dxf_text
+        assert "Walls" in dxf_text
+        assert "EOF" in dxf_text
+
+        dxf_3d = to_dxf(scene, mode="3dface")
+        assert "3DFACE" in dxf_3d
+        assert "AcDbFace" in dxf_3d
+
+
 # ── Image entity tests ───────────────────────────────────────────────────
 
 

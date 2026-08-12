@@ -2,11 +2,14 @@ include(GoogleTest)
 
 add_executable(
   openskp_tests
-  face_instance_hidden_test.cpp
-  geometry_test.cpp
+  core_test.cpp
+  dxf_export_test.cpp
+  dynamic_properties_test.cpp
   glb_test.cpp
+  image_entity_test.cpp
   json_export_test.cpp
-  layer_hidden_test.cpp
+  legacy_classref_test.cpp
+  legacy_test.cpp
   lowlevel_test.cpp
   obj_export_test.cpp
   observability_test.cpp

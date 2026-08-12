@@ -110,6 +110,10 @@ void main() async {
   final glbBytes = toGlb(scene);
   await exportGlb(scene, 'my_model.glb');
   print('Exported GLB: ${glbBytes.length} bytes');
+
+  // Export to 3D DXF (AutoCAD R2000 compliant)
+  final dxfText = toDxf(scene);
+  exportDxf(scene, 'my_model.dxf');
 }
 ```
 

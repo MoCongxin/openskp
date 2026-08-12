@@ -58,13 +58,23 @@ target_link_libraries(my_app PRIVATE OpenSkp::OpenSkp)
 auto file = openskp::SkpFile::open("model.skp");
 auto model = file.parse();
 auto scene = file.build_scene(); // independent reparse
+
+// GLB export
 auto bytes = openskp::to_glb(scene);
 openskp::export_glb(scene, "model.glb");
+
+// DXF export (AutoCAD R2000 compliant)
+auto dxf_str = openskp::to_dxf(scene);
+openskp::export_dxf(scene, "model.dxf");
+
+// OBJ / STL / PLY export
+openskp::export_obj(scene, "model.obj");
+openskp::export_stl(scene, "model.stl");
+openskp::export_ply(scene, "model.ply");
 ```
 
 `to_glb()` returns the complete binary asset as a `ByteBuffer`.
-`export_glb()` writes exactly those bytes and accepts any output filename; it
-does not create parent directories. Metadata JSON export is provided via
+`export_glb()` writes those bytes to disk. Metadata JSON export is provided via
 `to_json(model, scene)` and `export_json(model, scene, path)`.
 
 `BUILD_SHARED_LIBS` controls static/shared output (static is the CMake

@@ -35,6 +35,7 @@ export * from './observability';
 export * from './obj';
 export * from './stl';
 export * from './ply';
+export * from './dxf';
 
 declare const process: any;
 declare const require: any;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <openskp/dxf_export.hpp>
 #include <openskp/errors.hpp>
 #include <openskp/glb.hpp>
 #include <openskp/json_export.hpp>

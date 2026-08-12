@@ -104,6 +104,7 @@ endif()
 set(
   OPENSKP_SOURCES
   src/core.cpp
+  src/dxf_export.cpp
   src/earcut.cpp
   src/errors.cpp
   src/geometry.cpp
