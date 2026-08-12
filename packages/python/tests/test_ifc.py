@@ -1,7 +1,6 @@
 from array import array
 import tempfile
 import pathlib
-import pytest
 
 from openskp.scene import GlbPrimitive, MeshMetadata, Scene, InstanceNode
 from openskp.export.ifc import to_ifc, export, classify_element, generate_ifc_guid
