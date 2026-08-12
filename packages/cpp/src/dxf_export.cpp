@@ -206,39 +206,62 @@ std::string to_dxf(const Scene& scene, double scale, const std::string& mode) {
       // (DXF)" for the polyface mesh variant of these entities.
       std::size_t vert_count = prim.positions.size() / 3;
 
-      ss << "  0\r\nPOLYLINE\r\n  5\r\n"
-         << next_handle() << "\r\n330\r\n17\r\n100\r\nAcDbEntity\r\n  8\r\n"
-         << l_name << "\r\n 62\r\n"
-         << aci << "\r\n100\r\nAcDbPolyFaceMesh\r\n"
-         << " 66\r\n1\r\n"
-         << " 10\r\n0.0\r\n 20\r\n0.0\r\n 30\r\n0.0\r\n"
-         << " 70\r\n64\r\n"
-         << " 71\r\n" << vert_count << "\r\n"
-         << " 72\r\n" << tri_count << "\r\n";
+      ss << "  0\r\nPOLYLINE\r\n  5\r\n";
+      ss << next_handle();
+      ss << "\r\n330\r\n17\r\n100\r\nAcDbEntity\r\n  8\r\n";
+      ss << l_name;
+      ss << "\r\n 62\r\n";
+      ss << aci;
+      ss << "\r\n100\r\nAcDbPolyFaceMesh\r\n";
+      ss << " 66\r\n1\r\n";
+      ss << " 10\r\n0.0\r\n 20\r\n0.0\r\n 30\r\n0.0\r\n";
+      ss << " 70\r\n64\r\n";
+      ss << " 71\r\n";
+      ss << vert_count;
+      ss << "\r\n";
+      ss << " 72\r\n";
+      ss << tri_count;
+      ss << "\r\n";
 
       for (std::size_t i = 0; i < vert_count; ++i) {
         double vx = prim.positions[i * 3] * scale;
         double vy = prim.positions[i * 3 + 1] * scale;
         double vz = prim.positions[i * 3 + 2] * scale;
-        ss << "  0\r\nVERTEX\r\n  5\r\n"
-           << next_handle() << "\r\n330\r\n17\r\n100\r\nAcDbEntity\r\n  8\r\n"
-           << l_name << "\r\n100\r\nAcDbVertex\r\n100\r\nAcDbPolyFaceMeshVertex\r\n"
-           << " 10\r\n" << vx << "\r\n 20\r\n" << vy << "\r\n 30\r\n" << vz << "\r\n"
-           << " 70\r\n192\r\n";
+        ss << "  0\r\nVERTEX\r\n  5\r\n";
+        ss << next_handle();
+        ss << "\r\n330\r\n17\r\n100\r\nAcDbEntity\r\n  8\r\n";
+        ss << l_name;
+        ss << "\r\n100\r\nAcDbVertex\r\n100\r\nAcDbPolyFaceMeshVertex\r\n";
+        ss << " 10\r\n";
+        ss << vx;
+        ss << "\r\n 20\r\n";
+        ss << vy;
+        ss << "\r\n 30\r\n";
+        ss << vz;
+        ss << "\r\n 70\r\n192\r\n";
       }
 
       for (std::size_t i = 0; i < tri_count; ++i) {
-        ss << "  0\r\nVERTEX\r\n  5\r\n"
-           << next_handle() << "\r\n330\r\n17\r\n100\r\nAcDbEntity\r\n  8\r\n"
-           << l_name << "\r\n100\r\nAcDbVertex\r\n100\r\nAcDbFaceRecord\r\n"
-           << " 70\r\n128\r\n"
-           << " 71\r\n" << (prim.indices[i * 3] + 1) << "\r\n"
-           << " 72\r\n" << (prim.indices[i * 3 + 1] + 1) << "\r\n"
-           << " 73\r\n" << (prim.indices[i * 3 + 2] + 1) << "\r\n";
+        ss << "  0\r\nVERTEX\r\n  5\r\n";
+        ss << next_handle();
+        ss << "\r\n330\r\n17\r\n100\r\nAcDbEntity\r\n  8\r\n";
+        ss << l_name;
+        ss << "\r\n100\r\nAcDbVertex\r\n100\r\nAcDbFaceRecord\r\n";
+        ss << " 70\r\n128\r\n";
+        ss << " 71\r\n";
+        ss << (prim.indices[i * 3] + 1);
+        ss << "\r\n 72\r\n";
+        ss << (prim.indices[i * 3 + 1] + 1);
+        ss << "\r\n 73\r\n";
+        ss << (prim.indices[i * 3 + 2] + 1);
+        ss << "\r\n";
       }
 
-      ss << "  0\r\nSEQEND\r\n  5\r\n"
-         << next_handle() << "\r\n330\r\n17\r\n100\r\nAcDbEntity\r\n  8\r\n" << l_name << "\r\n";
+      ss << "  0\r\nSEQEND\r\n  5\r\n";
+      ss << next_handle();
+      ss << "\r\n330\r\n17\r\n100\r\nAcDbEntity\r\n  8\r\n";
+      ss << l_name;
+      ss << "\r\n";
       continue;
     }
 
