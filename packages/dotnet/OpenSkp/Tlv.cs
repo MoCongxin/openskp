@@ -21,6 +21,10 @@ namespace OpenSkp
     /// little-endian regardless of host platform endianness.</summary>
     internal static class Tlv
     {
+        /// <summary>VFF (2021+) model.dat binary structure uses Type-Length-Value (TLV) records.
+        /// Most TLV tags carry raw leaf binary/string payloads, but container tags contain
+        /// nested sub-TLV nodes (e.g. definitions, drawing elements, component instances).
+        /// ContainerTags lists every tag hex ID that the TLV parser must recursively traverse.</summary>
         public static readonly HashSet<string> ContainerTags = new HashSet<string>
         {
             "F401", "F701", "D430", "D530", "C832",

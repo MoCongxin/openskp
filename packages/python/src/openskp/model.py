@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import pathlib
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 if TYPE_CHECKING:
     from . import scene
@@ -404,9 +404,7 @@ class SkpFile:
 
     def __init__(self, path: pathlib.Path) -> None:
         self.path: pathlib.Path = path
-        self._raw_data: Optional[bytes] = None
-        self._model_data: Optional[bytes] = None
-        self._material_files: Dict[str, bytes] = {}
+        self._parsed: Optional[Dict[str, Any]] = None
 
     # ── Construction ──────────────────────────────────────────────────
 

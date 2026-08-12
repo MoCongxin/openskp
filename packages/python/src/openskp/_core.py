@@ -57,6 +57,10 @@ def parse_var_int(data: bytes, offset: int, length: int) -> int:
         val |= data[offset + i] << (8 * i)
     return val
 
+# VFF (2021+) model.dat binary structure uses Type-Length-Value (TLV) records.
+# Most TLV tags carry raw leaf binary/string payloads, but container tags contain
+# nested sub-TLV nodes (e.g. definitions, drawing elements, component instances).
+# CONTAINER_TAGS lists every tag hex ID that the TLV parser must recursively traverse.
 CONTAINER_TAGS = {
     'F401', 'F701', 'D430', 'D530', 'C832',
     '7C15', '8813', '8913', '8A13', '8B13', '8C13', '8D13', '4C1D', '6419',
@@ -549,9 +553,17 @@ def multiply_matrices(parent, child):
 # ── Dynamic properties ───────────────────────────────────────────────────
 
 def extract_dynamic_properties(d007):
+    """Extract Dynamic Component attribute key-value pairs from a D007 container node.
+
+    Dynamic properties are stored in a nested TLV hierarchy under the DC05 tag:
+    - Container tags (DD05, B536, B136, B236, B336, B036, A438) wrap property sub-trees.
+    - Tag B636 contains the attribute key name (UTF-8 string).
+    - Tag AD38 contains the attribute value (UTF-8 string).
+    """
     dc05 = next((c for c in d007['children'] if c['tag'] == 'DC05'), None)
     if not dc05:
         return {}
+    # TLV container tags nesting the dynamic property key/value nodes
     prop_container_tags = ['DD05', 'B536', 'B136', 'B236', 'B336', 'B036', 'A438']
     prop_elements = parse_tlv_recursive(dc05['payload'], 0, len(dc05['payload']), prop_container_tags)
     properties = {}
@@ -561,8 +573,10 @@ def extract_dynamic_properties(d007):
         for n in nodes:
             tag = n['tag']
             if tag == 'B636':
+                # Property key name (UTF-8 string)
                 current_key = n['payload'].decode('utf-8', errors='replace')
             elif tag == 'AD38' and current_key:
+                # Property value (UTF-8 string) matching preceding key
                 val = n['payload'].decode('utf-8', errors='replace')
                 properties[current_key] = val
                 current_key = None

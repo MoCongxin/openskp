@@ -208,8 +208,10 @@ class Geometry {
     void extractProps(List<TlvNode> nodes) {
       for (final n in nodes) {
         if (n.tag == 'B636') {
+          // Property key name (UTF-8 string)
           currentKey = utf8.decode(n.payload, allowMalformed: true);
         } else if (n.tag == 'AD38' && currentKey != null) {
+          // Property value (UTF-8 string) matching preceding key
           properties[currentKey!] = utf8.decode(n.payload, allowMalformed: true);
           currentKey = null;
         }

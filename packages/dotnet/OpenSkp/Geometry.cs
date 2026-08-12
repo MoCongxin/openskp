@@ -177,10 +177,12 @@ namespace OpenSkp
                 {
                     if (n.Tag == "B636")
                     {
+                        // Property key name (UTF-8 string)
                         currentKey = Encoding.UTF8.GetString(n.Payload);
                     }
                     else if (n.Tag == "AD38" && currentKey != null)
                     {
+                        // Property value (UTF-8 string) matching preceding key
                         properties[currentKey] = Encoding.UTF8.GetString(n.Payload);
                         currentKey = null;
                     }

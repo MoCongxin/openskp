@@ -22,6 +22,10 @@ class TlvNode {
 /// Low-level TLV (Tag-Length-Value) binary parsing helpers, ported from
 /// Python's _core.py. All multi-byte reads are explicitly little-endian.
 class Tlv {
+  /// VFF (2021+) model.dat binary structure uses Type-Length-Value (TLV) records.
+  /// Most TLV tags carry raw leaf binary/string payloads, but container tags contain
+  /// nested sub-TLV nodes (e.g. definitions, drawing elements, component instances).
+  /// [containerTags] lists every tag hex ID that the TLV parser must recursively traverse.
   static const Set<String> containerTags = {
     'F401', 'F701', 'D430', 'D530', 'C832',
     '7C15', '8813', '8913', '8A13', '8B13', '8C13', '8D13', '4C1D', '6419',
