@@ -32,7 +32,7 @@ import { isLegacy, parseLegacyToRaw } from './legacy';
 export * from './model';
 export * from './errors';
 export * from './observability';
-export * from './obj';
+export { toOBJ, toMTL, exportOBJ } from './obj';
 export * from './stl';
 export * from './ply';
 export * from './dxf';

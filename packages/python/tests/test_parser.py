@@ -1300,12 +1300,12 @@ class TestSectionPlaneTextDimension:
 
 
 class TestObjExporter:
-    """Wavefront OBJ text exporter."""
+    """Wavefront OBJ and MTL text exporter."""
 
     def test_to_obj_exports_primitives(self) -> None:
         from array import array
         from openskp.scene import Scene, GlbPrimitive
-        from openskp.export.obj import to_obj
+        from openskp.export.obj import to_obj, to_mtl
 
         prim = GlbPrimitive(
             geom_name="Box",
@@ -1315,12 +1315,24 @@ class TestObjExporter:
             uvs=array("f", [0.0, 0.0, 1.0, 0.0, 0.0, 1.0]),
             indices=array("I", [0, 1, 2]),
         )
-        scene = Scene(glb_primitives=[prim])
-        obj_text = to_obj(scene)
+        scene = Scene(
+            glb_primitives=[prim],
+            gltf_materials=[{"name": "Red_Material", "pbrMetallicRoughness": {"baseColorFactor": [1.0, 0.0, 0.0, 1.0]}}]
+        )
+        obj_text = to_obj(scene, "materials.mtl")
         assert "# OpenSKP OBJ Export" in obj_text
+        assert "mtllib materials.mtl" in obj_text
         assert "o Box" in obj_text
         assert "v 0.000000 0.000000 0.000000" in obj_text
-        assert "f 1 2 3" in obj_text
+        assert "vt 0.000000 0.000000" in obj_text
+        assert "vn 0.000000 0.000000 1.000000" in obj_text
+        assert "usemtl Red_Material" in obj_text
+        assert "f 1/1/1 2/2/2 3/3/3" in obj_text
+
+        mtl_text = to_mtl(scene)
+        assert "# OpenSKP MTL Material Library Export" in mtl_text
+        assert "newmtl Red_Material" in mtl_text
+        assert "Kd 1.000000 0.000000 0.000000" in mtl_text
 
 
 class TestStlExporter:
