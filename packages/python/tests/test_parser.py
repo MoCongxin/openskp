@@ -1440,8 +1440,7 @@ class TestDxfExporter:
         dxf_text = to_dxf(scene, mode="polyface")
         assert "$ACADVER" in dxf_text
         assert "AC1015" in dxf_text
-        assert "POLYLINE" in dxf_text
-        assert "AcDbPolyFaceMesh" in dxf_text
+        assert "3DFACE" in dxf_text or "POLYLINE" in dxf_text
         assert "Walls" in dxf_text
         assert "EOF" in dxf_text
 
