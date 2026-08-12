@@ -87,6 +87,32 @@ void main() async {
 }
 ```
 
+### 2. Baking Scene Graph & GLB Export
+Bake all placed instances into world-space, triangulated mesh primitives ready for 3D rendering or GLB export:
+
+```dart
+import 'dart:io';
+import 'package:openskp/openskp.dart';
+
+void main() async {
+  final bytes = await File('my_model.skp').readAsBytes();
+  final skpFile = SkpFile.fromBuffer(bytes);
+
+  // Bake scene graph into world-space meshes
+  final scene = skpFile.buildScene();
+
+  print('Renderable primitives: ${scene.glbPrimitives.length}');
+  for (var mesh in scene.meshIndex.values) {
+    print('- Mesh ${mesh.id}: ${mesh.definitionName} (${mesh.faceCount} faces)');
+  }
+
+  // Export to binary glTF 2.0 (GLB) bytes or file
+  final glbBytes = toGlb(scene);
+  await exportGlb(scene, 'my_model.glb');
+  print('Exported GLB: ${glbBytes.length} bytes');
+}
+```
+
 ---
 
 ## 📐 API Data Model Reference
@@ -96,12 +122,20 @@ data model (the same shape the C# port also follows):
 
 ### `SkpModel`
 - `String version` — The parsed SketchUp application version.
+- `String? units` — Model unit-system string (e.g., `"Millimeter"`).
 - `Map<int, Definition> definitions` — Component/group geometry definitions, keyed by their numeric TLV entity ID.
 - `Definition root` — Whatever is placed directly in the model (not inside any component/group).
-- `List<Layer> layers` — Layer names and color configurations.
-- `List<Material> materials` — Material names, color channels, and transparency values.
+- `List<Layer> layers` — Layer names, colors, and `hidden` visibility flags.
+- `List<Material> materials` — Material names, colors, transparency, and embedded textures.
 - `Map<int, Material> materialsById` — Join table from a TLV material ID (`Face.materialId`) to its `Material`.
 - `List<Style> styles` — Bundled rendering styles (default front/back face colors).
+
+### `Scene` & GLB Export
+- `Scene buildScene()` — Opt-in scene graph flattener; resolves nested instance transforms into world-space meshes.
+- `List<GlbPrimitive> glbPrimitives` — Triangulated mesh primitives ready for GPU upload or GLB packaging.
+- `Map<int, MeshMetadata> meshIndex` — Metadata map describing each baked mesh primitive.
+- `Uint8List toGlb(Scene scene)` — Serializes a baked scene into binary glTF 2.0 (GLB) bytes.
+- `Future<File> exportGlb(Scene scene, String path)` — Exports a baked scene directly to a `.glb` file on disk.
 
 ---
 
