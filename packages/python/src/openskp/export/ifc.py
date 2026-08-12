@@ -10,12 +10,11 @@ mapping of triangulated vertex positions and face indices from baked scene primi
 from __future__ import annotations
 
 import datetime
-import math
 import pathlib
 import uuid
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Tuple, Union
 
-from ..scene import INCHES_TO_MM, Scene
+from ..scene import Scene
 
 # 1 metre = 39.37007874015748 inches (SketchUp native unit)
 METRES_TO_INCHES = 39.37007874015748
@@ -47,20 +46,20 @@ def classify_element(geom_name: str) -> Tuple[str, str]:
     Returns:
         Tuple of (STEP_ENTITY_TYPE, IFC_CLASS_NAME)
     """
-    l = geom_name.lower()
-    if "wall" in l:
+    name_lower = geom_name.lower()
+    if "wall" in name_lower:
         return "IFCWALL", "IfcWall"
-    if "door" in l:
+    if "door" in name_lower:
         return "IFCDOOR", "IfcDoor"
-    if "window" in l:
+    if "window" in name_lower:
         return "IFCWINDOW", "IfcWindow"
-    if "slab" in l or "floor" in l:
+    if "slab" in name_lower or "floor" in name_lower:
         return "IFCSLAB", "IfcSlab"
-    if "column" in l or "pillar" in l:
+    if "column" in name_lower or "pillar" in name_lower:
         return "IFCCOLUMN", "IfcColumn"
-    if "beam" in l or "joist" in l:
+    if "beam" in name_lower or "joist" in name_lower:
         return "IFCBEAM", "IfcBeam"
-    if "roof" in l:
+    if "roof" in name_lower:
         return "IFCROOF", "IfcRoof"
     return "IFCBUILDINGELEMENTPROXY", "IfcBuildingElementProxy"
 
