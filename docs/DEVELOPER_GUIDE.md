@@ -363,13 +363,69 @@ dependency — .NET added a small internal JSON serializer since
 `netstandard2.0` has none built in; C++'s writer uses a private, pinned
 TinyGLTF dependency that does not appear in installed consumer
 interfaces; Dart's uses `dart:convert`'s built-in JSON support directly.
-None of the five GLB writers include OBJ or JSON-metadata export except
-Python (both) and TypeScript (JSON metadata only) — .NET and Dart
-consumers who need an `.obj`/JSON file today still need to serialize
-`Scene`'s `GlbPrimitive`s themselves for those two formats specifically
-(the OBJ format in particular is simple — see Python's
-`openskp.export.obj` for a reference implementation of exactly this data
-shape).
+None of the five GLB writers include OBJ export except Python (`openskp.export.obj`).
+However, because every language's `buildScene()` returns the same `Scene` shape (`GlbPrimitive[]` with triangulated `positions` and `indices`), generating a Wavefront `.obj` file in any language requires only a short loop over `scene.glbPrimitives`:
+
+```csharp
+// .NET OBJ export snippet
+using var writer = new StreamWriter("output.obj");
+int vertexOffset = 1;
+foreach (var prim in scene.GlbPrimitives) {
+    for (int i = 0; i < prim.Positions.Count; i += 3)
+        writer.WriteLine($"v {prim.Positions[i]} {prim.Positions[i+1]} {prim.Positions[i+2]}");
+    for (int i = 0; i < prim.Indices.Count; i += 3)
+        writer.WriteLine($"f {prim.Indices[i] + vertexOffset} {prim.Indices[i+1] + vertexOffset} {prim.Indices[i+2] + vertexOffset}");
+    vertexOffset += prim.Positions.Count / 3;
+}
+```
+
+```typescript
+// TypeScript OBJ export snippet
+let objText = "";
+let vertexOffset = 1;
+for (const prim of scene.glbPrimitives) {
+  for (let i = 0; i < prim.positions.length; i += 3) {
+    objText += `v ${prim.positions[i]} ${prim.positions[i+1]} ${prim.positions[i+2]}\n`;
+  }
+  for (let i = 0; i < prim.indices.length; i += 3) {
+    objText += `f ${prim.indices[i] + vertexOffset} ${prim.indices[i+1] + vertexOffset} ${prim.indices[i+2] + vertexOffset}\n`;
+  }
+  vertexOffset += prim.positions.length / 3;
+}
+```
+
+```dart
+// Dart OBJ export snippet
+final buffer = StringBuffer();
+var vertexOffset = 1;
+for (final prim in scene.glbPrimitives) {
+  for (var i = 0; i < prim.positions.length; i += 3) {
+    buffer.writeln('v ${prim.positions[i]} ${prim.positions[i + 1]} ${prim.positions[i + 2]}');
+  }
+  for (var i = 0; i < prim.indices.length; i += 3) {
+    buffer.writeln('f ${prim.indices[i] + vertexOffset} ${prim.indices[i + 1] + vertexOffset} ${prim.indices[i + 2] + vertexOffset}');
+  }
+  vertexOffset += prim.positions.length ~/ 3;
+}
+await File('output.obj').writeAsString(buffer.toString());
+```
+
+```cpp
+// C++ OBJ export snippet
+std::ofstream out("output.obj");
+std::uint32_t vertex_offset = 1;
+for (const auto& prim : scene.glb_primitives) {
+    for (std::size_t i = 0; i < prim.positions.size(); i += 3) {
+        out << "v " << prim.positions[i] << " " << prim.positions[i+1] << " " << prim.positions[i+2] << "\n";
+    }
+    for (std::size_t i = 0; i < prim.indices.size(); i += 3) {
+        out << "f " << (prim.indices[i] + vertex_offset) << " "
+            << (prim.indices[i+1] + vertex_offset) << " "
+            << (prim.indices[i+2] + vertex_offset) << "\n";
+    }
+    vertex_offset += static_cast<std::uint32_t>(prim.positions.size() / 3);
+}
+```
 
 ## The web viewer
 

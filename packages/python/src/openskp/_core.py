@@ -153,6 +153,8 @@ def iter_top_level_lazy(data, start, end, container_tags=None):
 # ── 3D planar triangulation ──────────────────────────────────────────────
 
 def triangulate_face_3d(vertices_3d, loops, normal):
+    if not loops or not loops[0] or len(loops[0]) < 3:
+        return []
     if len(loops) == 1 and len(loops[0]) == 3:
         return [loops[0]]
     if len(loops) == 1 and len(loops[0]) == 4:
@@ -202,32 +204,50 @@ def triangulate_face_3d(vertices_3d, loops, normal):
             hole_coords.append(hole_coords[0])
         inner_holes.append(hole_coords)
 
-    poly_2d = Polygon(outer_coords, inner_holes)
-    points_2d = []
-    for coords in [outer_coords] + inner_holes:
-        for c in coords[:-1]:
-            points_2d.append(Point(c))
+    try:
+        poly_2d = Polygon(outer_coords, inner_holes)
+        if not poly_2d.is_valid:
+            poly_2d = poly_2d.buffer(0)
 
-    mp = MultiPoint(points_2d)
-    triangles = shapely.ops.triangulate(mp)
+        points_2d = []
+        for coords in [outer_coords] + inner_holes:
+            for c in coords[:-1]:
+                points_2d.append(Point(c))
 
-    inside_triangles = []
-    for tri in triangles:
-        if poly_2d.contains(tri.centroid):
-            tri_coords = list(tri.exterior.coords)[:3]
-            tri_v_ids = []
-            for tc in tri_coords:
-                best_v_id = None
-                min_dist = float('inf')
-                for v_id, c2d in v_id_to_2d.items():
-                    dist = (tc[0] - c2d[0])**2 + (tc[1] - c2d[1])**2
-                    if dist < min_dist:
-                        min_dist = dist
-                        best_v_id = v_id
-                tri_v_ids.append(best_v_id)
-            inside_triangles.append(tri_v_ids)
+        if not points_2d:
+            return []
 
-    return inside_triangles
+        mp = MultiPoint(points_2d)
+        triangles = shapely.ops.triangulate(mp)
+
+        inside_triangles = []
+        for tri in triangles:
+            if poly_2d.contains(tri.centroid):
+                tri_coords = list(tri.exterior.coords)[:3]
+                tri_v_ids = []
+                for tc in tri_coords:
+                    best_v_id = None
+                    min_dist = float('inf')
+                    for v_id, c2d in v_id_to_2d.items():
+                        dist = (tc[0] - c2d[0])**2 + (tc[1] - c2d[1])**2
+                        if dist < min_dist:
+                            min_dist = dist
+                            best_v_id = v_id
+                    if best_v_id is not None:
+                        tri_v_ids.append(best_v_id)
+                if len(tri_v_ids) == 3 and len(set(tri_v_ids)) == 3:
+                    inside_triangles.append(tri_v_ids)
+
+        if inside_triangles:
+            return inside_triangles
+    except Exception:
+        logger.debug("Shapely triangulation failed for face, falling back to fan triangulation", exc_info=True)
+
+    # Fan triangulation fallback for outer loop
+    outer_loop = loops[0]
+    if len(outer_loop) < 3:
+        return []
+    return [[outer_loop[0], outer_loop[i], outer_loop[i + 1]] for i in range(1, len(outer_loop) - 1)]
 
 
 # ── Geometry builder ─────────────────────────────────────────────────────
