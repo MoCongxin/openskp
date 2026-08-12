@@ -1,7 +1,19 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
-import { parseSkp, buildScene } from './dist/index.mjs';
+import {
+  parseSkp,
+  buildScene,
+  toGLB,
+  toOBJ,
+  toSTLAscii,
+  toSTLBinary,
+  toPLYAscii,
+  toPLYBinary,
+  toDXF,
+  toIFC,
+  toJSON,
+} from './dist/index.mjs';
 
 // Application state variables
 let scene, camera, renderer, controls;
@@ -11,6 +23,7 @@ let selectedMesh = null;
 let selectedBoxHelper = null;
 let currentModel = null;
 let currentScene = null;
+let currentLoadedFilename = '';
 let layerVisibility = {};
 
 // DOM Elements
@@ -412,6 +425,7 @@ function loadSkpBuffer(arrayBuffer, filename) {
   setTimeout(() => {
     try {
       clearScene();
+      currentLoadedFilename = filename || 'model.skp';
       
       const startTime = performance.now();
       // parseSkp() is the light, per-definition raw parse (version, layers,
@@ -509,44 +523,68 @@ function loadSkpBuffer(arrayBuffer, filename) {
   }, 100);
 }
 
-// Download scene as GLB using Three.js GLTFExporter
-function exportToGLB() {
-  if (modelGroup.children.length === 0) return;
+// Helper function to trigger browser file download
+function downloadFile(filename, content, mimeType) {
+  const blob = content instanceof Blob ? content : new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
 
-  setLoader(true, 'Packaging & exporting GLB...');
+// Multi-format exporter router
+function handleExportFormat(format) {
+  if (!currentScene || !currentModel) {
+    alert('No active model loaded to export.');
+    return;
+  }
+
+  const stem = currentLoadedFilename ? currentLoadedFilename.replace(/\.skp$/i, '') : 'model';
+
+  setLoader(true, `Exporting model as ${format.toUpperCase()}...`);
 
   setTimeout(() => {
     try {
-      const exporter = new GLTFExporter();
-      
-      // We export the entire model group
-      exporter.parse(
-        modelGroup,
-        (gltfBuffer) => {
-          setLoader(false);
-          
-          const blob = new Blob([gltfBuffer], { type: 'application/octet-stream' });
-          const url = URL.createObjectURL(blob);
-          
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = `exported_model.glb`;
-          link.click();
-          
-          URL.revokeObjectURL(url);
-          statusText.textContent = 'GLB exported and downloaded successfully!';
-        },
-        (error) => {
-          setLoader(false);
-          console.error('GLTF Export error:', error);
-          alert(`Failed to export GLB: ${error.message}`);
-        },
-        { binary: true }
-      );
+      if (format === 'json') {
+        const data = toJSON(currentModel, currentScene);
+        downloadFile(`${stem}_metadata.json`, JSON.stringify(data, null, 2), 'application/json');
+        statusText.textContent = 'JSON metadata exported and downloaded!';
+      } else if (format === 'ifc') {
+        const ifcText = toIFC(currentScene);
+        downloadFile(`${stem}.ifc`, ifcText, 'application/x-step');
+        statusText.textContent = 'IFC4 BIM model exported and downloaded!';
+      } else if (format === 'dxf-polyface' || format === 'dxf') {
+        const dxfText = toDXF(currentScene, 39.37007874015748, 'polyface');
+        downloadFile(`${stem}_polyface.dxf`, dxfText, 'image/vnd.dxf');
+        statusText.textContent = 'AutoCAD 3D Polyface Mesh DXF exported and downloaded!';
+      } else if (format === 'dxf-3dface') {
+        const dxfText = toDXF(currentScene, 39.37007874015748, '3dface');
+        downloadFile(`${stem}_3dface.dxf`, dxfText, 'image/vnd.dxf');
+        statusText.textContent = 'AutoCAD 3DFACE Entities DXF exported and downloaded!';
+      } else if (format === 'ply') {
+        const plyBytes = toPLYBinary(currentScene);
+        downloadFile(`${stem}.ply`, plyBytes, 'application/octet-stream');
+        statusText.textContent = 'Stanford PLY mesh exported and downloaded!';
+      } else if (format === 'stl') {
+        const stlBytes = toSTLBinary(currentScene);
+        downloadFile(`${stem}.stl`, stlBytes, 'application/octet-stream');
+        statusText.textContent = '3D Printing STL exported and downloaded!';
+      } else if (format === 'glb') {
+        const glbBytes = toGLB(currentScene);
+        downloadFile(`${stem}.glb`, glbBytes, 'model/gltf-binary');
+        statusText.textContent = 'glTF 2.0 GLB binary exported and downloaded!';
+      } else if (format === 'obj') {
+        const objText = toOBJ(currentScene);
+        downloadFile(`${stem}.obj`, objText, 'text/plain');
+        statusText.textContent = 'Wavefront OBJ exported and downloaded!';
+      }
     } catch (err) {
+      console.error(`Export ${format} error:`, err);
+      alert(`Failed to export ${format.toUpperCase()}: ${err.message}`);
+    } finally {
       setLoader(false);
-      console.error(err);
-      alert(`Error during export setup: ${err.message}`);
     }
   }, 50);
 }
@@ -640,7 +678,34 @@ btnSizeProceed.addEventListener('click', () => {
   }
 });
 
-btnExport.addEventListener('click', exportToGLB);
+const exportDropdown = document.getElementById('export-dropdown');
+const exportMenu = document.getElementById('export-menu');
+
+btnExport.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (!btnExport.disabled && exportDropdown) {
+    exportDropdown.classList.toggle('active');
+  }
+});
+
+document.addEventListener('click', (e) => {
+  if (exportDropdown && !exportDropdown.contains(e.target)) {
+    exportDropdown.classList.remove('active');
+  }
+});
+
+if (exportMenu) {
+  exportMenu.querySelectorAll('.dropdown-item').forEach((item) => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const fmt = item.getAttribute('data-format');
+      if (exportDropdown) exportDropdown.classList.remove('active');
+      if (fmt) {
+        handleExportFormat(fmt);
+      }
+    });
+  });
+}
 
 // Mobile drawers: on phone-width screens the Layers/Inspector panels are
 // hidden by default (see the max-width:768px block in style.css) so the

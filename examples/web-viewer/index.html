@@ -46,10 +46,73 @@
           <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" class="btn-icon"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
           Upload SKP
         </button>
-        <button id="btn-export" class="btn btn-secondary" disabled>
-          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" class="btn-icon"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-          Export GLB
-        </button>
+        
+        <!-- Export Multi-Format Dropdown -->
+        <div class="dropdown" id="export-dropdown">
+          <button id="btn-export" class="btn btn-secondary dropdown-toggle" disabled>
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" class="btn-icon"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Export Model
+            <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none" class="btn-arrow"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </button>
+          <div class="dropdown-menu" id="export-menu">
+            <button class="dropdown-item" data-format="json">
+              <span class="fmt-icon">📄</span>
+              <div class="fmt-info">
+                <span class="fmt-title">JSON Metadata (.json)</span>
+                <span class="fmt-desc">Full 3D model metadata & attribute dictionaries</span>
+              </div>
+            </button>
+            <button class="dropdown-item" data-format="ifc">
+              <span class="fmt-icon">🏛️</span>
+              <div class="fmt-info">
+                <span class="fmt-title">IFC4 BIM (.ifc)</span>
+                <span class="fmt-desc">ISO STEP BIM model with spatial hierarchy</span>
+              </div>
+            </button>
+            <button class="dropdown-item" data-format="dxf-polyface">
+              <span class="fmt-icon">📐</span>
+              <div class="fmt-info">
+                <span class="fmt-title">AutoCAD DXF — Polyface Mesh (.dxf)</span>
+                <span class="fmt-desc">R2000 Polyface Mesh (POLYLINE type 64)</span>
+              </div>
+            </button>
+            <button class="dropdown-item" data-format="dxf-3dface">
+              <span class="fmt-icon">📐</span>
+              <div class="fmt-info">
+                <span class="fmt-title">AutoCAD DXF — 3DFACE Entities (.dxf)</span>
+                <span class="fmt-desc">Legacy 3DFACE individual triangle faces</span>
+              </div>
+            </button>
+            <button class="dropdown-item" data-format="ply">
+              <span class="fmt-icon">🔷</span>
+              <div class="fmt-info">
+                <span class="fmt-title">Stanford PLY (.ply)</span>
+                <span class="fmt-desc">3D triangle mesh with colors & normals</span>
+              </div>
+            </button>
+            <button class="dropdown-item" data-format="stl">
+              <span class="fmt-icon">🔺</span>
+              <div class="fmt-info">
+                <span class="fmt-title">3D Printing STL (.stl)</span>
+                <span class="fmt-desc">ASCII / Binary 3D printing geometry</span>
+              </div>
+            </button>
+            <button class="dropdown-item" data-format="glb">
+              <span class="fmt-icon">📦</span>
+              <div class="fmt-info">
+                <span class="fmt-title">glTF 2.0 GLB (.glb)</span>
+                <span class="fmt-desc">Binary 3D model with PBR materials</span>
+              </div>
+            </button>
+            <button class="dropdown-item" data-format="obj">
+              <span class="fmt-icon">🎨</span>
+              <div class="fmt-info">
+                <span class="fmt-title">Wavefront OBJ (.obj)</span>
+                <span class="fmt-desc">3D mesh with .mtl material library</span>
+              </div>
+            </button>
+          </div>
+        </div>
       </div>
 
       <input type="file" id="file-input" accept=".skp" style="display: none;">
