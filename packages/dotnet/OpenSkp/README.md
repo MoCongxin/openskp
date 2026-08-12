@@ -73,10 +73,11 @@ class Program
         // inside any component/group), including root-level instances.
         Console.WriteLine($"Root-level instances: {model.Root.Instances.Count}");
 
-        // Build scene graph into world-space meshes and export to DXF / GLB / OBJ / STL / PLY
+        // Build scene graph into world-space meshes and export to DXF / IFC / GLB / OBJ / STL / PLY
         Scene scene = SkpFile.BuildScene("house.skp");
         DxfExport.ExportDxf(scene, "house.dxf");
-        GlbExport.ExportGlb("house.skp", "house.glb");
+        IfcExport.ExportIfc(scene, "house.ifc");
+        GlbExport.ExportGlb(scene, "house.glb");
         ObjExport.ExportObj(scene, "house.obj");
         StlExport.ExportStl(scene, "house.stl");
         PlyExport.ExportPly(scene, "house.ply");
