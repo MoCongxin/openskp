@@ -5,6 +5,7 @@
 #include <string>
 
 #include "model.hpp"
+#include "scene.hpp"
 
 namespace openskp {
 
