@@ -59,7 +59,6 @@ static std::tuple<int, int, int> get_prim_rgb(const Scene& scene, const GlbPrimi
 }
 
 std::string to_dxf(const Scene& scene, double scale, const std::string& mode) {
-  (void)mode;
   std::map<std::string, std::tuple<int, int, int>> layer_colors;
   for (const auto& prim : scene.glb_primitives) {
     std::string l_name = sanitize_layer_name(prim.geom_name);
@@ -197,6 +196,51 @@ std::string to_dxf(const Scene& scene, double scale, const std::string& mode) {
 
     auto [pr, pg, pb] = get_prim_rgb(scene, prim);
     int aci = rgb_to_aci(pr, pg, pb);
+
+    if (mode == "polyface") {
+      // AutoCAD Polyface Mesh: a POLYLINE header (flag 70=64) naming the
+      // vertex/face counts, one AcDbPolyFaceMeshVertex VERTEX per point
+      // (flag 70=192), one AcDbFaceRecord VERTEX per triangle giving
+      // 1-based indices into the preceding vertex list (flag 70=128), and
+      // a closing SEQEND - see DXF Reference "POLYLINE (DXF)"/"VERTEX
+      // (DXF)" for the polyface mesh variant of these entities.
+      std::size_t vert_count = prim.positions.size() / 3;
+
+      ss << "  0\r\nPOLYLINE\r\n  5\r\n"
+         << next_handle() << "\r\n330\r\n17\r\n100\r\nAcDbEntity\r\n  8\r\n"
+         << l_name << "\r\n 62\r\n"
+         << aci << "\r\n100\r\nAcDbPolyFaceMesh\r\n"
+         << " 66\r\n1\r\n"
+         << " 10\r\n0.0\r\n 20\r\n0.0\r\n 30\r\n0.0\r\n"
+         << " 70\r\n64\r\n"
+         << " 71\r\n" << vert_count << "\r\n"
+         << " 72\r\n" << tri_count << "\r\n";
+
+      for (std::size_t i = 0; i < vert_count; ++i) {
+        double vx = prim.positions[i * 3] * scale;
+        double vy = prim.positions[i * 3 + 1] * scale;
+        double vz = prim.positions[i * 3 + 2] * scale;
+        ss << "  0\r\nVERTEX\r\n  5\r\n"
+           << next_handle() << "\r\n330\r\n17\r\n100\r\nAcDbEntity\r\n  8\r\n"
+           << l_name << "\r\n100\r\nAcDbVertex\r\n100\r\nAcDbPolyFaceMeshVertex\r\n"
+           << " 10\r\n" << vx << "\r\n 20\r\n" << vy << "\r\n 30\r\n" << vz << "\r\n"
+           << " 70\r\n192\r\n";
+      }
+
+      for (std::size_t i = 0; i < tri_count; ++i) {
+        ss << "  0\r\nVERTEX\r\n  5\r\n"
+           << next_handle() << "\r\n330\r\n17\r\n100\r\nAcDbEntity\r\n  8\r\n"
+           << l_name << "\r\n100\r\nAcDbVertex\r\n100\r\nAcDbFaceRecord\r\n"
+           << " 70\r\n128\r\n"
+           << " 71\r\n" << (prim.indices[i * 3] + 1) << "\r\n"
+           << " 72\r\n" << (prim.indices[i * 3 + 1] + 1) << "\r\n"
+           << " 73\r\n" << (prim.indices[i * 3 + 2] + 1) << "\r\n";
+      }
+
+      ss << "  0\r\nSEQEND\r\n  5\r\n"
+         << next_handle() << "\r\n330\r\n17\r\n100\r\nAcDbEntity\r\n  8\r\n" << l_name << "\r\n";
+      continue;
+    }
 
     for (size_t i = 0; i < tri_count; ++i) {
       uint32_t i0 = prim.indices[i * 3];

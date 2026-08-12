@@ -33,7 +33,11 @@ TEST(MetaUnits, ExtractsUnitsFromExactRealFixtureBytes) {
   // real file.
   const ByteBuffer payload = hex_to_bytes(
       "6400"
-      "7e010000"
+      "f2000000"  // 242 = the truncated inner payload's real length, not
+                  // the original 388-byte file's 0x17e/382 - the outer
+                  // record's declared length must match what's actually
+                  // present after truncation or the bounds-checked parser
+                  // correctly rejects it as malformed.
       "7500"
       "08000000"
       "32352e302e353735"  // "25.0.575"

@@ -20,7 +20,10 @@ TEST(ObjExport, SerializesSceneToObjText) {
   EXPECT_NE(obj_text.find("# OpenSKP OBJ Export"), std::string::npos);
   EXPECT_NE(obj_text.find("o Cube"), std::string::npos);
   EXPECT_NE(obj_text.find("v 0.000000 0.000000 0.000000"), std::string::npos);
-  EXPECT_NE(obj_text.find("f 1 2 3"), std::string::npos);
+  // Matching UV and normal counts against the vertex count means the
+  // richer v/vt/vn face form is expected here, not the bare "f 1 2 3" -
+  // same assertion TypeScript/Dart/.NET's equivalent tests make.
+  EXPECT_NE(obj_text.find("f 1/1/1 2/2/2 3/3/3"), std::string::npos);
 }
 
 }  // namespace
