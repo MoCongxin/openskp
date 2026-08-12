@@ -1,7 +1,10 @@
 import http.server
+import os
 import socketserver
 
 PORT = 8000
+
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 class MyHandler(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
