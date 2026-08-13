@@ -1,7 +1,48 @@
-# OpenSKP — Python Package
+# OpenSKP
 
-Open-source SketchUp (`.skp`) binary file parser. Extract geometry, metadata,
-layers, and materials from SketchUp files without requiring SketchUp itself.
+**The open-source SketchUp (`.skp`) file parser — Python edition.**
+
+Parse `.skp` files without SketchUp. No SDK. No license. Just code.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![PyPI](https://img.shields.io/pypi/v/openskp.svg?logo=pypi&logoColor=white&label=pypi)](https://pypi.org/project/openskp/)
+[![Python Versions](https://img.shields.io/pypi/pyversions/openskp.svg?logo=python&logoColor=white)](https://pypi.org/project/openskp/)
+
+🏠 [openskp.com](https://openskp.com) · 🌐 [Try the Live Web Viewer](https://iamahsanmehmood.github.io/openskp/) · 📖 [Docs](https://iamahsanmehmood.github.io/openskp/docs/) · [Changelog](https://github.com/iamahsanmehmood/openskp/blob/main/CHANGELOG.md)
+
+> [!IMPORTANT]
+> This project was built by reverse engineering a proprietary binary format. It is not affiliated with or endorsed by Trimble Inc. or SketchUp.
+
+## What is OpenSKP?
+
+OpenSKP is the first and only open-source, cross-platform parser for SketchUp
+binary files — reverse-engineered from both the modern **VFF container**
+(SketchUp 2021+) and the classic **MFC `CArchive`** container (SketchUp
+2013–2020). It gives you full programmatic access to geometry, materials,
+components, layers, and metadata, with no SketchUp installation and no
+proprietary SDK required. The same parser and export API also ship as
+first-class packages for TypeScript, .NET, Dart, and C++ — see the
+[project README](https://github.com/iamahsanmehmood/openskp) for the full
+cross-language picture.
+
+## Features
+
+- **Full-fidelity parsing** — vertices, edges, faces, normals, UV
+  coordinates, nested component hierarchies, layers/tags, materials,
+  textures, styles, and dynamic-component attributes.
+- **Both SketchUp file generations** — modern VFF (2021+) and legacy MFC
+  (2013–2020) containers, transparently, behind one `parse()` call.
+- **Scene baking** — an opt-in `build_scene()` pass resolves the full placed
+  scene graph to world-space, triangulated, export-ready geometry.
+- **Native multi-format export** — glTF (GLB), Wavefront OBJ/MTL, STL,
+  PLY, AutoCAD DXF (3DFACE and Polyface Mesh), IFC4 (BIM/ISO 10303-21 STEP),
+  and JSON — all written from scratch, no third-party CAD/BIM SDK involved.
+  The DXF writer is verified against real desktop AutoCAD, not just lenient
+  DXF readers.
+- **Streaming / low-memory parsing** — peak memory is bounded by the
+  largest single definition, not the whole file.
+- **Structured observability** — opt-in progress reporting and
+  location-carrying parse errors for debugging malformed or unusual files.
 
 ## Installation
 
@@ -48,7 +89,7 @@ from openskp.export import glb, obj, stl, ply, dxf, ifc, json_export
 # Export to GLB (glTF 2.0 binary) - takes the SkpFile itself
 glb.export(skp, "output.glb")
 
-# Export to Wavefront OBJ - takes a built Scene
+# Export to Wavefront OBJ (+ companion .mtl) - takes a built Scene
 obj.export(scene, "output.obj")
 
 # Export to STL (3D Printing ASCII/Binary)
@@ -57,7 +98,7 @@ stl.export(scene, "output.stl", binary=True)
 # Export to PLY (Stanford 3D Triangle Mesh)
 ply.export(scene, "output.ply", binary=True)
 
-# Export to AutoCAD 3D DXF (AutoCAD R2000 compliant)
+# Export to AutoCAD 3D DXF (AutoCAD R2000 compliant, Polyface Mesh by default)
 dxf.export(scene, "output.dxf")
 
 # Export to IFC4 / BIM (ISO 10303-21 STEP ASCII format)
@@ -80,7 +121,7 @@ json_export.export(model, "output.json", scene=scene)
 | `openskp.materials` | Material and layer XML parsing |
 | `openskp.metadata` | Dynamic properties and scene hierarchy |
 | `openskp.transforms` | 3D matrix transforms and coordinate conversion |
-| `openskp.export` | GLB, OBJ, STL, PLY, DXF, and JSON exporters |
+| `openskp.export` | GLB, OBJ/MTL, STL, PLY, DXF, IFC4, and JSON exporters |
 
 ## Requirements
 
@@ -88,6 +129,15 @@ json_export.export(model, "output.json", scene=scene)
 - NumPy ≥ 1.20
 - Trimesh ≥ 3.0
 - Shapely ≥ 1.8
+
+## Used in Production
+
+OpenSKP powers the SketchUp import pipeline for
+[FrameSmart](https://frame-smart.com/) (a 3D collaboration platform with
+nearly 200 active users) and [IngeTrazo](https://ingetrazo.com/) (a
+SketchUp-alternative 3D modeler with a BIM → IFC bridge). Using OpenSKP in
+your own project? [Open an issue](https://github.com/iamahsanmehmood/openskp/issues)
+or a PR to get added here.
 
 ## License
 

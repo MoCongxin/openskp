@@ -5,9 +5,67 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0] — 2026-08-13
+
+First stable release. All five language ports (Python, TypeScript, Dart,
+C# / .NET, C++) now carry full feature parity: parsing (geometry,
+materials, layers, dynamic properties, metadata) and native, dependency-light
+export to GLB, JSON, Wavefront OBJ/MTL, STL, PLY, DXF (3DFACE and AutoCAD
+Polyface Mesh), and IFC4 (BIM) — verified against real-world `.skp` fixtures
+and, for DXF specifically, against real desktop AutoCAD rather than lenient
+readers alone.
 
 ### Added
+
+- **All 5 languages**: native Wavefront OBJ exporter (`to_obj`/`toOBJ`/
+  `toObj`/`ToObj`, plus a file-writing counterpart in each language —
+  Python's is `openskp.export.obj.export()`, the other four are
+  `exportOBJ`/`exportObj`/`ExportObj`). InvariantCulture/classic-C-locale
+  formatting is enforced everywhere to guarantee dot decimal separators
+  regardless of the host OS locale.
+- **All 5 languages**: native STL exporter, both ASCII (`.stl`) and
+  little-endian binary (`_bin.stl`), with an optional `scale` multiplier
+  (default 1.0 for metres, 1000.0 for mm, matching what slicers like Cura/
+  PrusaSlicer/Bambu Studio expect). Verified byte-identical output (9,368,084
+  bytes, 187,360 triangles) across languages on the same real fixture.
+- **All 5 languages**: native PLY exporter (Polygon File Format), both ASCII
+  and little-endian binary, carrying vertex positions, normals, UV
+  coordinates, and RGBA vertex colors. C++'s binary writer uses
+  architecture-independent bitwise shifts rather than relying on host
+  endianness. Verified byte-identical output (9,316,015 bytes, 187,360
+  triangles) across languages on the same real fixture.
+- **All 5 languages**: rich Wavefront OBJ/MTL extension — a companion
+  `.mtl` material-library writer (`to_mtl`/`toMTL`/`toMtl`/`ToMtl`) emitting
+  `newmtl`/`Ka`/`Kd`/`Ks`/`Ns`/`d`/`illum` records plus `map_Kd` texture
+  references, with `to_obj` gaining an optional `mtl_filename` parameter to
+  link the two via `mtllib`. The `.obj` writer itself gained `vt` (UV) and
+  `vn` (normal) records, upgrading it from a positions-only debug dump to a
+  properly textured/shaded mesh format.
+- **All 5 languages**: native 3D DXF exporter, targeting AutoCAD R2000
+  (`AC1015`) compliance — full HEADER/CLASSES/TABLES/BLOCKS/OBJECTS
+  scaffold, `LAYER` table entries with ACI color codes, and entity output in
+  either `3DFACE` mode or AutoCAD Polyface Mesh mode (`POLYLINE` type 64 +
+  `VERTEX` + `SEQEND`). Polyface is now the default mode (previously
+  `3dface`), since it's the form AutoCAD itself generates for triangulated
+  meshes. See Fixed below — the exporter's real-world compatibility with
+  desktop AutoCAD required a second, much deeper pass beyond what made
+  lenient DXF readers (`ezdxf`) accept it.
+- **All 5 languages**: native IFC4 (BIM) exporter — ISO-10303-21 STEP ASCII
+  output with a full `IfcProject → IfcSite → IfcBuilding → IfcBuildingStorey
+  → IfcProduct` spatial hierarchy, `IfcTriangulatedFaceSet` tessellated
+  geometry, best-effort element classification (walls/doors/windows/slabs/
+  columns/beams/roofs, defaulting to `IfcBuildingElementProxy`), dynamic
+  properties via `IfcPropertySet`/`IfcRelDefinesByProperties`, material
+  colors via `IfcColourRgb`/`IfcSurfaceStyleRendering`, and layer
+  preservation via `IfcPresentationLayerAssignment`. Validated with
+  `IfcOpenShell` against two real-world files, including a 26.94 MB / 101,692-
+  property export.
+- **Web viewer**: the single "Export GLB" button is now an "Export Model"
+  dropdown covering every format the library supports — JSON, IFC4, DXF
+  (both Polyface Mesh and 3DFACE), PLY, STL, GLB, and OBJ. All formats share
+  one `downloadFile()` helper (Blob + object URL, revoked after use), and
+  exported filenames now derive from the uploaded `.skp`'s own name instead
+  of a fixed stem.
 
 - **Dart**: `toGlb(Scene)`/`exportGlb(Scene, path)` - binary glTF 2.0
   (GLB) export, matching Python's and C++'s `to_glb`/`export_glb` pair
@@ -123,6 +181,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **All 5 languages**: the DXF exporter produced files that `ezdxf.readfile()`
+  (and even `ezdxf`'s own `.audit()`) accepted without complaint, but real
+  desktop AutoCAD rejected outright — first with "Invalid or incomplete DXF
+  input", later with "Did not receive PlotStyleName" once the more obvious
+  problems were fixed. `ezdxf` is too lenient to catch what AutoCAD enforces
+  internally, and there's no public, comprehensive list of those rules, so
+  this was tracked down using real desktop AutoCAD as the only reliable
+  oracle, then cross-checked against what real `ezdxf` itself emits for
+  equivalent structures. Five distinct root causes, byte-verified against a
+  real `ezdxf`-generated file confirmed to open cleanly in AutoCAD:
+  1. An incomplete HEADER/CLASSES/TABLES/BLOCKS/OBJECTS scaffold — a
+     near-empty `CLASSES` table, a fabricated `VPORT` record, and a stripped
+     `OBJECTS` dictionary tree missing `MATERIAL`/`MLINESTYLE`/
+     `MLEADERSTYLE` records and a second `LAYOUT` record — all boilerplate
+     AutoCAD requires but lenient readers never check.
+  2. Every dynamically-generated `LAYER` record was missing group `370`
+     (lineweight) and `390` (PlotStyleName handle); AutoCAD rejects the
+     whole `TABLES` section without them once a drawing uses a Named plot
+     style table. Also dropped group `420` (24-bit true color), an R2004+
+     field real `ezdxf` never emits for R2000/AC1015 — ACI (`62`) is the
+     only color mechanism R2000 supports.
+  3. Polyface `POLYLINE`/`VERTEX`/`SEQEND` structure had three mismatches
+     against real `ezdxf`'s own polyface output: face-record `VERTEX`
+     entries were missing color (`62`) and dummy `0/0/0` coordinates while
+     carrying a subclass marker they shouldn't have, and `SEQEND`'s owner
+     (`330`) pointed at Model_Space instead of its parent `POLYLINE`'s own
+     handle. This is exactly why `3dface` mode opened fine while `polyface`
+     mode was rejected, despite sharing the same scaffold.
+  4. TypeScript, Dart, C#, and C++ never substituted the `$HANDSEED`
+     placeholder — every file these four exporters ever produced shipped
+     the literal text `__HANDSEED__` instead of a real hex value.
+  5. Unbounded layer names could exceed AutoCAD's documented limits; added a
+     defensive 255-character cap with a collision-safe hash suffix on
+     truncation.
+
+  Dynamic handles now start at `0x691`, matching the reference file's own
+  first entity handle, keeping every handle in an export globally unique.
+  Both `3dface` and `polyface` output confirmed opening cleanly in real
+  desktop AutoCAD after this fix (C++ mirrors the same verified structure
+  but could not be locally compiled/run in the environment this was fixed
+  in — CI is the correctness gate there).
+- **Python**: `export.dxf.export()` didn't set `newline=''` when opening the
+  output file on Windows, so `open()`'s universal-newline translation turned
+  every `\r\n` the writer emitted into `\r\r\n` (double carriage returns),
+  which CAD viewers rejected. Explicit 3DFACE output was affected before the
+  fix above even applied.
 - **TypeScript**: `toGLB()` never wrote a `TEXCOORD_0` accessor, despite
   `GlbPrimitive.uvs` existing on its data model since #65 - real UV data
   was computed but the actual exported `.glb` bytes never carried it.
