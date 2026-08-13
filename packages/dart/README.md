@@ -1,9 +1,31 @@
-# OpenSKP — Pure Dart SketchUp Binary Parser
+# OpenSKP
 
-OpenSKP is a pure Dart library designed to parse SketchUp (`.skp`) binary files directly in Dart and Flutter applications without requiring any native Trimble SketchUp SDK dependencies.
+**The open-source SketchUp (`.skp`) file parser — Dart / Flutter edition.**
+
+Parse `.skp` files without SketchUp. No SDK. No license. Just code.
 
 [![Pub Version](https://img.shields.io/pub/v/openskp.svg?logo=dart&logoColor=white)](https://pub.dev/packages/openskp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/iamahsanmehmood/openskp/blob/main/LICENSE)
+
+🏠 [openskp.com](https://openskp.com) · 🌐 [Try the Live Web Viewer](https://iamahsanmehmood.github.io/openskp/) · 📖 [Docs](https://iamahsanmehmood.github.io/openskp/docs/) · [Changelog](https://github.com/iamahsanmehmood/openskp/blob/main/CHANGELOG.md)
+
+> [!IMPORTANT]
+> This project was built by reverse engineering a proprietary binary format. It is not affiliated with or endorsed by Trimble Inc. or SketchUp.
+
+---
+
+## 🌟 What is OpenSKP?
+
+OpenSKP is the first and only open-source, cross-platform parser for
+SketchUp binary files — reverse-engineered from both the modern **VFF
+container** (SketchUp 2021+) and the classic **MFC `CArchive`** container
+(SketchUp 2013–2020). It gives Dart and Flutter developers full
+programmatic access to geometry, materials, components, layers, and
+metadata, with no SketchUp installation and no proprietary SDK required.
+The same parser and export API also ship as first-class packages for
+Python, TypeScript, .NET, and C++ — see the
+[project README](https://github.com/iamahsanmehmood/openskp) for the full
+cross-language picture.
 
 ---
 
@@ -23,10 +45,18 @@ Enable mobile (iOS/Android), desktop, and web developers to parse and build 3D S
 ## ✨ Features
 
 - **Zero Native Dependencies**: 100% pure Dart implementation.
-- **TLV Binary Decoding**: Decodes SketchUp's internal Tag-Length-Value records.
-- **VFF ZIP Extractors**: Decompresses and validates VFF file containers to extract `model.dat` and material XML assets.
-- **Geometry & Hierarchy**: Recovers vertices, edges, face loops, component definitions, and nested instance transformations.
-- **Dynamic Component properties**: Reads custom dynamic component attribute values.
+- **Full-fidelity parsing**: vertices, edges, faces, normals, UV
+  coordinates, nested component hierarchies, layers/tags, materials,
+  textures, styles, and dynamic-component attributes.
+- **Both SketchUp file generations**: modern VFF (2021+) and legacy MFC
+  (2013–2020) containers, transparently, behind one `parse()` call.
+- **Scene baking**: an opt-in `buildScene()` pass resolves the full placed
+  scene graph to world-space, triangulated, export-ready geometry.
+- **Native multi-format export**: glTF (GLB), Wavefront OBJ/MTL, STL,
+  PLY, AutoCAD DXF (3DFACE and Polyface Mesh), IFC4 (BIM/ISO 10303-21
+  STEP) — all written from scratch, no third-party CAD/BIM SDK involved.
+  The DXF writer is verified against real desktop AutoCAD, not just
+  lenient DXF readers.
 
 ---
 
@@ -102,8 +132,8 @@ void main() async {
   final scene = skpFile.buildScene();
 
   print('Renderable primitives: ${scene.glbPrimitives.length}');
-  for (var mesh in scene.meshIndex.values) {
-    print('- Mesh ${mesh.id}: ${mesh.definitionName} (${mesh.faceCount} faces)');
+  for (var entry in scene.meshIndex.entries) {
+    print('- Mesh ${entry.key}: ${entry.value.definitionName} [${entry.value.layer}]');
   }
 
   // Export to binary glTF 2.0 (GLB) bytes or file
@@ -111,7 +141,20 @@ void main() async {
   await exportGlb(scene, 'my_model.glb');
   print('Exported GLB: ${glbBytes.length} bytes');
 
-  // Export to 3D DXF (AutoCAD R2000 compliant)
+  // Export to Wavefront OBJ, plus a companion .mtl material library
+  final objText = toObj(scene);
+  final mtlText = toMtl(scene);
+  exportObj(scene, 'my_model.obj'); // writes .obj + .mtl together
+
+  // Export to STL (3D printing), ASCII or little-endian binary
+  final stlBytes = toStlBinary(scene);
+  exportStl(scene, 'my_model.stl', binary: true);
+
+  // Export to PLY (Stanford Triangle Format), ASCII or little-endian binary
+  final plyBytes = toPlyBinary(scene);
+  exportPly(scene, 'my_model.ply', binary: true);
+
+  // Export to 3D DXF (AutoCAD R2000 compliant, Polyface Mesh by default)
   final dxfText = toDxf(scene);
   exportDxf(scene, 'my_model.dxf');
 
@@ -141,9 +184,20 @@ data model (the same shape the C# port also follows):
 ### `Scene` & GLB Export
 - `Scene buildScene()` — Opt-in scene graph flattener; resolves nested instance transforms into world-space meshes.
 - `List<GlbPrimitive> glbPrimitives` — Triangulated mesh primitives ready for GPU upload or GLB packaging.
-- `Map<int, MeshMetadata> meshIndex` — Metadata map describing each baked mesh primitive.
+- `Map<String, MeshMetadata> meshIndex` — Metadata map describing each baked mesh primitive, keyed by the matching `GlbPrimitive.geomName`.
 - `Uint8List toGlb(Scene scene)` — Serializes a baked scene into binary glTF 2.0 (GLB) bytes.
 - `Future<File> exportGlb(Scene scene, String path)` — Exports a baked scene directly to a `.glb` file on disk.
+
+---
+
+## 🏭 Used in Production
+
+OpenSKP powers the SketchUp import pipeline for
+[FrameSmart](https://frame-smart.com/) (a 3D collaboration platform with
+nearly 200 active users) and [IngeTrazo](https://ingetrazo.com/) (a
+SketchUp-alternative 3D modeler with a BIM → IFC bridge). Using OpenSKP in
+your own project? [Open an issue](https://github.com/iamahsanmehmood/openskp/issues)
+or a PR to get added here.
 
 ---
 
