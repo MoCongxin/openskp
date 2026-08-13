@@ -17,11 +17,16 @@ Example::
 
 from __future__ import annotations
 
+from importlib.metadata import PackageNotFoundError, version as _version
+
 from .errors import SkpParseError
 from .model import SkpFile, SkpModel
 from .scene import Scene, InstanceNode, MeshMetadata, GlbPrimitive
 
-__version__: str = "0.3.0"
+try:
+    __version__: str = _version("openskp")
+except PackageNotFoundError:
+    __version__ = "0.0.0+unknown"
 __all__: list[str] = [
     "SkpFile",
     "SkpModel",
