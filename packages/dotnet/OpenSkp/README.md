@@ -1,15 +1,53 @@
-# OpenSKP — C# / .NET SketchUp Binary Parser
+# OpenSKP
 
-OpenSKP is a pure class library that enables programmatic parsing of SketchUp (`.skp`) binary files without requiring Trimble SketchUp or its proprietary SDK.
+**The open-source SketchUp (`.skp`) file parser — C# / .NET edition.**
+
+Parse `.skp` files without SketchUp. No SDK. No license. Just code.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/iamahsanmehmood/openskp/blob/main/LICENSE)
 [![NuGet](https://img.shields.io/nuget/v/OpenSkp.svg?logo=nuget&logoColor=white)](https://www.nuget.org/packages/OpenSkp)
 
+🏠 [openskp.com](https://openskp.com) · 🌐 [Try the Live Web Viewer](https://iamahsanmehmood.github.io/openskp/) · 📖 [Docs](https://iamahsanmehmood.github.io/openskp/docs/) · [Changelog](https://github.com/iamahsanmehmood/openskp/blob/main/CHANGELOG.md)
+
+> [!IMPORTANT]
+> This project was built by reverse engineering a proprietary binary format. It is not affiliated with or endorsed by Trimble Inc. or SketchUp.
+
 ---
 
-## 🌟 Vision
+## 🌟 What is OpenSKP?
 
-Provide .NET developers (desktop, cloud, and mobile) with native, fast, zero-dependency access to SketchUp 3D models. Works seamlessly across Windows, macOS, Linux, and Xamarin/MAUI platforms.
+OpenSKP is the first and only open-source, cross-platform parser for
+SketchUp binary files — reverse-engineered from both the modern **VFF
+container** (SketchUp 2021+) and the classic **MFC `CArchive`** container
+(SketchUp 2013–2020). It gives .NET developers (desktop, cloud, and
+mobile) full programmatic access to geometry, materials, components,
+layers, and metadata, with no SketchUp installation and no proprietary SDK
+required. The same parser and export API also ship as first-class packages
+for Python, TypeScript, Dart, and C++ — see the
+[project README](https://github.com/iamahsanmehmood/openskp) for the full
+cross-language picture.
+
+## ✨ Features
+
+- **Full-fidelity parsing** — vertices, edges, faces, normals, UV
+  coordinates, nested component hierarchies, layers/tags, materials,
+  textures, styles, and dynamic-component attributes.
+- **Both SketchUp file generations** — modern VFF (2021+) and legacy MFC
+  (2013–2020) containers, transparently, behind one `SkpFile.Open()` call.
+- **Scene baking** — an opt-in `SkpFile.BuildScene()` pass resolves the
+  full placed scene graph to world-space, triangulated, export-ready
+  geometry.
+- **Native multi-format export** — glTF (GLB), Wavefront OBJ/MTL, STL,
+  PLY, AutoCAD DXF (3DFACE and Polyface Mesh), IFC4 (BIM/ISO 10303-21
+  STEP), and JSON — all written from scratch, no third-party CAD/BIM SDK
+  involved. The DXF writer is verified against real desktop AutoCAD, not
+  just lenient DXF readers.
+- **No practical file-size ceiling** — unlike the CLR's ~2.1 GB array/
+  `MemoryStream` cap, OpenSKP's `ChunkedBuffer` and 64-bit TLV offsets
+  remove that limit entirely: verified against a real 620 MB `.skp` file
+  (153,586 definitions) with zero special configuration.
+- **Structured observability** — opt-in progress reporting and
+  location-carrying parse errors for debugging malformed or unusual files.
 
 ### 🌐 [Try the Live Web Viewer (Drag-and-Drop)](https://iamahsanmehmood.github.io/openskp/)
 
@@ -64,9 +102,9 @@ class Program
         }
 
         // Walk component definitions and their geometry
-        foreach (var (id, def) in model.Definitions)
+        foreach (var kvp in model.Definitions)
         {
-            Console.WriteLine($"Definition {id}: {def.Name} - {def.Vertices.Count} vertices, {def.Faces.Count} faces");
+            Console.WriteLine($"Definition {kvp.Key}: {kvp.Value.Name} - {kvp.Value.Vertices.Count} vertices, {kvp.Value.Faces.Count} faces");
         }
 
         // model.Root holds whatever is placed directly in the model (not
@@ -97,6 +135,17 @@ OpenSKP targets **.NET Standard 2.0**, ensuring full compatibility with:
 
 ---
 
+## 🏭 Used in Production
+
+OpenSKP powers the SketchUp import pipeline for
+[FrameSmart](https://frame-smart.com/) (a 3D collaboration platform with
+nearly 200 active users) and [IngeTrazo](https://ingetrazo.com/) (a
+SketchUp-alternative 3D modeler with a BIM → IFC bridge). Using OpenSKP in
+your own project? [Open an issue](https://github.com/iamahsanmehmood/openskp/issues)
+or a PR to get added here.
+
+---
+
 ## 🖥️ Monorepo Package Ecosystem
 
 OpenSKP is designed as a unified cross-platform monorepo:
@@ -104,6 +153,7 @@ OpenSKP is designed as a unified cross-platform monorepo:
 * [TypeScript / JS Package](https://www.npmjs.com/package/openskp) (`openskp`)
 * [.NET Package](https://www.nuget.org/packages/OpenSkp) (`OpenSkp`)
 * [Dart Package](https://pub.dev/packages/openskp) (`openskp`)
+* [C++ Package](https://github.com/iamahsanmehmood/openskp/releases?q=cpp-) (`OpenSkp`, source releases)
 
 ---
 
