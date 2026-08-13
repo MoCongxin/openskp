@@ -1,10 +1,52 @@
-# OpenSKP — TypeScript Package
+# OpenSKP
 
-Open-source SketchUp (`.skp`) binary file parser for Node.js and the
-browser. Extract geometry, metadata, layers, and materials from SketchUp
-files without requiring SketchUp itself. Zero native dependencies —
-`fflate` handles ZIP extraction and a ported `earcut` handles
-triangulation, so it runs anywhere JavaScript does.
+**The open-source SketchUp (`.skp`) file parser — TypeScript / JavaScript edition.**
+
+Parse `.skp` files without SketchUp. No SDK. No license. Zero native
+dependencies — `fflate` handles ZIP extraction and a ported `earcut`
+handles triangulation, so it runs anywhere JavaScript does: Node.js or the
+browser.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![npm](https://img.shields.io/npm/v/openskp.svg?logo=npm&logoColor=white)](https://www.npmjs.com/package/openskp)
+[![Node](https://img.shields.io/node/v/openskp.svg?logo=node.js&logoColor=white)](https://www.npmjs.com/package/openskp)
+
+🏠 [openskp.com](https://openskp.com) · 🌐 [Try the Live Web Viewer](https://iamahsanmehmood.github.io/openskp/) · 📖 [Docs](https://iamahsanmehmood.github.io/openskp/docs/) · [Changelog](https://github.com/iamahsanmehmood/openskp/blob/main/CHANGELOG.md)
+
+> [!IMPORTANT]
+> This project was built by reverse engineering a proprietary binary format. It is not affiliated with or endorsed by Trimble Inc. or SketchUp.
+
+## What is OpenSKP?
+
+OpenSKP is the first and only open-source, cross-platform parser for
+SketchUp binary files — reverse-engineered from both the modern **VFF
+container** (SketchUp 2021+) and the classic **MFC `CArchive`** container
+(SketchUp 2013–2020). It gives you full programmatic access to geometry,
+materials, components, layers, and metadata, with no SketchUp installation
+and no proprietary SDK required. The same parser and export API also ship
+as first-class packages for Python, .NET, Dart, and C++ — see the
+[project README](https://github.com/iamahsanmehmood/openskp) for the full
+cross-language picture.
+
+## Features
+
+- **Full-fidelity parsing** — vertices, edges, faces, normals, UV
+  coordinates, nested component hierarchies, layers/tags, materials,
+  textures, styles, and dynamic-component attributes.
+- **Both SketchUp file generations** — modern VFF (2021+) and legacy MFC
+  (2013–2020) containers, transparently, behind one `parseSkp()`/`.parse()`
+  call.
+- **Scene baking** — an opt-in `buildScene()` pass resolves the full placed
+  scene graph to world-space, triangulated, export-ready geometry.
+- **Native multi-format export** — glTF (GLB), Wavefront OBJ/MTL, STL,
+  PLY, AutoCAD DXF (3DFACE and Polyface Mesh), IFC4 (BIM/ISO 10303-21 STEP),
+  and JSON — all written from scratch, no third-party CAD/BIM SDK involved.
+  The DXF writer is verified against real desktop AutoCAD, not just lenient
+  DXF readers.
+- **Runs anywhere JavaScript does** — zero native dependencies, works in
+  Node.js and directly in the browser from a `File`/`Blob`.
+- **Structured observability** — opt-in progress reporting and
+  structured, location-carrying parse errors.
 
 ## Installation
 
@@ -45,13 +87,17 @@ console.log(scene.glbPrimitives.length, 'renderable mesh primitives');
 ## Exporting
 
 ```typescript
-import { toGLB, toOBJ, toSTLAscii, toSTLBinary, exportSTL, toPLYAscii, toPLYBinary, exportPLY, toDXF, exportDXF, toIFC, exportIFC, toJSON } from 'openskp';
+import { toGLB, toOBJ, toMTL, exportOBJ, toSTLAscii, toSTLBinary, exportSTL, toPLYAscii, toPLYBinary, exportPLY, toDXF, exportDXF, toIFC, exportIFC, toJSON } from 'openskp';
 
 // Serialize a built scene straight to .glb bytes (in-memory, no disk I/O)
 const glbBytes = toGLB(scene);
 
-// Export to Wavefront OBJ string
-const objText = toOBJ(scene);
+// Export to Wavefront OBJ string, plus a companion .mtl material library
+const objText = toOBJ(scene, 'output.mtl');
+const mtlText = toMTL(scene);
+
+// Node.js only: writes both output.obj and output.mtl together
+exportOBJ(scene, 'output.obj');
 
 // Export to STL ASCII or Binary string/buffer
 const stlText = toSTLAscii(scene);
@@ -95,7 +141,7 @@ cross-language reference.
 
 ## Known limitation: large files
 
-Memory use scales worse than the other three ports on very large files —
+Memory use scales worse than the other four ports on very large files —
 a 113 MB file needs 8–16 GB of Node heap, and files beyond ~150-200 MB
 may not parse in a browser tab at all (a typical tab's heap ceiling is
 ~4 GB). Root cause: V8's per-object overhead on millions of small
@@ -120,6 +166,15 @@ verified numbers before parsing very large files in this package.
 ## Requirements
 
 Node.js ≥ 16, or any modern browser. No native dependencies.
+
+## Used in Production
+
+OpenSKP powers the SketchUp import pipeline for
+[FrameSmart](https://frame-smart.com/) (a 3D collaboration platform with
+nearly 200 active users) and [IngeTrazo](https://ingetrazo.com/) (a
+SketchUp-alternative 3D modeler with a BIM → IFC bridge). Using OpenSKP in
+your own project? [Open an issue](https://github.com/iamahsanmehmood/openskp/issues)
+or a PR to get added here.
 
 ## Contributing
 

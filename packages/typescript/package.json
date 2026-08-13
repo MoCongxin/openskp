@@ -1,7 +1,7 @@
 {
   "name": "openskp",
-  "version": "0.3.1",
-  "description": "Open-source SketchUp (.skp) binary file parser — extract geometry, metadata, layers, and materials. Works in browser and Node.js.",
+  "version": "1.0.0",
+  "description": "Open-source SketchUp (.skp) binary file parser — extract geometry, metadata, layers, and materials; export to GLB, OBJ, STL, PLY, DXF, and IFC4. Works in browser and Node.js.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
@@ -33,7 +33,13 @@
     "cad",
     "geometry",
     "three.js",
-    "webgl"
+    "webgl",
+    "dxf",
+    "autocad",
+    "ifc",
+    "obj",
+    "stl",
+    "ply"
   ],
   "author": "Ahsan Mehmood",
   "license": "MIT",
@@ -42,7 +48,7 @@
     "url": "https://github.com/iamahsanmehmood/openskp",
     "directory": "packages/typescript"
   },
-  "homepage": "https://github.com/iamahsanmehmood/openskp",
+  "homepage": "https://openskp.com",
   "bugs": "https://github.com/iamahsanmehmood/openskp/issues",
   "engines": {
     "node": ">=16"
