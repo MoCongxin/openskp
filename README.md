@@ -73,11 +73,11 @@ Using OpenSKP in your own project? [Open an issue](https://github.com/iamahsanme
 
 | Platform | Version | Status | Install | Package Link |
 |:---------|:--------|:------:|:--------|:-------------|
-| 🐍 **Python** | `v0.3.0` | ✅ Available | `pip install openskp` | [PyPI](https://pypi.org/project/openskp/) |
-| 📘 **TypeScript / JS** | `v0.3.1` | ✅ Available | `npm install openskp` | [npm](https://www.npmjs.com/package/openskp) |
-| 🚀 **.NET / C#** | `v0.3.0` | ✅ Available | `dotnet add package OpenSkp` | [NuGet](https://www.nuget.org/packages/OpenSkp) |
-| 🎯 **Dart / Flutter** | `v0.3.0` | ✅ Available | `dart pub add openskp` | [pub.dev](https://pub.dev/packages/openskp) |
-| ⚙️ **C++17** | `v0.3.0` | ✅ Source package | `find_package(OpenSkp CONFIG REQUIRED)` | [`packages/cpp`](packages/cpp) |
+| 🐍 **Python** | [![PyPI](https://img.shields.io/pypi/v/openskp.svg?label=)](https://pypi.org/project/openskp/) | ✅ Available | `pip install openskp` | [PyPI](https://pypi.org/project/openskp/) |
+| 📘 **TypeScript / JS** | [![npm](https://img.shields.io/npm/v/openskp.svg?label=)](https://www.npmjs.com/package/openskp) | ✅ Available | `npm install openskp` | [npm](https://www.npmjs.com/package/openskp) |
+| 🚀 **.NET / C#** | [![NuGet](https://img.shields.io/nuget/v/OpenSkp.svg?label=)](https://www.nuget.org/packages/OpenSkp) | ✅ Available | `dotnet add package OpenSkp` | [NuGet](https://www.nuget.org/packages/OpenSkp) |
+| 🎯 **Dart / Flutter** | [![Pub](https://img.shields.io/pub/v/openskp.svg?label=)](https://pub.dev/packages/openskp) | ✅ Available | `dart pub add openskp` | [pub.dev](https://pub.dev/packages/openskp) |
+| ⚙️ **C++17** | [![C++](https://img.shields.io/github/v/release/iamahsanmehmood/openskp?filter=cpp-v*&label=)](https://github.com/iamahsanmehmood/openskp/releases?q=cpp-) | ✅ Source package | `find_package(OpenSkp CONFIG REQUIRED)` | [`packages/cpp`](packages/cpp) |
 
 All five languages parse both the modern VFF (2021+) and classic MFC
 (2013–2020) `.skp` containers, and support the same opt-in scene-baking
