@@ -1,9 +1,44 @@
-# OpenSKP C++
+# OpenSKP
 
-The C++17 OpenSKP implementation parses modern SketchUp VFF/ZIP files and
-legacy SketchUp 2013–2020 MFC archives without the SketchUp SDK. It exposes
-the common parsed model plus separately baked, world-space scene data and
-in-memory or file-based GLB export.
+**The open-source SketchUp (`.skp`) file parser — C++17 edition.**
+
+Parse `.skp` files without SketchUp. No SDK. No license. Just code.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![C++](https://img.shields.io/github/v/release/iamahsanmehmood/openskp?filter=cpp-v*&logo=cplusplus&logoColor=white&label=cpp)](https://github.com/iamahsanmehmood/openskp/releases?q=cpp-)
+
+🏠 [openskp.com](https://openskp.com) · 🌐 [Try the Live Web Viewer](https://iamahsanmehmood.github.io/openskp/) · 📖 [Docs](https://iamahsanmehmood.github.io/openskp/docs/) · [Changelog](https://github.com/iamahsanmehmood/openskp/blob/main/CHANGELOG.md)
+
+> [!IMPORTANT]
+> This project was built by reverse engineering a proprietary binary format. It is not affiliated with or endorsed by Trimble Inc. or SketchUp.
+
+## What is OpenSKP?
+
+OpenSKP is the first and only open-source, cross-platform parser for
+SketchUp binary files — reverse-engineered from both the modern **VFF
+container** (SketchUp 2021+) and the classic **MFC `CArchive`** container
+(SketchUp 2013–2020). It gives you full programmatic access to geometry,
+materials, components, layers, and metadata, with no SketchUp installation
+and no proprietary SDK required. The same parser and export API also ship
+as first-class packages for Python, TypeScript, .NET, and Dart — see the
+[project README](https://github.com/iamahsanmehmood/openskp) for the full
+cross-language picture.
+
+## Features
+
+- **Full-fidelity parsing** — vertices, edges, faces, normals, UV
+  coordinates, nested component hierarchies, layers/tags, materials,
+  textures, styles, and dynamic-component attributes.
+- **Both SketchUp file generations** — modern VFF (2021+) and legacy MFC
+  (2013–2020) containers, transparently, behind one `parse()` call.
+- **Scene baking** — an opt-in `build_scene()` pass resolves the full
+  placed scene graph to world-space, triangulated, export-ready geometry.
+- **Native multi-format export** — glTF (GLB), Wavefront OBJ/MTL, STL,
+  PLY, AutoCAD DXF (3DFACE and Polyface Mesh), IFC4 (BIM/ISO 10303-21
+  STEP), and JSON — no third-party CAD/BIM SDK involved beyond the two
+  privately-bundled dependencies below (miniz for ZIP, TinyGLTF for GLB).
+  The DXF writer is verified against real desktop AutoCAD, not just
+  lenient DXF readers.
 
 ## Dependencies
 
@@ -63,23 +98,34 @@ auto scene = file.build_scene(); // independent reparse
 auto bytes = openskp::to_glb(scene);
 openskp::export_glb(scene, "model.glb");
 
-// DXF export (AutoCAD R2000 compliant)
+// Wavefront OBJ export, plus a companion .mtl material library
+auto obj_text = openskp::to_obj(scene, "model.mtl");
+auto mtl_text = openskp::to_mtl(scene);
+openskp::export_obj(scene, "model.obj"); // writes .obj + .mtl together
+
+// STL export (3D printing), ASCII or little-endian binary
+auto stl_bytes = openskp::to_stl_binary(scene);
+openskp::export_stl(scene, "model.stl", /*binary=*/true);
+
+// PLY export (Stanford Triangle Format), ASCII or little-endian binary
+auto ply_bytes = openskp::to_ply_binary(scene);
+openskp::export_ply(scene, "model.ply", /*binary=*/true);
+
+// DXF export (AutoCAD R2000 compliant, Polyface Mesh by default)
 auto dxf_str = openskp::to_dxf(scene);
 openskp::export_dxf(scene, "model.dxf");
 
 // IFC4 / BIM export (ISO 10303-21 STEP format)
 auto ifc_str = openskp::to_ifc(scene);
 openskp::export_ifc(scene, "model.ifc");
-
-// OBJ / STL / PLY export
-openskp::export_obj(scene, "model.obj");
-openskp::export_stl(scene, "model.stl");
-openskp::export_ply(scene, "model.ply");
 ```
 
 `to_glb()` returns the complete binary asset as a `ByteBuffer`.
-`export_glb()` writes those bytes to disk. Metadata JSON export is provided via
-`to_json(model, scene)` and `export_json(model, scene, path)`.
+`export_glb()` writes those bytes to disk. Metadata JSON export is provided
+via `to_json(model, scene)`, which returns a `JsonValue` tree — pass it to
+`to_json_string(value, indent)` for actual JSON text, or use
+`export_json(model, path, scene)` to write a file directly (note: `path`
+comes before `scene` in that signature).
 
 `BUILD_SHARED_LIBS` controls static/shared output (static is the CMake
 default). `OPENSKP_BUILD_TESTS` defaults on only when this directory is the
@@ -101,3 +147,17 @@ cmake --build build --target openskp-format-check
 
 If CMake does not find the desired executable automatically, configure with
 `-DOPENSKP_CLANG_FORMAT_EXECUTABLE=/path/to/clang-format`.
+
+## Used in Production
+
+OpenSKP powers the SketchUp import pipeline for
+[FrameSmart](https://frame-smart.com/) (a 3D collaboration platform with
+nearly 200 active users) and [IngeTrazo](https://ingetrazo.com/) (a
+SketchUp-alternative 3D modeler with a BIM → IFC bridge). Using OpenSKP in
+your own project? [Open an issue](https://github.com/iamahsanmehmood/openskp/issues)
+or a PR to get added here.
+
+## License
+
+MIT — see the [root repository](https://github.com/iamahsanmehmood/openskp) for
+full documentation and multi-language packages.
