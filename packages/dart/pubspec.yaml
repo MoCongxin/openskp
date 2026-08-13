@@ -6,7 +6,6 @@ repository: https://github.com/iamahsanmehmood/openskp/tree/main/packages/dart
 issue_tracker: https://github.com/iamahsanmehmood/openskp/issues
 topics:
   - sketchup
-  - 3d
   - parser
   - cad
   - gltf
