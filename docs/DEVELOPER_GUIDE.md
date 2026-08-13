@@ -35,11 +35,11 @@ others, that's stated plainly rather than smoothed over.
 
 | Language | Install | Current version |
 |---|---|---|
-| Python | `pip install openskp` | 0.3.0 |
-| TypeScript / JavaScript | `npm install openskp` | 0.3.1 |
-| .NET / C# | `dotnet add package OpenSkp` | 0.3.0 |
-| Dart / Flutter | `dart pub add openskp` | 0.3.0 |
-| C++17 / CMake | build/install `packages/cpp`, then `find_package(OpenSkp CONFIG REQUIRED)` | 0.3.0 |
+| Python | `pip install openskp` | [![PyPI](https://img.shields.io/pypi/v/openskp.svg?label=)](https://pypi.org/project/openskp/) |
+| TypeScript / JavaScript | `npm install openskp` | [![npm](https://img.shields.io/npm/v/openskp.svg?label=)](https://www.npmjs.com/package/openskp) |
+| .NET / C# | `dotnet add package OpenSkp` | [![NuGet](https://img.shields.io/nuget/v/OpenSkp.svg?label=)](https://www.nuget.org/packages/OpenSkp) |
+| Dart / Flutter | `dart pub add openskp` | [![Pub](https://img.shields.io/pub/v/openskp.svg?label=)](https://pub.dev/packages/openskp) |
+| C++17 / CMake | build/install `packages/cpp`, then `find_package(OpenSkp CONFIG REQUIRED)` | [![C++](https://img.shields.io/github/v/release/iamahsanmehmood/openskp?filter=cpp-v*&label=)](https://github.com/iamahsanmehmood/openskp/releases?q=cpp-) |
 
 All five are independent packages sharing one reverse-engineered format
 specification, not bindings around a shared native core — each is a
@@ -194,7 +194,7 @@ only the orchestration loop changed, in all five languages, the same way.
 
 ### .NET's additional fix: no array-size ceiling
 
-.NET has one constraint the other three don't: the CLR's array and
+.NET has one constraint the other four don't: the CLR's array and
 `MemoryStream` types are capped at roughly 2.1 GB regardless of GC
 settings, and a decompressed `model.dat` can exceed that on real files (a
 compression ratio of ~10x on this binary format is common, so a 300 MB
