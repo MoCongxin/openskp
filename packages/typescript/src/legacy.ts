@@ -792,7 +792,11 @@ function readDefinition(ar: Archive, r: R): any {
   }
   r.u32();
   let count = r.u32();
-  if (count > 5_000_000) {
+  // A zero count is as much a symptom of the v20 filler as an implausibly
+  // large one: the reader lands on the leading zero bytes of the filler
+  // instead of the count. A genuinely empty definition reads zero with no
+  // filler ahead, and retryCountAfterV20Filler leaves those alone.
+  if (count > 5_000_000 || count === 0) {
     const retry = retryCountAfterV20Filler(r, r.pos - 4);
     if (retry !== null) count = retry;
   }

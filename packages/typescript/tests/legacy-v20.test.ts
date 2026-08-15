@@ -80,6 +80,38 @@ describe('Legacy MFC reader - SketchUp 2020 (v20) layout', () => {
     expect(scene.gltfMaterials.length).toBe(17);
   });
 
+  it('resolves placed instances to definitions that carry geometry', () => {
+    // Guards the failure mode that a zero entity count produces: the
+    // definitions an instance points at come back empty, so the file parses
+    // into a scene of correctly-positioned but invisible groups. Counting
+    // definitions or instances alone does not catch it - the two have to be
+    // checked together.
+    const model = parseSkp(arrayBuffer);
+    const referenced = new Set<number>();
+    for (const inst of model.root.instances) referenced.add(inst.refIdx);
+    for (const def of model.definitions.values()) {
+      for (const inst of def.instances) referenced.add(inst.refIdx);
+    }
+    const memo = new Map<number, boolean>();
+    const inProgress = new Set<number>();
+    const carriesGeometry = (id: number): boolean => {
+      const cached = memo.get(id);
+      if (cached !== undefined) return cached;
+      if (inProgress.has(id)) return false; // reference cycle
+      inProgress.add(id);
+      const def = model.definitions.get(id);
+      // a group whose own geometry lives in nested children still counts
+      const result =
+        def !== undefined &&
+        (def.faces.length > 0 || def.instances.some((child) => carriesGeometry(child.refIdx)));
+      inProgress.delete(id);
+      memo.set(id, result);
+      return result;
+    };
+    const empty = [...referenced].filter((id) => !carriesGeometry(id));
+    expect(empty).toEqual([]);
+  });
+
   it('bakes geometry at a plausible real-world scale', () => {
     const scene = buildScene(arrayBuffer);
     let min = [Infinity, Infinity, Infinity];
