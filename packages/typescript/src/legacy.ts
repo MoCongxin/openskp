@@ -30,6 +30,53 @@ function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
   return true;
 }
 
+/**
+ * SketchUp 2020 (v20) writes an extra, undocumented record ahead of some
+ * counts that v17 does not have, which leaves the reader a few bytes early and
+ * makes it read garbage as the count. The filler is an empty UTF-16 string
+ * record followed by zero padding:
+ *
+ *   <ff fe ff> <u8 0>        empty string
+ *   <zero padding>           runs up to the real count
+ *
+ * Rather than hard-code an offset (the number of bytes before the marker
+ * differs per call site), locate the marker in the short window ahead, then
+ * take the first non-zero u32 that follows the padding. Only the EMPTY-string
+ * form counts as filler: a real string here would mean genuine data, and
+ * moving the cursor past it would corrupt the parse.
+ *
+ * This only ever runs after a count came back implausible, so files that were
+ * already parsing (v17, and the VFF path) never reach it.
+ *
+ * `countPos` is the offset the count was read FROM (i.e. r.pos - 4).
+ * Returns the corrected count, or null when this is not the v20 layout.
+ */
+function retryCountAfterV20Filler(r: R, countPos: number): number | null {
+  const data = r.data;
+  // the marker sits within a handful of bytes of the bad read; the window is
+  // deliberately tight so a coincidental ff-fe-ff further out cannot match
+  let markerAt = -1;
+  for (let i = countPos; i < countPos + 12 && i + 4 <= data.length; i++) {
+    if (data[i] === 0xff && data[i + 1] === 0xfe && data[i + 2] === 0xff) {
+      markerAt = i;
+      break;
+    }
+  }
+  if (markerAt < 0) return null;
+  if (data[markerAt + 3] !== 0) return null; // non-empty string: real data
+
+  // Skip the zero padding that follows the empty string. The count is
+  // little-endian and non-zero, so the first non-zero byte after the padding
+  // IS its low byte — the run ends exactly on the count.
+  let at = markerAt + 4;
+  while (at < data.length && data[at] === 0) at++;
+  if (at + 4 > data.length) return null;
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const count = view.getUint32(at, true);
+  r.pos = at + 4;
+  return count;
+}
+
 /** Search for `needle` (exact bytes) within [start, end). Returns -1 if absent. */
 function findBytes(data: Uint8Array, needle: Uint8Array, start = 0, end = data.length): number {
   const nlen = needle.length;
@@ -744,12 +791,20 @@ function readDefinition(ar: Archive, r: R): any {
     decl = r.u32();
   }
   r.u32();
-  const count = r.u32();
+  let count = r.u32();
+  if (count > 5_000_000) {
+    const retry = retryCountAfterV20Filler(r, r.pos - 4);
+    if (retry !== null) count = retry;
+  }
   if (count > 5_000_000) {
     throw new LegacyParseError(`implausible def entity count ${r.ctx()}`);
   }
   const ents = readEntityList(ar, r, count, 'def');
-  const nrel = r.u32();
+  let nrel = r.u32();
+  if (nrel > 100000) {
+    const retry = retryCountAfterV20Filler(r, r.pos - 4);
+    if (retry !== null) nrel = retry;
+  }
   if (nrel > 100000) {
     throw new LegacyParseError(`definition list misaligned ${r.ctx()}`);
   }
@@ -757,6 +812,19 @@ function readDefinition(ar: Archive, r: R): any {
     ar.readObject(r, 'CRelationship');
   }
   r.u16();
+  // The GUID is followed immediately by the name string. Some files (SketchUp
+  // 2020) carry two extra bytes ahead of the GUID, which would shift this read
+  // and leave the cursor mid-record. Anchor on the string marker that must
+  // follow the 16 GUID bytes instead of trusting the fixed prefix width.
+  if (!bytesEqual(r.peek(19).subarray(16, 19), STR_MARKER)) {
+    for (let skip = 1; skip <= 4; skip++) {
+      const at = r.pos + skip;
+      if (bytesEqual(r.data.subarray(at + 16, at + 19), STR_MARKER)) {
+        r.pos = at;
+        break;
+      }
+    }
+  }
   const guid = r.raw(16);
   const name = r.utf16();
   r.utf16();
@@ -947,6 +1015,11 @@ function walk(data: Uint8Array): WalkResult {
   const layers: [number, any][] = [];
   for (let i = 0; i < layerCount; i++) {
     const [s, , v] = ar.readObject(r, 'CLayer');
+    // A null object-ref occupies a slot in the list without carrying a layer
+    // record (seen in SketchUp 2020 files, where layerCount includes it).
+    // Keeping it would push a null into the list and blow up downstream on
+    // v.rgba; readObject has still consumed the ref from the stream.
+    if (v === null) continue;
     layers.push([s as number, v]);
   }
 
@@ -955,7 +1028,11 @@ function walk(data: Uint8Array): WalkResult {
   if (dn !== 'CLayer') {
     throw new LegacyParseError(`definition-list anchor is ${dn}, not a layer`);
   }
-  const defCount = r.u32();
+  let defCount = r.u32();
+  if (defCount > 1_000_000) {
+    const retry = retryCountAfterV20Filler(r, r.pos - 4);
+    if (retry !== null) defCount = retry;
+  }
   if (defCount > 1_000_000) {
     throw new LegacyParseError('implausible definition count');
   }
@@ -976,7 +1053,11 @@ function walk(data: Uint8Array): WalkResult {
   }
 
   // root entity list
-  const rootCount = r.u32();
+  let rootCount = r.u32();
+  if (rootCount > 5_000_000) {
+    const retry = retryCountAfterV20Filler(r, r.pos - 4);
+    if (retry !== null) rootCount = retry;
+  }
   if (rootCount > 5_000_000) {
     throw new LegacyParseError('implausible root entity count');
   }
