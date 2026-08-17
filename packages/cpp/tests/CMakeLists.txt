@@ -9,6 +9,7 @@ add_executable(
   ifc_export_test.cpp
   json_export_test.cpp
   layer_hidden_test.cpp
+  legacy_v20_test.cpp
   lowlevel_test.cpp
   meta_units_test.cpp
   obj_export_test.cpp

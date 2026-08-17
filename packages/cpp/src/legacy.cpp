@@ -160,6 +160,48 @@ bool is_class_ref(const ByteBuffer& d, size_t p, uint64_t slot) {
          read_u32(d, p + 2) == (0x80000000u | uint32_t(slot));
 }
 
+// SketchUp 2020 (v20) writes an extra, undocumented record ahead of some
+// counts that v17 does not have, which leaves the reader a few bytes early
+// and makes it read garbage as the count. The filler is an empty UTF-16
+// string record followed by zero padding:
+//
+//   <ff fe ff> <u8 0>        empty string
+//   <zero padding>           runs up to the real count
+//
+// Rather than hard-code an offset (the number of bytes before the marker
+// differs per call site), locate the marker in the short window ahead, then
+// take the first non-zero u32 that follows the padding. Only the EMPTY-
+// string form counts as filler: a real string here would mean genuine
+// data, and moving the cursor past it would corrupt the parse.
+//
+// This only ever runs after a count came back implausible (or zero), so
+// files that were already parsing (v17, and the VFF path) never reach it.
+//
+// count_pos is the offset the count was read FROM (i.e. r.p - 4). Returns
+// the corrected count, or nullopt when this is not the v20 layout.
+std::optional<uint32_t> retry_count_after_v20_filler(R& r, size_t count_pos) {
+  const auto& d = r.d;
+  size_t marker_at = std::string::npos;
+  for (size_t i = count_pos; i + 4 <= d.size() && i < count_pos + 12; ++i) {
+    if (d[i] == 255 && d[i + 1] == 254 && d[i + 2] == 255) {
+      marker_at = i;
+      break;
+    }
+  }
+  if (marker_at == std::string::npos) return std::nullopt;
+  if (d[marker_at + 3] != 0) return std::nullopt;  // non-empty string: real data
+
+  // Skip the zero padding that follows the empty string. The count is
+  // little-endian and non-zero, so the first non-zero byte after the
+  // padding IS its low byte - the run ends exactly on the count.
+  size_t at = marker_at + 4;
+  while (at < d.size() && d[at] == 0) ++at;
+  if (at + 4 > d.size()) return std::nullopt;
+  uint32_t count = read_u32(d, at);
+  r.p = at + 4;
+  return count;
+}
+
 struct Archive {
   R r;
   int ver;
@@ -483,12 +525,41 @@ struct Archive {
       if (decl == 0x7fff) r.u32();
       r.u32();
       auto count = r.u32();
+      // A zero count is as much a symptom of the v20 filler as an
+      // implausibly large one: the reader lands on the leading zero bytes
+      // of the filler instead of the count. A genuinely empty definition
+      // reads zero with no filler ahead, and retry_count_after_v20_filler
+      // leaves those alone.
+      if (count > 5000000 || count == 0) {
+        auto retry = retry_count_after_v20_filler(r, r.p - 4);
+        if (retry) count = *retry;
+      }
       if (count > 5000000) throw std::runtime_error("implausible def entities");
       v->ents = entity_list(count, false);
       auto nr = r.u32();
+      if (nr > 100000) {
+        auto retry = retry_count_after_v20_filler(r, r.p - 4);
+        if (retry) nr = *retry;
+      }
       if (nr > 100000) throw std::runtime_error("definition list misaligned");
       while (nr--) object("CRelationship");
       r.u16();
+      // The GUID is followed immediately by the name string. Some files
+      // (SketchUp 2020) carry two extra bytes ahead of the GUID, which
+      // would shift this read and leave the cursor mid-record. Anchor on
+      // the string marker that must follow the 16 GUID bytes instead of
+      // trusting the fixed prefix width.
+      if (!(r.p + 19 <= r.d.size() && r.d[r.p + 16] == 255 && r.d[r.p + 17] == 254 &&
+            r.d[r.p + 18] == 255)) {
+        for (size_t skip = 1; skip <= 4; ++skip) {
+          size_t at = r.p + skip;
+          if (at + 19 <= r.d.size() && r.d[at + 16] == 255 && r.d[at + 17] == 254 &&
+              r.d[at + 18] == 255) {
+            r.p = at;
+            break;
+          }
+        }
+      }
       auto g = r.raw(16);
       static char h[] = "0123456789ABCDEF";
       for (auto x : g) {
@@ -757,12 +828,21 @@ RawParsed parse_legacy(const ByteBuffer& data, const ParseOptions& o) {
     if (lc > 100000) throw std::runtime_error("invalid layer count");
     while (lc--) {
       auto q = ar.object("CLayer");
+      // A null object-ref occupies a slot in the list without carrying a
+      // layer record (seen in SketchUp 2020 files, where lc includes it).
+      // Keeping it would push a null V into layers and blow up downstream
+      // on its r/g/b fields; ar.object() has still consumed the ref.
+      if (!std::get<2>(q)) continue;
       layers.push_back({std::get<0>(q), std::get<2>(q)});
     }
     auto anchor = ar.object();
     if (std::get<1>(anchor) != "CLayer")
       throw std::runtime_error("definition anchor is not a layer");
     auto dc = ar.r.u32();
+    if (dc > 1000000) {
+      auto retry = retry_count_after_v20_filler(ar.r, ar.r.p - 4);
+      if (retry) dc = *retry;
+    }
     if (dc > 1000000) throw std::runtime_error("invalid definition count");
     while (dc--) ar.object("CComponentDefinition");
     auto cs = ar.class_slot.find("CComponentDefinition");
@@ -775,7 +855,13 @@ RawParsed parse_legacy(const ByteBuffer& data, const ParseOptions& o) {
       if (!yes) break;
       ar.object();
     }
-    auto root = ar.entity_list(ar.r.u32(), true);
+    auto root_count = ar.r.u32();
+    if (root_count > 5000000) {
+      auto retry = retry_count_after_v20_filler(ar.r, ar.r.p - 4);
+      if (retry) root_count = *retry;
+    }
+    if (root_count > 5000000) throw std::runtime_error("implausible root entity count");
+    auto root = ar.entity_list(root_count, true);
     for (auto& m : mats) {
       auto v = m.second;
       auto x = std::make_shared<RawMaterial>();
