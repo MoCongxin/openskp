@@ -729,7 +729,7 @@ function readText(ar: Archive, r: R): any {
   // variable-length variant middle, delimited by an 11-byte block
   // `01 00 00 00 ?? 00 03 00 00 00 01` right before the text string
   let p = r.pos;
-  let idx = -1;
+  let idx: number;
   while (true) {
     idx = findBytes(r.data, STR_MARKER, p, r.pos + 512);
     if (idx < 0) {
@@ -757,11 +757,10 @@ function readEntityList(ar: Archive, r: R, count: number, owner: string): [numbe
     const p = r.pos;
     const prevFlag = ar.inEntityList;
     ar.inEntityList = true;
-    let s: number | null = null;
-    let n: string | null = null;
-    let v: any = null;
     try {
-      [s, n, v] = ar.readObject(r);
+      const [s, n, v] = ar.readObject(r);
+      ar.inEntityList = prevFlag;
+      ents.push([s as number, n, v]);
     } catch (e) {
       ar.inEntityList = prevFlag;
       if (!(e instanceof LegacyParseError) || owner !== 'root') {
@@ -770,8 +769,6 @@ function readEntityList(ar: Archive, r: R, count: number, owner: string): [numbe
       r.pos = p;
       break;
     }
-    ar.inEntityList = prevFlag;
-    ents.push([s as number, n, v]);
   }
   return ents;
 }
@@ -786,9 +783,9 @@ function readDefinition(ar: Archive, r: R): any {
   for (let i = 0; i < nlayers; i++) {
     ar.readObject(r, 'CLayer');
   }
-  let decl = r.u16();
+  const decl = r.u16();
   if (decl === 0x7fff) {
-    decl = r.u32();
+    r.u32();
   }
   r.u32();
   let count = r.u32();

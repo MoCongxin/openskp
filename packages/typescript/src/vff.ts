@@ -175,7 +175,12 @@ export function extractSkpContents(data: Uint8Array, options?: ParseOptions): Sk
   try {
     unzipped = unzipSync(zipBytes, { filter: wanted });
   } catch (e) {
-    throw new Error('Failed to decompress ZIP archive: ' + (e as Error).message);
+    // The Error constructor's `cause` option is an ES2022 addition not covered
+    // by this package's ES2020 lib target; set it manually instead - it's a
+    // real runtime feature regardless (Node 16.9+ and all current browsers).
+    const wrapped = new Error('Failed to decompress ZIP archive: ' + (e as Error).message);
+    (wrapped as Error & { cause?: unknown }).cause = e;
+    throw wrapped;
   }
 
   let modelData: Uint8Array | null = null;
