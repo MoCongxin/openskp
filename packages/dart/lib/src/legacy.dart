@@ -79,6 +79,50 @@ bool _matchesAscii(Uint8List data, int offset, String str) {
   return true;
 }
 
+/// SketchUp 2020 (v20) writes an extra, undocumented record ahead of some
+/// counts that v17 does not have, which leaves the reader a few bytes early
+/// and makes it read garbage as the count. The filler is an empty UTF-16
+/// string record followed by zero padding:
+///
+///   <ff fe ff> <u8 0>        empty string
+///   <zero padding>           runs up to the real count
+///
+/// Rather than hard-code an offset (the number of bytes before the marker
+/// differs per call site), locate the marker in the short window ahead,
+/// then take the first non-zero u32 that follows the padding. Only the
+/// EMPTY-string form counts as filler: a real string here would mean
+/// genuine data, and moving the cursor past it would corrupt the parse.
+///
+/// This only ever runs after a count came back implausible (or zero), so
+/// files that were already parsing (v17, and the VFF path) never reach it.
+///
+/// [countPos] is the offset the count was read FROM (i.e. r.pos - 4).
+/// Returns the corrected count, or null when this is not the v20 layout.
+int? retryCountAfterV20Filler(LR r, int countPos) {
+  final data = r.data;
+  int markerAt = -1;
+  for (int i = countPos; i < countPos + 12 && i + 4 <= data.length; i++) {
+    if (data[i] == 0xFF && data[i + 1] == 0xFE && data[i + 2] == 0xFF) {
+      markerAt = i;
+      break;
+    }
+  }
+  if (markerAt < 0) return null;
+  if (data[markerAt + 3] != 0) return null; // non-empty string: real data
+
+  // Skip the zero padding that follows the empty string. The count is
+  // little-endian and non-zero, so the first non-zero byte after the
+  // padding IS its low byte - the run ends exactly on the count.
+  int at = markerAt + 4;
+  while (at < data.length && data[at] == 0) {
+    at++;
+  }
+  if (at + 4 > data.length) return null;
+  final count = Tlv.readU32(data, at);
+  r.pos = at + 4;
+  return count;
+}
+
 /// True when the bytes at [p] are an MFC class-ref to class [slot]. Mirrors
 /// both encodings Archive.readObject decodes: the short 16-bit form
 /// (0x8000|slot) and, for slots past 0x7FFF, the big-tag escape (0x7FFF
@@ -906,12 +950,24 @@ class LegacyReaders {
       decl = r.u32();
     }
     r.u32();
-    final count = r.u32();
+    var count = r.u32();
+    // A zero count is as much a symptom of the v20 filler as an implausibly
+    // large one: the reader lands on the leading zero bytes of the filler
+    // instead of the count. A genuinely empty definition reads zero with no
+    // filler ahead, and retryCountAfterV20Filler leaves those alone.
+    if (count > 5000000 || count == 0) {
+      final retry = retryCountAfterV20Filler(r, r.pos - 4);
+      if (retry != null) count = retry;
+    }
     if (count > 5000000) {
       throw LegacyParseError('implausible def entity count ${r.ctx()}');
     }
     final ents = readEntityList(ar, r, count, 'def');
-    final nrel = r.u32();
+    var nrel = r.u32();
+    if (nrel > 100000) {
+      final retry = retryCountAfterV20Filler(r, r.pos - 4);
+      if (retry != null) nrel = retry;
+    }
     if (nrel > 100000) {
       throw LegacyParseError('definition list misaligned ${r.ctx()}');
     }
@@ -919,6 +975,20 @@ class LegacyReaders {
       ar.readObject(r, 'CRelationship');
     }
     r.u16();
+    // The GUID is followed immediately by the name string. Some files
+    // (SketchUp 2020) carry two extra bytes ahead of the GUID, which would
+    // shift this read and leave the cursor mid-record. Anchor on the string
+    // marker that must follow the 16 GUID bytes instead of trusting the
+    // fixed prefix width.
+    if (!_bytesEqualAt(r.data, r.pos + 16, _strMarker)) {
+      for (int skip = 1; skip <= 4; skip++) {
+        final at = r.pos + skip;
+        if (_bytesEqualAt(r.data, at + 16, _strMarker)) {
+          r.pos = at;
+          break;
+        }
+      }
+    }
     final guid = r.raw(16);
     final name = r.utf16();
     r.utf16();
@@ -1113,6 +1183,11 @@ class Legacy {
     final layers = <(int, Object?)>[];
     for (int i = 0; i < layerCount; i++) {
       final (s, _, v) = ar.readObject(r, 'CLayer');
+      // A null object-ref occupies a slot in the list without carrying a
+      // layer record (seen in SketchUp 2020 files, where layerCount
+      // includes it). Keeping it would push a null into the list; readObject
+      // has still consumed the ref from the stream.
+      if (v == null) continue;
       layers.add((s!, v));
     }
 
@@ -1120,7 +1195,11 @@ class Legacy {
     if (dn != 'CLayer') {
       throw LegacyParseError('definition-list anchor is $dn, not a layer');
     }
-    final defCount = r.u32();
+    var defCount = r.u32();
+    if (defCount > 1000000) {
+      final retry = retryCountAfterV20Filler(r, r.pos - 4);
+      if (retry != null) defCount = retry;
+    }
     if (defCount > 1000000) {
       throw LegacyParseError('implausible definition count');
     }
@@ -1141,7 +1220,11 @@ class Legacy {
       ar.readObject(r);
     }
 
-    final rootCount = r.u32();
+    var rootCount = r.u32();
+    if (rootCount > 5000000) {
+      final retry = retryCountAfterV20Filler(r, r.pos - 4);
+      if (retry != null) rootCount = retry;
+    }
     if (rootCount > 5000000) {
       throw LegacyParseError('implausible root entity count');
     }
