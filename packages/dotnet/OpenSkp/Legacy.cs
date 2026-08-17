@@ -103,6 +103,57 @@ namespace OpenSkp
         {
             return Tlv.ToHexUpper(data);
         }
+
+        /// <summary>
+        /// SketchUp 2020 (v20) writes an extra, undocumented record ahead of
+        /// some counts that v17 does not have, which leaves the reader a few
+        /// bytes early and makes it read garbage as the count. The filler is
+        /// an empty UTF-16 string record followed by zero padding:
+        ///
+        ///   &lt;ff fe ff&gt; &lt;u8 0&gt;        empty string
+        ///   &lt;zero padding&gt;           runs up to the real count
+        ///
+        /// Rather than hard-code an offset (the number of bytes before the
+        /// marker differs per call site), locate the marker in the short
+        /// window ahead, then take the first non-zero u32 that follows the
+        /// padding. Only the EMPTY-string form counts as filler: a real
+        /// string here would mean genuine data, and moving the cursor past
+        /// it would corrupt the parse.
+        ///
+        /// This only ever runs after a count came back implausible (or
+        /// zero), so files that were already parsing (v17, and the VFF
+        /// path) never reach it.
+        ///
+        /// <paramref name="countPos"/> is the offset the count was read FROM
+        /// (i.e. r.Pos - 4). Returns the corrected count, or null when this
+        /// is not the v20 layout.
+        /// </summary>
+        public static uint? RetryCountAfterV20Filler(LR r, int countPos)
+        {
+            var data = r.Data;
+            int markerAt = -1;
+            for (int i = countPos; i < countPos + 12 && i + 4 <= data.Length; i++)
+            {
+                if (data[i] == 0xFF && data[i + 1] == 0xFE && data[i + 2] == 0xFF)
+                {
+                    markerAt = i;
+                    break;
+                }
+            }
+            if (markerAt < 0) return null;
+            if (data[markerAt + 3] != 0) return null; // non-empty string: real data
+
+            // Skip the zero padding that follows the empty string. The count
+            // is little-endian and non-zero, so the first non-zero byte
+            // after the padding IS its low byte - the run ends exactly on
+            // the count.
+            int at = markerAt + 4;
+            while (at < data.Length && data[at] == 0) at++;
+            if (at + 4 > data.Length) return null;
+            uint count = Tlv.ReadU32(data, at);
+            r.Pos = at + 4;
+            return count;
+        }
     }
 
     /// <summary>Byte cursor, matching Python's _R / TS's R.</summary>
@@ -889,12 +940,27 @@ namespace OpenSkp
             }
             r.U32();
             uint count = r.U32();
+            // A zero count is as much a symptom of the v20 filler as an
+            // implausibly large one: the reader lands on the leading zero
+            // bytes of the filler instead of the count. A genuinely empty
+            // definition reads zero with no filler ahead, and
+            // RetryCountAfterV20Filler leaves those alone.
+            if (count > 5_000_000 || count == 0)
+            {
+                var retry = LegacyBytes.RetryCountAfterV20Filler(r, r.Pos - 4);
+                if (retry.HasValue) count = retry.Value;
+            }
             if (count > 5_000_000)
             {
                 throw new LegacyParseError($"implausible def entity count {r.Ctx()}");
             }
             var ents = ReadEntityList(ar, r, count, "def");
             uint nrel = r.U32();
+            if (nrel > 100000)
+            {
+                var retry = LegacyBytes.RetryCountAfterV20Filler(r, r.Pos - 4);
+                if (retry.HasValue) nrel = retry.Value;
+            }
             if (nrel > 100000)
             {
                 throw new LegacyParseError($"definition list misaligned {r.Ctx()}");
@@ -904,6 +970,23 @@ namespace OpenSkp
                 ar.ReadObject(r, "CRelationship");
             }
             r.U16();
+            // The GUID is followed immediately by the name string. Some
+            // files (SketchUp 2020) carry two extra bytes ahead of the GUID,
+            // which would shift this read and leave the cursor mid-record.
+            // Anchor on the string marker that must follow the 16 GUID
+            // bytes instead of trusting the fixed prefix width.
+            if (!LegacyBytes.BytesEqual(r.Data, r.Pos + 16, LegacyBytes.StrMarker))
+            {
+                for (int skip = 1; skip <= 4; skip++)
+                {
+                    int at = r.Pos + skip;
+                    if (LegacyBytes.BytesEqual(r.Data, at + 16, LegacyBytes.StrMarker))
+                    {
+                        r.Pos = at;
+                        break;
+                    }
+                }
+            }
             var guid = r.Raw(16);
             string name = r.Utf16();
             r.Utf16();
@@ -1157,6 +1240,12 @@ namespace OpenSkp
             for (int i = 0; i < layerCount; i++)
             {
                 var (s, _, v) = ar.ReadObject(r, "CLayer");
+                // A null object-ref occupies a slot in the list without
+                // carrying a layer record (seen in SketchUp 2020 files,
+                // where layerCount includes it). Keeping it would push a
+                // null into the list; ReadObject has still consumed the ref
+                // from the stream.
+                if (v == null) continue;
                 layers.Add((s!.Value, v));
             }
 
@@ -1166,6 +1255,11 @@ namespace OpenSkp
                 throw new LegacyParseError($"definition-list anchor is {dn}, not a layer");
             }
             uint defCount = r.U32();
+            if (defCount > 1_000_000)
+            {
+                var retry = LegacyBytes.RetryCountAfterV20Filler(r, r.Pos - 4);
+                if (retry.HasValue) defCount = retry.Value;
+            }
             if (defCount > 1_000_000)
             {
                 throw new LegacyParseError("implausible definition count");
@@ -1189,6 +1283,11 @@ namespace OpenSkp
             }
 
             uint rootCount = r.U32();
+            if (rootCount > 5_000_000)
+            {
+                var retry = LegacyBytes.RetryCountAfterV20Filler(r, r.Pos - 4);
+                if (retry.HasValue) rootCount = retry.Value;
+            }
             if (rootCount > 5_000_000)
             {
                 throw new LegacyParseError("implausible root entity count");
