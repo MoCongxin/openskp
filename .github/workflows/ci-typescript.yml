@@ -3,13 +3,26 @@ name: TypeScript CI
 on:
   push:
     branches: [main]
-    paths: ['packages/typescript/**']
   pull_request:
     branches: [main]
-    paths: ['packages/typescript/**']
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      typescript: ${{ steps.filter.outputs.typescript }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            typescript:
+              - 'packages/typescript/**'
+
   test:
+    needs: changes
+    if: needs.changes.outputs.typescript == 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -44,6 +57,8 @@ jobs:
           npm test
 
   lint:
+    needs: changes
+    if: needs.changes.outputs.typescript == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -62,3 +77,24 @@ jobs:
         run: |
           cd packages/typescript
           npm run lint
+
+  # Single stable check name for branch protection to require, regardless of
+  # whether packages/typescript/** changed - see ci-python.yml's `required`
+  # job for why this exists.
+  required:
+    name: TypeScript CI required
+    needs: [changes, test, lint]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check outcome
+        run: |
+          if [ "${{ needs.changes.outputs.typescript }}" != "true" ]; then
+            echo "packages/typescript/** unchanged - nothing to verify"
+            exit 0
+          fi
+          if [ "${{ needs.test.result }}" != "success" ] || [ "${{ needs.lint.result }}" != "success" ]; then
+            echo "TypeScript CI failed"
+            exit 1
+          fi
+          echo "TypeScript CI passed"

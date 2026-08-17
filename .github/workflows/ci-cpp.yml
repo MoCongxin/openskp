@@ -2,12 +2,27 @@ name: C++ CI
 
 on:
   push:
-    paths: ['packages/cpp/**', '.clang-format', '.github/workflows/ci-cpp.yml']
   pull_request:
-    paths: ['packages/cpp/**', '.clang-format', '.github/workflows/ci-cpp.yml']
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      cpp: ${{ steps.filter.outputs.cpp }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            cpp:
+              - 'packages/cpp/**'
+              - '.clang-format'
+              - '.github/workflows/ci-cpp.yml'
+
   format:
+    needs: changes
+    if: needs.changes.outputs.cpp == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,6 +31,8 @@ jobs:
       - run: cmake --build format-build --target openskp-format-check
 
   build:
+    needs: changes
+    if: needs.changes.outputs.cpp == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -51,9 +68,32 @@ jobs:
           cmake --build consumer-build --config Release
 
   sanitizers:
+    needs: changes
+    if: needs.changes.outputs.cpp == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: cmake -S packages/cpp -B build -DOPENSKP_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_C_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_EXE_LINKER_FLAGS='-fsanitize=address,undefined'
       - run: cmake --build build --parallel
       - run: ctest --test-dir build --output-on-failure
+
+  # Single stable check name for branch protection to require, regardless of
+  # whether packages/cpp/** changed - see ci-python.yml's `required` job for
+  # why this exists.
+  required:
+    name: C++ CI required
+    needs: [changes, format, build, sanitizers]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check outcome
+        run: |
+          if [ "${{ needs.changes.outputs.cpp }}" != "true" ]; then
+            echo "packages/cpp/** unchanged - nothing to verify"
+            exit 0
+          fi
+          if [ "${{ needs.format.result }}" != "success" ] || [ "${{ needs.build.result }}" != "success" ] || [ "${{ needs.sanitizers.result }}" != "success" ]; then
+            echo "C++ CI failed"
+            exit 1
+          fi
+          echo "C++ CI passed"
