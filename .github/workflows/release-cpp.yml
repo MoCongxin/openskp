@@ -14,7 +14,7 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Verify tag matches CMakeLists.txt version
         shell: bash
@@ -45,7 +45,7 @@ jobs:
           zip -r "openskp-cpp-${RELEASE_VERSION}.zip" "openskp-cpp-${RELEASE_VERSION}" > /dev/null
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             dist/openskp-cpp-${{ env.RELEASE_VERSION }}.tar.gz
