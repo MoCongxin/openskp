@@ -1113,6 +1113,16 @@ class Legacy {
     ...ascii.encode('CMaterial'),
   ];
 
+  static final List<int?> _cLayerPattern = [
+    0xFF,
+    0xFF,
+    null,
+    null,
+    0x06,
+    0x00,
+    ...ascii.encode('CLayer'),
+  ];
+
   static int? _findVersionMajor(Uint8List data) {
     final headLen = data.length < 0x60 ? data.length : 0x60;
     final stripped = <int>[];
@@ -1125,6 +1135,66 @@ class Legacy {
     return int.parse(m.group(1)!);
   }
 
+  /// Bootstrap the absolute slot base: parse material 1 with a throwaway
+  /// archive; material 2's class-ref tag names CMaterial's true slot.
+  static int _bootstrapTwoMaterials(Uint8List data, int ver, int matHdr) {
+    final boot = Archive(data, ver);
+    boot.readers.addAll(LegacyReaders.readers);
+    boot.nextSlot = 1 << 20;
+    boot.walkBase = 1 << 20;
+    boot.r.pos = matHdr;
+    boot.readObject(boot.r, 'CMaterial');
+    final tag = boot.r.peekU16();
+    if (tag == 0xFFFF || (tag & 0x8000) == 0) {
+      throw LegacyParseError('cannot bootstrap the slot base');
+    }
+    return tag & 0x7FFF;
+  }
+
+  /// Slot-base candidates for files where the two-material trick is
+  /// unavailable (0 or 1 materials).
+  ///
+  /// Parse the model prefix (materials, layer list) with a throwaway base;
+  /// the object right after the layer list is the definition-list anchor -
+  /// an ABSOLUTE back-ref to the active layer, an object we just allocated
+  /// relatively. Each walked layer yields one candidate base; with a single
+  /// layer (the common case) the answer is exact.
+  static List<int> _probeLayerAnchorBases(
+      Uint8List data, int ver, int start, int matCount) {
+    final boot = Archive(data, ver);
+    boot.readers.addAll(LegacyReaders.readers);
+    const b0 = 1 << 20;
+    boot.nextSlot = b0;
+    boot.walkBase = b0;
+    boot.r.pos = start;
+    for (int i = 0; i < matCount; i++) {
+      boot.readObject(boot.r, 'CMaterial');
+    }
+    boot.r.u32();
+    if (ver >= 17) {
+      boot.r.u8();
+    }
+    final layerCount = boot.r.u32();
+    if (layerCount < 1 || layerCount > 100000) {
+      throw LegacyParseError('implausible layer count in base probe');
+    }
+    final layerSlots = <int>[];
+    for (int i = 0; i < layerCount; i++) {
+      final (s, _, __) = boot.readObject(boot.r, 'CLayer');
+      layerSlots.add(s!);
+    }
+    final (s, n, __) = boot.readObject(boot.r);
+    if (n != 'premodel') {
+      // under the throwaway base every absolute back-ref classifies as
+      // premodel; anything else means the prefix did not parse
+      throw LegacyParseError('base probe: anchor resolved to $n');
+    }
+    return [
+      for (final rel in layerSlots)
+        if (s! - (rel - b0) > 0 && s - (rel - b0) < b0) s - (rel - b0)
+    ];
+  }
+
   static ({
     Archive ar,
     List<(int, String?, Object?)> root,
@@ -1135,37 +1205,58 @@ class Legacy {
     if (ver == null) {
       throw LegacyParseError('no version string in header');
     }
+
+    // anchor: the material manager (u32 count right before the first
+    // CMaterial new-class record); zero-material files have no CMaterial
+    // record anywhere, so fall back to the first CLayer class record and
+    // start at the layer-list marker just before it
+    final matHdr = _findPattern(data, _cMaterialPattern);
+    int start;
+    int matCount;
+    if (matHdr >= 0) {
+      start = matHdr;
+      matCount = Tlv.readU32(data, matHdr - 4);
+      if (matCount > 100000) {
+        throw LegacyParseError('implausible material count');
+      }
+    } else {
+      final layerHdr = _findPattern(data, _cLayerPattern);
+      if (layerHdr < 0) {
+        throw LegacyParseError('no CMaterial or CLayer class record found');
+      }
+      matCount = 0;
+      start = layerHdr - (ver >= 17 ? 9 : 8);
+    }
+
+    final bases = matCount >= 2
+        ? [_bootstrapTwoMaterials(data, ver, start)]
+        : _probeLayerAnchorBases(data, ver, start, matCount);
+
+    LegacyParseError? lastExc;
+    for (final base in bases) {
+      try {
+        return _walkModel(data, ver, start, matCount, base);
+      } on LegacyParseError catch (e) {
+        lastExc = e;
+      }
+    }
+    if (lastExc != null) throw lastExc;
+    throw LegacyParseError('no viable slot base candidate');
+  }
+
+  static ({
+    Archive ar,
+    List<(int, String?, Object?)> root,
+    List<(int, Object?)> layers,
+    List<(int, Object?)> materials
+  }) _walkModel(Uint8List data, int ver, int start, int matCount, int base) {
     final ar = Archive(data, ver);
     ar.readers.addAll(LegacyReaders.readers);
+    ar.nextSlot = base;
+    ar.walkBase = base;
     final r = ar.r;
 
-    final matHdr = _findPattern(data, _cMaterialPattern);
-    if (matHdr < 0) {
-      throw LegacyParseError('no CMaterial class record found');
-    }
-    final matCount = Tlv.readU32(data, matHdr - 4);
-    if (matCount > 100000) {
-      throw LegacyParseError('implausible material count');
-    }
-
-    if (matCount < 2) {
-      throw LegacyParseError(
-          'single-material bootstrap not implemented for this file');
-    }
-    final boot = Archive(data, ver);
-    boot.readers.addAll(LegacyReaders.readers);
-    boot.nextSlot = 1 << 20;
-    boot.walkBase = 1 << 20;
-    boot.r.pos = matHdr;
-    boot.readObject(boot.r, 'CMaterial');
-    final bootTag = boot.r.peekU16();
-    if (bootTag == 0xFFFF || (bootTag & 0x8000) == 0) {
-      throw LegacyParseError('cannot bootstrap the slot base');
-    }
-    ar.nextSlot = bootTag & 0x7FFF;
-    ar.walkBase = ar.nextSlot;
-
-    r.pos = matHdr;
+    r.pos = start;
     final materials = <(int, Object?)>[];
     for (int i = 0; i < matCount; i++) {
       final (s, _, v) = ar.readObject(r, 'CMaterial');
@@ -1335,7 +1426,8 @@ class Legacy {
   /// Parser converts to the public SkpModel exactly like the VFF path.
   static RawParsed fullParseLegacy(Uint8List data, [ParseOptions? options]) {
     final sw = Stopwatch()..start();
-    emitLog(options, SkpLogLevel.info, 'Parsing legacy buffer (${data.length} bytes)');
+    emitLog(options, SkpLogLevel.info,
+        'Parsing legacy buffer (${data.length} bytes)');
 
     var version = 'unknown';
     final second = _findBytes(data, _strMarker, 4);
@@ -1364,13 +1456,15 @@ class Legacy {
     try {
       walkResult = _walk(data);
     } on LegacyParseError catch (e) {
-      throw SkpParseException('legacy .skp parse failed: ${e.message}', stage: 'legacy_walk', cause: e);
+      throw SkpParseException('legacy .skp parse failed: ${e.message}',
+          stage: 'legacy_walk', cause: e);
     }
 
     final ar = walkResult.ar;
     final slots = ar.slots;
     emitLog(
-      options, SkpLogLevel.debug,
+      options,
+      SkpLogLevel.debug,
       'Legacy walk complete: ${walkResult.materials.length} materials, ${walkResult.layers.length} layers',
     );
 
@@ -1457,14 +1551,17 @@ class Legacy {
           processed++;
           if (processed % progressInterval == 0) {
             emitProgress(options, 'legacy_defs', processed, processed);
-            emitLog(options, SkpLogLevel.debug, 'Processed $processed component definitions');
+            emitLog(options, SkpLogLevel.debug,
+                'Processed $processed component definitions');
           }
         }
       }
     } catch (e) {
       throw SkpParseException(
         'Failed while building component definitions: $e',
-        stage: 'legacy_defs', definitionId: lastSlot, cause: e,
+        stage: 'legacy_defs',
+        definitionId: lastSlot,
+        cause: e,
       );
     }
 
@@ -1472,7 +1569,8 @@ class Legacy {
     _fillBuilder(rootBuilder, walkResult.root, slots);
 
     emitLog(
-      options, SkpLogLevel.info,
+      options,
+      SkpLogLevel.info,
       'Parse complete: ${defsDict.length} defs (${(sw.elapsedMilliseconds / 1000).toStringAsFixed(2)}s)',
     );
 

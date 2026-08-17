@@ -1148,11 +1148,19 @@ namespace OpenSkp
         }
 
         private static readonly int?[] CMaterialPattern = BuildCMaterialPattern();
+        private static readonly int?[] CLayerPattern = BuildCLayerPattern();
 
         private static int?[] BuildCMaterialPattern()
         {
             var prefix = new int?[] { 0xFF, 0xFF, null, null, 0x09, 0x00 };
             var name = Encoding.ASCII.GetBytes("CMaterial").Select(b => (int?)b);
+            return prefix.Concat(name).ToArray();
+        }
+
+        private static int?[] BuildCLayerPattern()
+        {
+            var prefix = new int?[] { 0xFF, 0xFF, null, null, 0x06, 0x00 };
+            var name = Encoding.ASCII.GetBytes("CLayer").Select(b => (int?)b);
             return prefix.Concat(name).ToArray();
         }
 
@@ -1178,6 +1186,78 @@ namespace OpenSkp
             public List<(int Slot, object? Value)> Materials = new List<(int, object?)>();
         }
 
+        /// <summary>Bootstrap the absolute slot base: parse material 1 with
+        /// a throwaway archive; material 2's class-ref tag names
+        /// CMaterial's true slot.</summary>
+        private static int BootstrapTwoMaterials(byte[] data, int ver, int matHdr)
+        {
+            var boot = new Archive(data, ver);
+            foreach (var kv in LegacyReaders.Readers) boot.Readers[kv.Key] = kv.Value;
+            boot.NextSlot = 1 << 20;
+            boot.WalkBase = 1 << 20;
+            boot.R.Pos = matHdr;
+            boot.ReadObject(boot.R, "CMaterial");
+            ushort tag = boot.R.PeekU16();
+            if (tag == 0xFFFF || (tag & 0x8000) == 0)
+            {
+                throw new LegacyParseError("cannot bootstrap the slot base");
+            }
+            return tag & 0x7FFF;
+        }
+
+        /// <summary>Slot-base candidates for files where the two-material
+        /// trick is unavailable (0 or 1 materials).
+        ///
+        /// Parse the model prefix (materials, layer list) with a throwaway
+        /// base; the object right after the layer list is the
+        /// definition-list anchor - an ABSOLUTE back-ref to the active
+        /// layer, an object we just allocated relatively. Each walked layer
+        /// yields one candidate base; with a single layer (the common case)
+        /// the answer is exact.</summary>
+        private static List<int> ProbeLayerAnchorBases(byte[] data, int ver, int start, uint matCount)
+        {
+            var boot = new Archive(data, ver);
+            foreach (var kv in LegacyReaders.Readers) boot.Readers[kv.Key] = kv.Value;
+            const int b0 = 1 << 20;
+            boot.NextSlot = b0;
+            boot.WalkBase = b0;
+            boot.R.Pos = start;
+            for (int i = 0; i < matCount; i++)
+            {
+                boot.ReadObject(boot.R, "CMaterial");
+            }
+            boot.R.U32();
+            if (ver >= 17)
+            {
+                boot.R.U8();
+            }
+            uint layerCount = boot.R.U32();
+            if (layerCount < 1 || layerCount > 100000)
+            {
+                throw new LegacyParseError("implausible layer count in base probe");
+            }
+            var layerSlots = new List<int>();
+            for (int i = 0; i < layerCount; i++)
+            {
+                var (s, _, _) = boot.ReadObject(boot.R, "CLayer");
+                layerSlots.Add(s!.Value);
+            }
+            var (anchorSlot, anchorName, _) = boot.ReadObject(boot.R);
+            if (anchorName != "premodel")
+            {
+                // under the throwaway base every absolute back-ref classifies as
+                // premodel; anything else means the prefix did not parse
+                throw new LegacyParseError($"base probe: anchor resolved to {anchorName}");
+            }
+            var result = new List<int>();
+            foreach (var rel in layerSlots)
+            {
+                int candidate = anchorSlot!.Value - (rel - b0);
+                if (candidate > 0 && candidate < b0) result.Add(candidate);
+            }
+            return result;
+        }
+
         private static WalkResult Walk(byte[] data)
         {
             int? ver = FindVersionMajor(data);
@@ -1185,40 +1265,63 @@ namespace OpenSkp
             {
                 throw new LegacyParseError("no version string in header");
             }
-            var ar = new Archive(data, ver.Value);
+
+            // anchor: the material manager (u32 count right before the first
+            // CMaterial new-class record); zero-material files have no
+            // CMaterial record anywhere, so fall back to the first CLayer
+            // class record and start at the layer-list marker just before it
+            int matHdr = LegacyBytes.FindPattern(data, CMaterialPattern);
+            int start;
+            uint matCount;
+            if (matHdr >= 0)
+            {
+                start = matHdr;
+                matCount = Tlv.ReadU32(data, matHdr - 4);
+                if (matCount > 100000)
+                {
+                    throw new LegacyParseError("implausible material count");
+                }
+            }
+            else
+            {
+                int layerHdr = LegacyBytes.FindPattern(data, CLayerPattern);
+                if (layerHdr < 0)
+                {
+                    throw new LegacyParseError("no CMaterial or CLayer class record found");
+                }
+                matCount = 0;
+                start = layerHdr - (ver >= 17 ? 9 : 8);
+            }
+
+            List<int> bases = matCount >= 2
+                ? new List<int> { BootstrapTwoMaterials(data, ver.Value, start) }
+                : ProbeLayerAnchorBases(data, ver.Value, start, matCount);
+
+            LegacyParseError? lastExc = null;
+            foreach (var b in bases)
+            {
+                try
+                {
+                    return WalkModel(data, ver.Value, start, matCount, b);
+                }
+                catch (LegacyParseError e)
+                {
+                    lastExc = e;
+                }
+            }
+            if (lastExc != null) throw lastExc;
+            throw new LegacyParseError("no viable slot base candidate");
+        }
+
+        private static WalkResult WalkModel(byte[] data, int ver, int start, uint matCount, int baseSlot)
+        {
+            var ar = new Archive(data, ver);
             foreach (var kv in LegacyReaders.Readers) ar.Readers[kv.Key] = kv.Value;
+            ar.NextSlot = baseSlot;
+            ar.WalkBase = baseSlot;
             var r = ar.R;
 
-            int matHdr = LegacyBytes.FindPattern(data, CMaterialPattern);
-            if (matHdr < 0)
-            {
-                throw new LegacyParseError("no CMaterial class record found");
-            }
-            uint matCount = Tlv.ReadU32(data, matHdr - 4);
-            if (matCount > 100000)
-            {
-                throw new LegacyParseError("implausible material count");
-            }
-
-            if (matCount < 2)
-            {
-                throw new LegacyParseError("single-material bootstrap not implemented for this file");
-            }
-            var boot = new Archive(data, ver.Value);
-            foreach (var kv in LegacyReaders.Readers) boot.Readers[kv.Key] = kv.Value;
-            boot.NextSlot = 1 << 20;
-            boot.WalkBase = 1 << 20;
-            boot.R.Pos = matHdr;
-            boot.ReadObject(boot.R, "CMaterial");
-            ushort bootTag = boot.R.PeekU16();
-            if (bootTag == 0xFFFF || (bootTag & 0x8000) == 0)
-            {
-                throw new LegacyParseError("cannot bootstrap the slot base");
-            }
-            ar.NextSlot = bootTag & 0x7FFF;
-            ar.WalkBase = ar.NextSlot;
-
-            r.Pos = matHdr;
+            r.Pos = start;
             var materials = new List<(int, object?)>();
             for (int i = 0; i < matCount; i++)
             {

@@ -940,6 +940,11 @@ const CMATERIAL_PATTERN: (number | null)[] = [
   ...asciiBytes('CMaterial'),
 ];
 
+const CLAYER_PATTERN: (number | null)[] = [
+  0xff, 0xff, null, null, 0x06, 0x00,
+  ...asciiBytes('CLayer'),
+];
+
 function findVersionMajor(data: Uint8Array): number | null {
   const head = data.subarray(0, Math.min(0x60, data.length));
   // strip all 0x00 bytes (UTF-16LE ASCII text becomes plain ASCII-like)
@@ -960,47 +965,118 @@ interface WalkResult {
   materials: [number, any][];
 }
 
-function walk(data: Uint8Array): WalkResult {
-  const ver = findVersionMajor(data);
-  if (ver === null) {
-    throw new LegacyParseError('no version string in header');
-  }
-  const ar = new Archive(data, ver);
-  Object.assign(ar.readers, READERS);
-  const r = ar.r;
-
-  // anchor: the material manager (u32 count right before the first
-  // CMaterial new-class record)
-  const matHdr = findPattern(data, CMATERIAL_PATTERN);
-  if (matHdr < 0) {
-    throw new LegacyParseError('no CMaterial class record found');
-  }
-  const headerView = new DataView(data.buffer, data.byteOffset, data.byteLength);
-  const matCount = headerView.getUint32(matHdr - 4, true);
-  if (matCount > 100000) {
-    throw new LegacyParseError('implausible material count');
-  }
-
-  // bootstrap the absolute slot base: parse material 1 with a throwaway
-  // archive; material 2's class-ref tag names CMaterial's true slot
-  if (matCount < 2) {
-    throw new LegacyParseError('single-material bootstrap not implemented for this file');
-  }
+/** Bootstrap the absolute slot base: parse material 1 with a throwaway
+ * archive; material 2's class-ref tag names CMaterial's true slot. */
+function bootstrapTwoMaterials(data: Uint8Array, ver: number, matHdr: number): number {
   const boot = new Archive(data, ver);
   Object.assign(boot.readers, READERS);
   boot.nextSlot = 1 << 20;
   boot.walkBase = 1 << 20;
   boot.r.pos = matHdr;
   boot.readObject(boot.r, 'CMaterial');
-  const bootTag = boot.r.peekU16();
-  if (bootTag === 0xffff || !(bootTag & 0x8000)) {
+  const tag = boot.r.peekU16();
+  if (tag === 0xffff || !(tag & 0x8000)) {
     throw new LegacyParseError('cannot bootstrap the slot base');
   }
-  ar.nextSlot = bootTag & 0x7fff;
-  ar.walkBase = ar.nextSlot;
+  return tag & 0x7fff;
+}
+
+/** Slot-base candidates for files where the two-material trick is
+ * unavailable (0 or 1 materials).
+ *
+ * Parse the model prefix (materials, layer list) with a throwaway base;
+ * the object right after the layer list is the definition-list anchor - an
+ * ABSOLUTE back-ref to the active layer, an object we just allocated
+ * relatively. Each walked layer yields one candidate base; with a single
+ * layer (the common case) the answer is exact. */
+function probeLayerAnchorBases(data: Uint8Array, ver: number, start: number, matCount: number): number[] {
+  const boot = new Archive(data, ver);
+  Object.assign(boot.readers, READERS);
+  const b0 = 1 << 20;
+  boot.nextSlot = b0;
+  boot.walkBase = b0;
+  boot.r.pos = start;
+  for (let i = 0; i < matCount; i++) {
+    boot.readObject(boot.r, 'CMaterial');
+  }
+  boot.r.u32();
+  if (ver >= 17) {
+    boot.r.u8();
+  }
+  const layerCount = boot.r.u32();
+  if (!(layerCount >= 1 && layerCount <= 100000)) {
+    throw new LegacyParseError('implausible layer count in base probe');
+  }
+  const layerSlots: number[] = [];
+  for (let i = 0; i < layerCount; i++) {
+    const [s] = boot.readObject(boot.r, 'CLayer');
+    layerSlots.push(s as number);
+  }
+  const [s, n] = boot.readObject(boot.r);
+  if (n !== 'premodel') {
+    // under the throwaway base every absolute back-ref classifies as
+    // premodel; anything else means the prefix did not parse
+    throw new LegacyParseError(`base probe: anchor resolved to ${n}`);
+  }
+  return layerSlots
+    .map((rel) => (s as number) - (rel - b0))
+    .filter((cand) => cand > 0 && cand < b0);
+}
+
+function walk(data: Uint8Array): WalkResult {
+  const ver = findVersionMajor(data);
+  if (ver === null) {
+    throw new LegacyParseError('no version string in header');
+  }
+
+  // anchor: the material manager (u32 count right before the first
+  // CMaterial new-class record); zero-material files have no CMaterial
+  // record anywhere, so fall back to the first CLayer class record and
+  // start at the layer-list marker just before it
+  const headerView = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const matHdr = findPattern(data, CMATERIAL_PATTERN);
+  let start: number;
+  let matCount: number;
+  if (matHdr >= 0) {
+    start = matHdr;
+    matCount = headerView.getUint32(matHdr - 4, true);
+    if (matCount > 100000) {
+      throw new LegacyParseError('implausible material count');
+    }
+  } else {
+    const layerHdr = findPattern(data, CLAYER_PATTERN);
+    if (layerHdr < 0) {
+      throw new LegacyParseError('no CMaterial or CLayer class record found');
+    }
+    matCount = 0;
+    start = layerHdr - (ver >= 17 ? 9 : 8);
+  }
+
+  const bases =
+    matCount >= 2 ? [bootstrapTwoMaterials(data, ver, start)] : probeLayerAnchorBases(data, ver, start, matCount);
+
+  let lastExc: unknown = null;
+  for (const base of bases) {
+    try {
+      return walkModel(data, ver, start, matCount, base);
+    } catch (exc) {
+      if (!(exc instanceof LegacyParseError)) throw exc;
+      lastExc = exc;
+    }
+  }
+  if (lastExc !== null) throw lastExc;
+  throw new LegacyParseError('no viable slot base candidate');
+}
+
+function walkModel(data: Uint8Array, ver: number, start: number, matCount: number, base: number): WalkResult {
+  const ar = new Archive(data, ver);
+  Object.assign(ar.readers, READERS);
+  ar.nextSlot = base;
+  ar.walkBase = base;
+  const r = ar.r;
 
   // material manager
-  r.pos = matHdr;
+  r.pos = start;
   const materials: [number, any][] = [];
   for (let i = 0; i < matCount; i++) {
     const [s, , v] = ar.readObject(r, 'CMaterial');
