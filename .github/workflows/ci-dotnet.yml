@@ -3,14 +3,27 @@ name: .NET CI
 on:
   push:
     branches: [main]
-    paths: ['packages/dotnet/**']
   pull_request:
     branches: [main]
-    paths: ['packages/dotnet/**']
   workflow_dispatch:
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      dotnet: ${{ steps.filter.outputs.dotnet }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            dotnet:
+              - 'packages/dotnet/**'
+
   test:
+    needs: changes
+    if: needs.changes.outputs.dotnet == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -34,6 +47,8 @@ jobs:
         run: dotnet test packages/dotnet/OpenSkp.Tests/OpenSkp.Tests.csproj --no-build --configuration Release
 
   format:
+    needs: changes
+    if: needs.changes.outputs.dotnet == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -56,3 +71,24 @@ jobs:
       - name: Build with analyzers as errors
         run: |
           dotnet build packages/dotnet/OpenSkp.Tests/OpenSkp.Tests.csproj --no-restore --configuration Release -warnaserror
+
+  # Single stable check name for branch protection to require, regardless of
+  # whether packages/dotnet/** changed - see ci-python.yml's `required` job
+  # for why this exists.
+  required:
+    name: .NET CI required
+    needs: [changes, test, format]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check outcome
+        run: |
+          if [ "${{ needs.changes.outputs.dotnet }}" != "true" ]; then
+            echo "packages/dotnet/** unchanged - nothing to verify"
+            exit 0
+          fi
+          if [ "${{ needs.test.result }}" != "success" ] || [ "${{ needs.format.result }}" != "success" ]; then
+            echo ".NET CI failed"
+            exit 1
+          fi
+          echo ".NET CI passed"
