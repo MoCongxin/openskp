@@ -1,5 +1,7 @@
 #include <algorithm>
 #include <cmath>
+#include <exception>
+#include <optional>
 #include <regex>
 #include <unordered_map>
 
@@ -662,6 +664,116 @@ struct Archive {
   }
 };
 
+struct WalkResult {
+  Archive ar;
+  std::vector<std::tuple<uint64_t, std::string, std::shared_ptr<V>>> root;
+  std::vector<std::pair<uint64_t, std::shared_ptr<V>>> layers;
+  std::vector<std::pair<uint64_t, std::shared_ptr<V>>> materials;
+};
+
+// Bootstrap the absolute slot base: parse material 1 with a throwaway
+// archive; material 2's class-ref tag names CMaterial's true slot.
+uint64_t bootstrap_two_materials(const ByteBuffer& data, int ver, size_t mat_hdr) {
+  Archive boot(data, ver);
+  boot.next = boot.base = 1 << 20;
+  boot.r.p = mat_hdr;
+  boot.object("CMaterial");
+  auto tag = read_u16(data, boot.r.p);
+  if (tag == 0xffff || !(tag & 0x8000)) throw std::runtime_error("cannot bootstrap the slot base");
+  return tag & 0x7fff;
+}
+
+// Slot-base candidates for files where the two-material trick is
+// unavailable (0 or 1 materials).
+//
+// Parse the model prefix (materials, layer list) with a throwaway base; the
+// object right after the layer list is the definition-list anchor - an
+// ABSOLUTE back-ref to the active layer, an object we just allocated
+// relatively. Each walked layer yields one candidate base; with a single
+// layer (the common case) the answer is exact.
+std::vector<uint64_t> probe_layer_anchor_bases(const ByteBuffer& data, int ver, size_t start,
+                                               uint32_t mat_count) {
+  Archive boot(data, ver);
+  constexpr uint64_t b0 = 1 << 20;
+  boot.next = boot.base = b0;
+  boot.r.p = start;
+  for (uint32_t i = 0; i < mat_count; ++i) boot.object("CMaterial");
+  boot.r.u32();
+  if (ver >= 17) boot.r.u8();
+  auto layer_count = boot.r.u32();
+  if (layer_count < 1 || layer_count > 100000)
+    throw std::runtime_error("implausible layer count in base probe");
+  std::vector<uint64_t> layer_slots;
+  for (uint32_t i = 0; i < layer_count; ++i) {
+    auto q = boot.object("CLayer");
+    layer_slots.push_back(std::get<0>(q));
+  }
+  auto anchor = boot.object();
+  if (std::get<1>(anchor) != "premodel")
+    // under the throwaway base every absolute back-ref classifies as
+    // premodel; anything else means the prefix did not parse
+    throw std::runtime_error("base probe: anchor resolved to " + std::get<1>(anchor));
+  uint64_t s = std::get<0>(anchor);
+  std::vector<uint64_t> result;
+  for (auto rel : layer_slots) {
+    int64_t candidate = int64_t(s) - (int64_t(rel) - int64_t(b0));
+    if (candidate > 0 && uint64_t(candidate) < b0) result.push_back(uint64_t(candidate));
+  }
+  return result;
+}
+
+WalkResult walk_model(const ByteBuffer& data, int ver, size_t start, uint32_t mat_count,
+                      uint64_t base) {
+  Archive ar(data, ver);
+  ar.next = ar.base = base;
+  ar.r.p = start;
+  std::vector<std::pair<uint64_t, std::shared_ptr<V>>> mats, layers;
+  for (uint32_t i = 0; i < mat_count; ++i) {
+    auto q = ar.object("CMaterial");
+    mats.push_back({std::get<0>(q), std::get<2>(q)});
+  }
+  ar.r.u32();
+  if (ver >= 17) ar.r.u8();
+  auto lc = ar.r.u32();
+  if (lc > 100000) throw std::runtime_error("invalid layer count");
+  while (lc--) {
+    auto q = ar.object("CLayer");
+    // A null object-ref occupies a slot in the list without carrying a
+    // layer record (seen in SketchUp 2020 files, where lc includes it).
+    // Keeping it would push a null V into layers and blow up downstream
+    // on its r/g/b fields; ar.object() has still consumed the ref.
+    if (!std::get<2>(q)) continue;
+    layers.push_back({std::get<0>(q), std::get<2>(q)});
+  }
+  auto anchor = ar.object();
+  if (std::get<1>(anchor) != "CLayer") throw std::runtime_error("definition anchor is not a layer");
+  auto dc = ar.r.u32();
+  if (dc > 1000000) {
+    auto retry = retry_count_after_v20_filler(ar.r, ar.r.p - 4);
+    if (retry) dc = *retry;
+  }
+  if (dc > 1000000) throw std::runtime_error("invalid definition count");
+  while (dc--) ar.object("CComponentDefinition");
+  auto cs = ar.class_slot.find("CComponentDefinition");
+  while (ar.r.p + 2 <= data.size()) {
+    auto t = read_u16(data, ar.r.p);
+    bool yes = cs != ar.class_slot.end() && t == (0x8000 | cs->second);
+    if (!yes && t == 0xffff && ar.r.p + 26 <= data.size())
+      yes =
+          std::equal(data.begin() + ar.r.p + 6, data.begin() + ar.r.p + 26, "CComponentDefinition");
+    if (!yes) break;
+    ar.object();
+  }
+  auto root_count = ar.r.u32();
+  if (root_count > 5000000) {
+    auto retry = retry_count_after_v20_filler(ar.r, ar.r.p - 4);
+    if (retry) root_count = *retry;
+  }
+  if (root_count > 5000000) throw std::runtime_error("implausible root entity count");
+  auto root = ar.entity_list(root_count, true);
+  return {std::move(ar), std::move(root), std::move(layers), std::move(mats)};
+}
+
 void add_edge(GeometryBuilder& b, uint64_t s, const V& e,
               const std::unordered_map<uint64_t, Entry>& slots) {
   if (b.edges.count(s)) return;
@@ -798,6 +910,11 @@ RawParsed parse_legacy(const ByteBuffer& data, const ParseOptions& o) {
     std::smatch vm;
     std::regex_search(ascii, vm, std::regex("\\{(\\d+)\\."));
     int ver = std::stoi(vm[1]);
+
+    // anchor: the material manager (u32 count right before the first
+    // CMaterial new-class record); zero-material files have no CMaterial
+    // record anywhere, so fall back to the first CLayer class record and
+    // start at the layer-list marker just before it
     size_t mh = std::string::npos;
     for (size_t i = 0; i + 15 < data.size(); ++i)
       if (data[i] == 255 && data[i + 1] == 255 && read_u16(data, i + 4) == 9 &&
@@ -805,63 +922,51 @@ RawParsed parse_legacy(const ByteBuffer& data, const ParseOptions& o) {
         mh = i;
         break;
       }
-    if (mh == std::string::npos || mh < 4) throw std::runtime_error("no CMaterial class record");
-    auto mc = read_u32(data, mh - 4);
-    if (mc < 2 || mc > 100000) throw std::runtime_error("invalid material count");
-    Archive boot(data, ver);
-    boot.next = boot.base = 1 << 20;
-    boot.r.p = mh;
-    boot.object("CMaterial");
-    auto tag = read_u16(data, boot.r.p);
-    if (tag == 0xffff || !(tag & 0x8000)) throw std::runtime_error("cannot bootstrap slot base");
-    Archive ar(data, ver);
-    ar.next = ar.base = tag & 0x7fff;
-    ar.r.p = mh;
-    std::vector<std::pair<uint64_t, std::shared_ptr<V>>> mats, layers;
-    for (uint32_t i = 0; i < mc; ++i) {
-      auto q = ar.object("CMaterial");
-      mats.push_back({std::get<0>(q), std::get<2>(q)});
+    size_t start;
+    uint32_t mc;
+    if (mh != std::string::npos && mh >= 4) {
+      start = mh;
+      mc = read_u32(data, mh - 4);
+      if (mc > 100000) throw std::runtime_error("implausible material count");
+    } else {
+      size_t lh = std::string::npos;
+      for (size_t i = 0; i + 12 < data.size(); ++i)
+        if (data[i] == 255 && data[i + 1] == 255 && read_u16(data, i + 4) == 6 &&
+            std::equal(data.begin() + i + 6, data.begin() + i + 12, "CLayer")) {
+          lh = i;
+          break;
+        }
+      if (lh == std::string::npos)
+        throw std::runtime_error("no CMaterial or CLayer class record found");
+      mc = 0;
+      start = lh - (ver >= 17 ? 9 : 8);
     }
-    ar.r.u32();
-    if (ver >= 17) ar.r.u8();
-    auto lc = ar.r.u32();
-    if (lc > 100000) throw std::runtime_error("invalid layer count");
-    while (lc--) {
-      auto q = ar.object("CLayer");
-      // A null object-ref occupies a slot in the list without carrying a
-      // layer record (seen in SketchUp 2020 files, where lc includes it).
-      // Keeping it would push a null V into layers and blow up downstream
-      // on its r/g/b fields; ar.object() has still consumed the ref.
-      if (!std::get<2>(q)) continue;
-      layers.push_back({std::get<0>(q), std::get<2>(q)});
+
+    std::vector<uint64_t> bases;
+    if (mc >= 2) {
+      bases.push_back(bootstrap_two_materials(data, ver, start));
+    } else {
+      bases = probe_layer_anchor_bases(data, ver, start, mc);
     }
-    auto anchor = ar.object();
-    if (std::get<1>(anchor) != "CLayer")
-      throw std::runtime_error("definition anchor is not a layer");
-    auto dc = ar.r.u32();
-    if (dc > 1000000) {
-      auto retry = retry_count_after_v20_filler(ar.r, ar.r.p - 4);
-      if (retry) dc = *retry;
+
+    std::optional<WalkResult> walked;
+    std::exception_ptr last_exc;
+    for (auto base : bases) {
+      try {
+        walked = walk_model(data, ver, start, mc, base);
+        break;
+      } catch (const std::exception&) {
+        last_exc = std::current_exception();
+      }
     }
-    if (dc > 1000000) throw std::runtime_error("invalid definition count");
-    while (dc--) ar.object("CComponentDefinition");
-    auto cs = ar.class_slot.find("CComponentDefinition");
-    while (ar.r.p + 2 <= data.size()) {
-      auto t = read_u16(data, ar.r.p);
-      bool yes = cs != ar.class_slot.end() && t == (0x8000 | cs->second);
-      if (!yes && t == 0xffff && ar.r.p + 26 <= data.size())
-        yes = std::equal(data.begin() + ar.r.p + 6, data.begin() + ar.r.p + 26,
-                         "CComponentDefinition");
-      if (!yes) break;
-      ar.object();
+    if (!walked) {
+      if (last_exc) std::rethrow_exception(last_exc);
+      throw std::runtime_error("no viable slot base candidate");
     }
-    auto root_count = ar.r.u32();
-    if (root_count > 5000000) {
-      auto retry = retry_count_after_v20_filler(ar.r, ar.r.p - 4);
-      if (retry) root_count = *retry;
-    }
-    if (root_count > 5000000) throw std::runtime_error("implausible root entity count");
-    auto root = ar.entity_list(root_count, true);
+    Archive& ar = walked->ar;
+    auto& root = walked->root;
+    auto& layers = walked->layers;
+    auto& mats = walked->materials;
     for (auto& m : mats) {
       auto v = m.second;
       auto x = std::make_shared<RawMaterial>();
