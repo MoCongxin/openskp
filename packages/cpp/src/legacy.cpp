@@ -723,6 +723,28 @@ std::vector<uint64_t> probe_layer_anchor_bases(const ByteBuffer& data, int ver, 
 }
 
 WalkResult walk_model(const ByteBuffer& data, int ver, size_t start, uint32_t mat_count,
+                      uint64_t base);
+
+// Tries each candidate base in turn, returning the first one that walks
+// cleanly. WalkResult holds an Archive whose R holds a reference member, so
+// it's move-constructible but not assignable - built via a direct `return`
+// from inside the loop (RVO/move-construction) rather than storing into an
+// outer-scope optional/variable, which would need assignment instead.
+WalkResult walk_with_bases(const ByteBuffer& data, int ver, size_t start, uint32_t mat_count,
+                           const std::vector<uint64_t>& bases) {
+  std::exception_ptr last_exc;
+  for (auto base : bases) {
+    try {
+      return walk_model(data, ver, start, mat_count, base);
+    } catch (const std::exception&) {
+      last_exc = std::current_exception();
+    }
+  }
+  if (last_exc) std::rethrow_exception(last_exc);
+  throw std::runtime_error("no viable slot base candidate");
+}
+
+WalkResult walk_model(const ByteBuffer& data, int ver, size_t start, uint32_t mat_count,
                       uint64_t base) {
   Archive ar(data, ver);
   ar.next = ar.base = base;
@@ -949,24 +971,11 @@ RawParsed parse_legacy(const ByteBuffer& data, const ParseOptions& o) {
       bases = probe_layer_anchor_bases(data, ver, start, mc);
     }
 
-    std::optional<WalkResult> walked;
-    std::exception_ptr last_exc;
-    for (auto base : bases) {
-      try {
-        walked = walk_model(data, ver, start, mc, base);
-        break;
-      } catch (const std::exception&) {
-        last_exc = std::current_exception();
-      }
-    }
-    if (!walked) {
-      if (last_exc) std::rethrow_exception(last_exc);
-      throw std::runtime_error("no viable slot base candidate");
-    }
-    Archive& ar = walked->ar;
-    auto& root = walked->root;
-    auto& layers = walked->layers;
-    auto& mats = walked->materials;
+    WalkResult walked = walk_with_bases(data, ver, start, mc, bases);
+    Archive& ar = walked.ar;
+    auto& root = walked.root;
+    auto& layers = walked.layers;
+    auto& mats = walked.materials;
     for (auto& m : mats) {
       auto v = m.second;
       auto x = std::make_shared<RawMaterial>();
