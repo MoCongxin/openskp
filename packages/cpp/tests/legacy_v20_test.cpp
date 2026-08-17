@@ -125,9 +125,10 @@ TEST(LegacyV20, BakesGeometryAtAPlausibleRealWorldScale) {
   auto file = SkpFile::open(test::fixture("gondola_v20.skp"));
   auto scene = file.build_scene();
   double min[3] = {std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(),
-                    std::numeric_limits<double>::infinity()};
-  double max[3] = {-std::numeric_limits<double>::infinity(), -std::numeric_limits<double>::infinity(),
-                    -std::numeric_limits<double>::infinity()};
+                   std::numeric_limits<double>::infinity()};
+  double max[3] = {-std::numeric_limits<double>::infinity(),
+                   -std::numeric_limits<double>::infinity(),
+                   -std::numeric_limits<double>::infinity()};
   for (const auto& prim : scene.glb_primitives) {
     for (std::size_t i = 0; i + 2 < prim.positions.size(); i += 3) {
       for (int a = 0; a < 3; ++a) {

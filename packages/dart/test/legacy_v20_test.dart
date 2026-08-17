@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:math';
 
 import 'package:openskp/openskp.dart';
 import 'package:openskp/src/legacy.dart';
