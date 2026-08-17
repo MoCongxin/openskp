@@ -58,7 +58,7 @@
     "fflate": "^0.8.0"
   },
   "devDependencies": {
-    "@eslint/js": "9.39.5",
+    "@eslint/js": "10.0.1",
     "@types/earcut": "^3.0.0",
     "eslint": "10.8.1",
     "tsup": "^8.0.0",
