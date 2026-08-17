@@ -10,8 +10,8 @@ jobs:
     outputs:
       cpp: ${{ steps.filter.outputs.cpp }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
@@ -25,7 +25,7 @@ jobs:
     if: needs.changes.outputs.cpp == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: sudo apt-get update && sudo apt-get install -y clang-format-18
       - run: cmake -S packages/cpp -B format-build -DOPENSKP_BUILD_TESTS=OFF -DOPENSKP_CLANG_FORMAT_EXECUTABLE=/usr/bin/clang-format-18
       - run: cmake --build format-build --target openskp-format-check
@@ -47,7 +47,7 @@ jobs:
             compiler: msvc
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Select GCC
         if: matrix.compiler == 'gcc'
         run: echo "CXX=g++" >> "$GITHUB_ENV" && echo "CC=gcc" >> "$GITHUB_ENV"
@@ -72,7 +72,7 @@ jobs:
     if: needs.changes.outputs.cpp == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: cmake -S packages/cpp -B build -DOPENSKP_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_C_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_EXE_LINKER_FLAGS='-fsanitize=address,undefined'
       - run: cmake --build build --parallel
       - run: ctest --test-dir build --output-on-failure
