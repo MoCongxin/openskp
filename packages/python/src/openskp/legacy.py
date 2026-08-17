@@ -207,6 +207,51 @@ class _Archive:
         return slot, ent[1], ent[2]
 
 
+def _retry_count_after_v20_filler(r: _R, count_pos: int) -> Optional[int]:
+    """SketchUp 2020 (v20) writes an extra, undocumented record ahead of some
+    counts that v17 does not have, which leaves the reader a few bytes early
+    and makes it read garbage as the count. The filler is an empty UTF-16
+    string record followed by zero padding:
+
+        <ff fe ff> <u8 0>        empty string
+        <zero padding>           runs up to the real count
+
+    Rather than hard-code an offset (the number of bytes before the marker
+    differs per call site), locate the marker in the short window ahead,
+    then take the first non-zero u32 that follows the padding. Only the
+    EMPTY-string form counts as filler: a real string here would mean
+    genuine data, and moving the cursor past it would corrupt the parse.
+
+    This only ever runs after a count came back implausible (or zero), so
+    files that were already parsing (v17, and the VFF path) never reach it.
+
+    *count_pos* is the offset the count was read FROM (i.e. ``r.pos - 4``).
+    Returns the corrected count, or ``None`` when this is not the v20 layout.
+    """
+    data = r.data
+    marker_at = -1
+    for i in range(count_pos, min(count_pos + 12, len(data) - 3)):
+        if data[i:i + 3] == _STR_MARKER:
+            marker_at = i
+            break
+    if marker_at < 0:
+        return None
+    if data[marker_at + 3] != 0:          # non-empty string: real data
+        return None
+
+    # Skip the zero padding that follows the empty string. The count is
+    # little-endian and non-zero, so the first non-zero byte after the
+    # padding IS its low byte - the run ends exactly on the count.
+    at = marker_at + 4
+    while at < len(data) and data[at] == 0:
+        at += 1
+    if at + 4 > len(data):
+        return None
+    count = struct.unpack_from('<I', data, at)[0]
+    r.pos = at + 4
+    return count
+
+
 # ── shared record blocks ─────────────────────────────────────────────────
 
 def _is_class_ref(data: bytes, p: int, slot: int) -> bool:
@@ -587,15 +632,38 @@ def _read_definition(ar, r):
         decl = r.u32()
     r.u32()
     count = r.u32()
+    # A zero count is as much a symptom of the v20 filler as an implausibly
+    # large one: the reader lands on the leading zero bytes of the filler
+    # instead of the count. A genuinely empty definition reads zero with no
+    # filler ahead, and _retry_count_after_v20_filler leaves those alone.
+    if count > 5_000_000 or count == 0:
+        retry = _retry_count_after_v20_filler(r, r.pos - 4)
+        if retry is not None:
+            count = retry
     if count > 5_000_000:
         raise LegacyParseError(f"implausible def entity count {r.ctx()}")
     ents = _read_entity_list(ar, r, count, 'def')
     nrel = r.u32()
     if nrel > 100000:
+        retry = _retry_count_after_v20_filler(r, r.pos - 4)
+        if retry is not None:
+            nrel = retry
+    if nrel > 100000:
         raise LegacyParseError(f"definition list misaligned {r.ctx()}")
     for _ in range(nrel):
         ar.read_object(r, expect='CRelationship')
     r.u16()
+    # The GUID is followed immediately by the name string. Some files
+    # (SketchUp 2020) carry two extra bytes ahead of the GUID, which would
+    # shift this read and leave the cursor mid-record. Anchor on the string
+    # marker that must follow the 16 GUID bytes instead of trusting the
+    # fixed prefix width.
+    if r.peek(19)[16:19] != _STR_MARKER:
+        for skip in range(1, 5):
+            at = r.pos + skip
+            if r.data[at + 16:at + 19] == _STR_MARKER:
+                r.pos = at
+                break
     guid = r.raw(16)
     name = r.utf16()
     r.utf16()
@@ -799,6 +867,13 @@ def _walk_model(data: bytes, ver: int, start: int, mat_count: int,
     layers = []
     for _ in range(layer_count):
         s, _, v = ar.read_object(r, expect='CLayer')
+        # A null object-ref occupies a slot in the list without carrying a
+        # layer record (seen in SketchUp 2020 files, where layer_count
+        # includes it). Keeping it would push a None into the list and blow
+        # up downstream on v['rgba']; read_object has still consumed the
+        # ref from the stream.
+        if v is None:
+            continue
         layers.append((s, v))
 
     # definition list: object pointer to the ACTIVE layer, then count
@@ -806,6 +881,10 @@ def _walk_model(data: bytes, ver: int, start: int, mat_count: int,
     if dn != 'CLayer':
         raise LegacyParseError(f"definition-list anchor is {dn}, not a layer")
     def_count = r.u32()
+    if def_count > 1_000_000:
+        retry = _retry_count_after_v20_filler(r, r.pos - 4)
+        if retry is not None:
+            def_count = retry
     if def_count > 1_000_000:
         raise LegacyParseError("implausible definition count")
     for _ in range(def_count):
@@ -825,6 +904,10 @@ def _walk_model(data: bytes, ver: int, start: int, mat_count: int,
 
     # root entity list
     root_count = r.u32()
+    if root_count > 5_000_000:
+        retry = _retry_count_after_v20_filler(r, r.pos - 4)
+        if retry is not None:
+            root_count = retry
     if root_count > 5_000_000:
         raise LegacyParseError("implausible root entity count")
     root = _read_entity_list(ar, r, root_count, 'root')
