@@ -1873,6 +1873,19 @@ void ComponentDefinitionBuilder::add_polyline(const std::vector<Point3>& points,
                                                      impl_->edge_registry, points, options);
 }
 
+void ComponentDefinitionBuilder::add_construction_line(Point3 point, std::optional<Point3> point2,
+                                                       std::optional<Point3> direction) {
+  check_writable("construction lines");
+  impl_->writer->write_construction_line(point, point2, direction);
+  impl_->new_entity_count += 1;
+}
+
+void ComponentDefinitionBuilder::add_construction_point(Point3 position) {
+  check_writable("construction points");
+  impl_->writer->write_construction_point(position);
+  impl_->new_entity_count += 1;
+}
+
 void ComponentDefinitionBuilder::add_instance(const ComponentDefinitionBuilder& definition,
                                               const InstanceOptions& options) {
   check_writable("instances");

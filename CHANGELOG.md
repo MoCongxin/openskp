@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — C++: write construction lines/points inside component definitions
+
+`ComponentDefinitionBuilder` now has `add_construction_point` /
+`add_construction_line` with the same signatures as `SkpBuilder` (Python's
+writer is still root-level only). `open_existing()` replays both, including
+inside nested definitions that previously counted as "no replayable
+geometry" when they had no faces. Half-bounded lines (one end unset) are
+skipped with a warning — the public writer API is still fully finite or
+fully infinite.
+
+### Fixed — construction-line trailer calibration when the guide is last in a definition
+
+A `CConstructionLine` that is the last entity in a `CComponentDefinition`
+is followed by `nrel=0`, which looks like a null MFC tag. The v17
+calibrator preferred a 7-byte trailer on that weak match, swallowed three
+bytes of the definition tail, and then cached that 7 for every later
+guide in the file (this project's writer, and real SketchUp 2025, use 4).
+The strong-tag pass is unchanged; the null pass now prefers 4. Same
+change in Python's `legacy._read_constructionline`.
 ### Added — Read VFF (2021+) construction lines/points (Python + C++)
 
 VFF files store guide lines under definition list `9113` → `6942` / `6A42`

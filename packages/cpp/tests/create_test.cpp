@@ -1079,5 +1079,45 @@ TEST(Create, AddConstructionLineRequiresExactlyOneOfPoint2OrDirection) {
                SkpWriteError);
 }
 
+TEST(Create, NestedDefinitionConstructionRoundTrips) {
+  // Construction is last in the nested definition on purpose: that is the
+  // case that used to desync legacy_walk (cline trailer calibration
+  // against the definition's nrel=0 tail). Root-level guides follow, so
+  // a wrong cached trailer length would also corrupt those.
+  auto builder = create();
+  auto& nested = builder->add_component_definition("GuideGroup");
+  nested.add_face({{0, 0, 0}, {10, 0, 0}, {10, 10, 0}, {0, 10, 0}});
+  nested.add_construction_point({4.0, 5.0, 6.0});
+  nested.add_construction_line({1.0, 1.0, 1.0}, Point3{2.0, 2.0, 2.0});
+  nested.close();
+  builder->add_instance(nested);
+  builder->add_construction_point({1.0, 2.0, 3.0});
+  builder->add_construction_line({0.0, 0.0, 0.0}, Point3{12.0, 0.0, 0.0});
+  builder->add_construction_line({0.0, 0.0, 4.0}, std::nullopt, Point3{0.0, 0.0, 1.0});
+
+  SkpModel model = round_trip(*builder);
+  ASSERT_EQ(model.root().construction_points.size(), 1u);
+  EXPECT_NEAR(model.root().construction_points[0].position[0], 1.0, 1e-9);
+  EXPECT_NEAR(model.root().construction_points[0].position[1], 2.0, 1e-9);
+  EXPECT_NEAR(model.root().construction_points[0].position[2], 3.0, 1e-9);
+
+  ASSERT_EQ(model.root().construction_lines.size(), 2u);
+  ASSERT_TRUE(model.root().construction_lines[0].start && model.root().construction_lines[0].end);
+  EXPECT_NEAR((*model.root().construction_lines[0].end)[0], 12.0, 1e-9);
+  EXPECT_FALSE(model.root().construction_lines[1].start);
+  EXPECT_FALSE(model.root().construction_lines[1].end);
+  EXPECT_NEAR(model.root().construction_lines[1].point[2], 4.0, 1e-9);
+
+  const Definition* group = nullptr;
+  for (const auto& kv : model.definitions) {
+    if (kv.second.name == "GuideGroup") group = &kv.second;
+  }
+  ASSERT_NE(group, nullptr);
+  ASSERT_EQ(group->construction_points.size(), 1u);
+  EXPECT_NEAR(group->construction_points[0].position[0], 4.0, 1e-9);
+  ASSERT_EQ(group->construction_lines.size(), 1u);
+  ASSERT_TRUE(group->construction_lines[0].start && group->construction_lines[0].end);
+}
+
 }  // namespace
 }  // namespace openskp

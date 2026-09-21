@@ -222,13 +222,14 @@ bool definition_has_content(const Definition& defn,
   for (const auto& inst : defn.instances) {
     if (inst.ref_idx && def_builders.count(*inst.ref_idx)) return true;
   }
+  if (!defn.construction_points.empty() || !defn.construction_lines.empty()) return true;
   return false;
 }
 
 // ---------------------------------------------------------------------------------------------
-// Body replay (faces + instances) - templated on Target since SkpBuilder and
-// ComponentDefinitionBuilder expose the identical add_face/add_instance shape this needs (the
-// same duck-typing edit.py relies on for its `target` parameter).
+// Body replay (faces + instances + construction) - templated on Target since SkpBuilder and
+// ComponentDefinitionBuilder expose the identical add_face/add_instance/add_construction_*
+// shape this needs (the same duck-typing edit.py relies on for its `target` parameter).
 // ---------------------------------------------------------------------------------------------
 
 // front_uv/back_uv need exactly 3 correspondences whose (u, v) values are
@@ -448,6 +449,27 @@ void replay_body(Target& target, const Definition& defn,
   for (const auto& inst : defn.instances) {
     replay_instance(target, inst, def_builders, by_id, material_slots, layer_slots, warnings,
                     context);
+  }
+  for (const auto& cp : defn.construction_points) {
+    try {
+      target.add_construction_point(cp.position);
+    } catch (const SkpWriteError& exc) {
+      warnings.push_back(context + ": construction point skipped (" + std::string(exc.what()) +
+                         ")");
+    }
+  }
+  for (const auto& cl : defn.construction_lines) {
+    try {
+      if (cl.start && cl.end) {
+        target.add_construction_line(*cl.start, *cl.end);
+      } else if (!cl.start && !cl.end) {
+        target.add_construction_line(cl.point, std::nullopt, cl.direction);
+      } else {
+        warnings.push_back(context + ": half-bounded construction line skipped");
+      }
+    } catch (const SkpWriteError& exc) {
+      warnings.push_back(context + ": construction line skipped (" + std::string(exc.what()) + ")");
+    }
   }
 }
 

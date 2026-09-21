@@ -803,19 +803,27 @@ def _read_constructionline(ar, r):
     if k is None:
         default = 7 if ar.ver == 17 else 4
         order = [default] + [c for c in (0, 4, 7) if c != default]
-        # two passes: a zero tail full of padding can mimic a null tag, so
-        # only accept a null-anchored candidate when no candidate lands on
-        # a STRONG form (escape / known class / class definition)
-        for allow_null in (False, True):
-            for cand in order:
-                if _strict_next_tag(ar, r.data, r.pos + cand,
-                                    allow_null=allow_null):
-                    k = cand
-                    break
-            if k is not None:
+        # Strong tags first (escape / known class / class definition). A
+        # following entity at +4 or +7 is unambiguous. The weak (null) pass
+        # is the last-in-list case: a construction line that is the last
+        # entity in a CComponentDefinition is followed by nrel=0, which
+        # looks like a null tag at every candidate including v17's preferred
+        # 7. Preferring 7 there swallows three bytes of the definition tail
+        # and then caches that 7 for every later guide in the file - this
+        # project's own writer (and real SketchUp 2025) uses a 4-byte
+        # trailer, so the weak pass prefers 4.
+        k = None
+        for cand in order:
+            if _strict_next_tag(ar, r.data, r.pos + cand, allow_null=False):
+                k = cand
                 break
         if k is None:
-            k = default
+            for cand in (4, 0, 7):
+                if _strict_next_tag(ar, r.data, r.pos + cand, allow_null=True):
+                    k = cand
+                    break
+        if k is None:
+            k = 4
         ar._cline_tail = k
     r.raw(k)
     huge = 1e20  # well below the real ±1e30 sentinel, far above any real geometry extent

@@ -319,6 +319,14 @@ class OPENSKP_EXPORT ComponentDefinitionBuilder {
   /// Add one freeform polyline curve - same behavior as `SkpBuilder::add_polyline`.
   void add_polyline(const std::vector<Point3>& points, const PolylineOptions& options = {});
 
+  /// Add a construction/guide line - same behavior as `SkpBuilder::add_construction_line`
+  /// (coordinates are definition-local inches, like `add_face`).
+  void add_construction_line(Point3 point, std::optional<Point3> point2 = std::nullopt,
+                             std::optional<Point3> direction = std::nullopt);
+  /// Add a construction/guide point - same behavior as `SkpBuilder::add_construction_point`
+  /// (coordinates are definition-local inches, like `add_face`).
+  void add_construction_point(Point3 position);
+
   /// Place one instance of another, already-closed component definition inside this one - the
   /// same nesting real SketchUp supports (an assembly definition containing instances of its own
   /// sub-part definitions). `definition` must come from the same `SkpBuilder`, must already be

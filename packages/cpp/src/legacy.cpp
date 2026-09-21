@@ -682,21 +682,31 @@ struct Archive {
         std::vector<size_t> order{dflt};
         for (size_t c : {size_t(0), size_t(4), size_t(7)})
           if (c != dflt) order.push_back(c);
-        // two passes: a zero tail full of padding can mimic a null tag,
-        // so only accept a null-anchored candidate when no candidate
-        // lands on a STRONG form (escape / known class / class
-        // definition)
+        // Strong tags first (escape / known class / class definition). A
+        // following entity at +4 or +7 is unambiguous. The weak (null)
+        // pass is the last-in-list case: a construction line that is the
+        // last entity in a CComponentDefinition is followed by nrel=0,
+        // which looks like a null tag at every candidate including v17's
+        // preferred 7. Preferring 7 there swallows three bytes of the
+        // definition tail and then caches that 7 for every later guide
+        // in the file - this project's own writer (and real SketchUp
+        // 2025) uses a 4-byte trailer, so the weak pass prefers 4.
         std::optional<size_t> k;
-        for (bool allow_null : {false, true}) {
-          for (size_t cand : order) {
-            if (strict_next_tag(r.p + cand, allow_null)) {
+        for (size_t cand : order) {
+          if (strict_next_tag(r.p + cand, false)) {
+            k = cand;
+            break;
+          }
+        }
+        if (!k) {
+          for (size_t cand : {size_t(4), size_t(0), size_t(7)}) {
+            if (strict_next_tag(r.p + cand, true)) {
               k = cand;
               break;
             }
           }
-          if (k) break;
         }
-        cline_tail = k ? *k : dflt;
+        cline_tail = k ? *k : size_t(4);
       }
       r.raw(*cline_tail);
     } else if (n == "CConstructionPoint") {
