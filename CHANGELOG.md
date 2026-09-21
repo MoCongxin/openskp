@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — C++: face UV basis and pin scale now match Python / real SketchUp
+
+Python's writer already parameterized a face's texture matrix in SketchUp's
+normal-derived basis (`U = normalize(Z × n)`, `V = n × U`; horizontal `(X, Y)`,
+downward `(−X, +Y)`; tilt sine below `1e-3` stays on the world axes) and scaled
+`front_uv`/`back_uv` pins from tiles into texture-inches using the material's
+applied size before the fit. The C++ port still solved the matrix in a
+first-edge basis (`points[1] − points[0]`), which agreed with SketchUp only
+when that edge happened to run along `Z × n` and otherwise turned the mapping
+90° or 180° (a square listed from a different corner, every underside, a
+faceted curve of small quads). Its reader copies (`face_groups` / `edit` /
+`codegen`) used a `1e-9` snap and the `(X, −Y)` downward mirror, so a
+near-horizontal normal's float noise flipped the basis and every downward face
+read back upside-down. Pins were also left in tiles, so a material applied at
+anything other than 1 in per tile came out that many times too big. C++ now
+matches Python on all four copies of the basis, stores applied size per
+textured-material slot, and scales pins in both `SkpBuilder::add_face` and
+`ComponentDefinitionBuilder::add_face`. Regression tests lock the vertex-order
+matrix, the downward `(−X, +Y)` matrix, and a 10-inch tile's 5× scale.
 ### Added — C++: named dictionaries on `CLayer`
 
 `SkpBuilder::add_layer` now accepts `LayerOptions::extra_dictionaries` and
