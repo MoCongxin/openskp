@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Read VFF (2021+) construction lines/points (Python + C++)
+
+VFF files store guide lines under definition list `9113` → `6942` / `6A42`
+(same 8 doubles as classic `CConstructionLine`) and guide points under
+`9213` → `6C42` / `6D42`. Those tags are now containers in the TLV walker
+(`_core.CONTAINER_TAGS` / `tlv.cpp`), and the geometry collectors fill
+`Definition.construction_lines` / `.construction_points`. Ground-truthed
+against a SketchUp-authored VFF layout; tests lock the tag layout with
+synthetic TLV so the fixture does not have to carry a real document path
+or template.
 ### Fixed — C++: face UV basis and pin scale now match Python / real SketchUp
 
 Python's writer already parameterized a face's texture matrix in SketchUp's

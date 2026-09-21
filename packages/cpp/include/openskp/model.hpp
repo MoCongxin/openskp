@@ -224,8 +224,8 @@ struct Dimension {
 };
 
 /// A construction/guide line (SketchUp's Construction Line tool).
-/// Legacy (pre-2021) files only - the VFF (2021+) reader does not
-/// currently recognize this entity.
+/// Legacy `CConstructionLine` and VFF list `9113` → entity `6942` /
+/// leaf `6A42` (same 8 doubles).
 ///
 /// Stored internally (and here, unchanged) as a point + normalized
 /// direction + two signed distance parameters along that direction
@@ -249,8 +249,8 @@ struct ConstructionLine {
 };
 
 /// A construction/guide point (SketchUp's Construction Point tool).
-/// Legacy (pre-2021) files only - the VFF (2021+) reader does not
-/// currently recognize this entity.
+/// Legacy `CConstructionPoint` and VFF list `9213` → entity `6C42` /
+/// leaf `6D42` (3 doubles).
 struct ConstructionPoint {
   /// The point's position, in inches (world space).
   Vec3 position{0.0, 0.0, 0.0};
