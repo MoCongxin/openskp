@@ -1041,10 +1041,15 @@ class ArchiveWriter {
   // visible name, so each layer consumes 2 pids, not 1. `with_pids=false` (used only for the
   // layer a component definition embeds internally) omits both.
   int write_layer(const std::string& name, bool with_pids = true, bool hidden = false,
-                  std::optional<Color4> rgba = std::nullopt) {
+                  std::optional<Color4> rgba = std::nullopt, AttributeDictList dicts = {}) {
     int slot = new_of_known_class("CLayer", kLayerSchema);
-    preamble(with_pids ? std::optional<std::uint64_t>(std::nullopt)
-                       : std::optional<std::uint64_t>(0));
+    std::optional<std::uint64_t> pid =
+        with_pids ? std::optional<std::uint64_t>(std::nullopt) : std::optional<std::uint64_t>(0);
+    if (!dicts.empty()) {
+      preamble_with_real_attrs(std::nullopt, std::nullopt, dicts, pid);
+    } else {
+      preamble(pid);
+    }
     write_str(name);
     std::uint64_t pid2 = with_pids ? alloc_pid() : 0;
     buf.push_back(hidden ? 1 : 0);
@@ -1962,7 +1967,9 @@ int SkpBuilder::add_layer(const std::string& name, const LayerOptions& options) 
     impl_->layer_writer_start = detail::kLayerWriterBase + impl_->material_shift();
     impl_->layer_writer.emplace(impl_->layer_writer_start, impl_->material_shifted_class_slot());
   }
-  int slot = impl_->layer_writer->write_layer(name, true, options.hidden, options.color);
+  detail::AttributeDictList dicts;
+  for (const auto& kv : options.extra_dictionaries) dicts.emplace_back(kv.first, kv.second);
+  int slot = impl_->layer_writer->write_layer(name, true, options.hidden, options.color, dicts);
   layers_by_name[name] = slot;
   impl_->layer_count += 1;
   return slot;

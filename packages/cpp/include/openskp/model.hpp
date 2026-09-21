@@ -103,6 +103,10 @@ struct Layer {
   /// Layer_<name>-prefixed materials, which carry no visibility data, so
   /// this is always false there.
   bool hidden{};
+  /// Named `CAttributeNamed` dictionaries on this `CLayer` (legacy). Empty on VFF,
+  /// which has no equivalent slot. Callers own the dictionary names; the reader
+  /// does not special-case any of them.
+  std::map<std::string, std::map<std::string, std::string>> attribute_dictionaries;
 };
 
 /// Embedded texture image data and metadata.

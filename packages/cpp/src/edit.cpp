@@ -163,6 +163,11 @@ std::map<std::string, int> replay_layers(SkpBuilder& builder, const SkpModel& mo
     LayerOptions options;
     options.color = Color4{layer.color[0], layer.color[1], layer.color[2], 255};
     options.hidden = layer.hidden;
+    for (const auto& d : layer.attribute_dictionaries) {
+      AttributeDict bag;
+      for (const auto& kv : d.second) bag[kv.first] = kv.second;
+      options.extra_dictionaries[d.first] = std::move(bag);
+    }
     slots[layer.name] = builder.add_layer(layer.name, options);
   }
   return slots;

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — C++: named dictionaries on `CLayer`
+
+`SkpBuilder::add_layer` now accepts `LayerOptions::extra_dictionaries` and
+writes them as `CAttributeNamed` records on the layer. `parse()` copies
+every named dictionary on a legacy `CLayer` onto
+`Layer::attribute_dictionaries` (string maps, same contract as
+`Instance::attribute_dictionaries`). The reader does not special-case
+dictionary names. VFF layers still have no attribute slot, so this is
+empty there. `edit()` replays the dictionaries so a round-trip through
+the writer keeps them.
+
 ### Added — Read a `.frag` file back (TypeScript, .NET, Dart, C++) - all 5 languages now
 
 Ports Python's `from_fragments()`/`read()` to TypeScript (`fromFragments()`,

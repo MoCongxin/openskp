@@ -538,7 +538,7 @@ struct Archive {
       }
       r.u32();
     } else if (n == "CLayer") {
-      preamble();
+      v->attrs = preamble();
       v->k = "layer";
       v->name = r.utf16();
       ByteBuffer mid;
@@ -1222,6 +1222,19 @@ std::map<std::string, std::string> extract_legacy_dynamic_properties(
   return {};
 }
 
+std::map<std::string, std::map<std::string, std::string>> extract_legacy_attribute_dictionaries(
+    std::optional<uint64_t> attrs_slot, const std::unordered_map<uint64_t, Entry>& slots) {
+  if (!attrs_slot) return {};
+  auto ai = slots.find(*attrs_slot);
+  if (ai == slots.end() || !ai->second.v) return {};
+  std::map<std::string, std::map<std::string, std::string>> out;
+  for (auto& ent : ai->second.v->ents) {
+    auto& ev = std::get<2>(ent);
+    if (ev && ev->k == "dict" && !ev->name.empty()) out[ev->name] = ev->entries;
+  }
+  return out;
+}
+
 void fill(GeometryBuilder& b,
           const std::vector<std::tuple<uint64_t, std::string, std::shared_ptr<V>>>& ents,
           const std::unordered_map<uint64_t, Entry>& slots) {
@@ -1611,6 +1624,8 @@ RawParsed parse_legacy(const ByteBuffer& data, const ParseOptions& o) {
       out.layer_colors[l.second->name] = {uint8_t(l.second->r), uint8_t(l.second->g),
                                           uint8_t(l.second->b)};
       out.layer_hidden[l.second->name] = l.second->hidden != 0;
+      auto dicts = extract_legacy_attribute_dictionaries(l.second->attrs, ar.slots);
+      if (!dicts.empty()) out.layer_attribute_dictionaries[l.second->name] = std::move(dicts);
     }
     if (!out.layer_colors.count("Layer0")) {
       out.layer_order.push_back("Layer0");

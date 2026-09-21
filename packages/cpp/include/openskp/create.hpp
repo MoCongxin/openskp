@@ -20,9 +20,9 @@
 /// add_group` is at the root level, since this format has no way to embed one definition's
 /// declaration inside another's); per-instance rotation (axis+angle convenience) and hidden
 /// state; explicit per-side texture positioning (`FaceOptions::front_uv`/`back_uv`) on a face of
-/// any orientation; custom attribute dictionaries on definitions/instances/faces/groups (the same
-/// mechanism SketchUp's own "dynamic component" attributes use - a group only pays for a real
-/// attribute container when it actually has one, unlike a component instance, which always
+/// any orientation; custom attribute dictionaries on definitions/instances/faces/groups/layers
+/// (the same mechanism SketchUp's own "dynamic component" attributes use - a group only pays for
+/// a real attribute container when it actually has one, unlike a component instance, which always
 /// carries a real, if often empty, one); real, editable-by-radius
 /// `CArcCurve` circles/arcs (`add_circle`/`add_arc`) and freeform `CCurve` polylines
 /// (`add_polyline`); faces with one or more holes; `auto_triangulate` fan-splitting a
@@ -206,6 +206,9 @@ struct LayerOptions {
   std::optional<Color4> color;
   /// Sets the layer's own visibility (SketchUp's layer-panel checkbox).
   bool hidden = false;
+  /// Named `CAttributeNamed` dictionaries written onto this `CLayer`. Callers own
+  /// the dictionary names; the writer does not reserve any.
+  std::map<std::string, AttributeDict> extra_dictionaries;
 };
 
 /// Options for `SkpBuilder::add_instance` / `ComponentDefinitionBuilder::add_instance`.

@@ -798,6 +798,23 @@ TEST(Create, InstanceAttributesRoundTrip) {
   ASSERT_EQ(model.root().instances.size(), 1u);
 }
 
+TEST(Create, LayerExtraDictionariesRoundTrip) {
+  auto builder = create();
+  LayerOptions opts;
+  opts.extra_dictionaries["plugin"]["n"] = std::int32_t{7};
+  builder->add_layer("Walls", opts);
+  builder->add_face({{0, 0, 0}, {10, 0, 0}, {10, 10, 0}, {0, 10, 0}});
+
+  SkpModel model = round_trip(*builder);
+  const Layer* walls = nullptr;
+  for (const auto& layer : model.layers) {
+    if (layer.name == "Walls") walls = &layer;
+  }
+  ASSERT_NE(walls, nullptr);
+  ASSERT_TRUE(walls->attribute_dictionaries.count("plugin"));
+  EXPECT_EQ(walls->attribute_dictionaries.at("plugin").at("n"), "7");
+}
+
 TEST(Create, FaceAndDefinitionAttributesDoNotThrow) {
   // The reader's public model doesn't expose face/definition-level attributes (see edit.hpp's
   // own documented gap), so this is a smoke test that writing them at least succeeds and
